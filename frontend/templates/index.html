@@ -10,6 +10,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Using a placeholder for favicon if not exists -->
     <link rel="icon" href="/static/images/svu_logo_final_v2.jpg" type="image/x-icon">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0f766e">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -43,6 +46,7 @@
                     </li>
                     <li id="nav-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i> <span
                             id="theme-text">Dark Mode</span></li>
+                    <li id="nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</li>
                 </ul>
             </nav>
         </aside>
@@ -115,25 +119,45 @@
                 </div>
             </section>
 
-            <!-- Admin Dashboard -->
-            <section id="admin-section" style="display: none;">
+            <!-- Add to Head -->
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+            <!-- Add to Sidebar -->
+            <li id="nav-dashboard" onclick="showSection('dashboard')" style="display: none;"><i
+                    class="fa-solid fa-chart-line"></i> Dashboard</li>
+
+            <!-- Add Toggle in Header -->
+            <div class="header-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="incognito-toggle">
+                    <span class="slider round"></span>
+                </label>
+                <span>Incognito Mode</span>
+            </div>
+
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" style="display: none;">
                 <div class="header">
-                    <h3>Admin Dashboard</h3>
+                    <h3>Analytics Dashboard</h3>
                 </div>
                 <div class="admin-content">
-                    <div class="admin-profile-card">
-                        <!-- Admin avatar placeholder -->
-                        <img src="/static/images/admin_avatar.jpg" class="admin-avatar-lg" alt="Admin Avatar">
-                        <div class="admin-info">
-                            <h4>Administrator</h4>
-                            <p>Super User</p>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Total Queries</h3>
+                            <p id="total-queries">Loading...</p>
                         </div>
-                        <button class="btn-primary" onclick="openModal()">+ Add New FAQ</button>
+                        <div class="stat-card">
+                            <h3>Active Users</h3>
+                            <p id="active-users">Loading...</p>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="roleChart"></canvas>
                     </div>
 
+                    <!-- Existing FAQ Management -->
                     <div class="admin-divider"></div>
                     <h4 class="section-title">Manage Knowledge Base</h4>
-
                     <div class="admin-search-container">
                         <input type="text" id="admin-search-input" placeholder="Search knowledge base..."
                             class="admin-search-input">
@@ -192,7 +216,63 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=2"></script>
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="auth-overlay">
+        <div class="auth-card">
+            <div class="auth-header">
+                <img src="/static/images/svu_logo_final_v2.jpg" alt="Logo" class="auth-logo">
+                <h2>Welcome to SVU CampusConnect</h2>
+                <p>Please log in to access your personalized assistant.</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+                <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required placeholder="Student ID / Email">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required placeholder="********">
+                </div>
+                <button type="submit" class="btn-submit auth-btn">Log In</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="register-form" onsubmit="handleRegister(event)" style="display: none;">
+                <div class="form-group">
+                    <label>Username (ID)</label>
+                    <input type="text" id="reg-username" required placeholder="Create a unique ID">
+                </div>
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="reg-fullname" required placeholder="e.g. Vishnu Reddy">
+                </div>
+                <div class="form-group">
+                    <label>Role</label>
+                    <select id="reg-role" required
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <option value="student">Student</option>
+                        <option value="faculty">Faculty</option>
+                        <option value="parent">Parent</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="reg-password" required placeholder="Create password">
+                </div>
+                <button type="submit" class="btn-submit auth-btn">Create Account</button>
+            </form>
+            <p id="auth-error" style="color: red; text-align: center; margin-top: 10px; display: none;"></p>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=3"></script>
 </body>
 
 </html>

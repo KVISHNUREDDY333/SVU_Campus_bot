@@ -27,7 +27,26 @@ function updateThemeUI(isDark) {
 }
 
 // Splash Screen Logic
+// Auth State
+let ACCESS_TOKEN = localStorage.getItem('access_token');
+let USER_ROLE = localStorage.getItem('user_role');
+
 document.addEventListener("DOMContentLoaded", () => {
+    // Check Auth first
+    checkAuth();
+
+    // Register PWA Service Worker
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Fail', err));
+    }
+
+    // Request Notification Permission
+    if ('Notification' in window && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+    }
+
     // Load Theme
     const savedTheme = localStorage.getItem('svu_theme');
     if (savedTheme === 'dark') {
@@ -45,12 +64,119 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 1500);
     }
 
-    // Focus input on load
     if (userInput) userInput.focus();
-
-    // Load Chat History
     loadChatHistory();
 });
+
+// --- Auth Functions ---
+function checkAuth() {
+    const overlay = document.getElementById('auth-overlay');
+
+    if (!ACCESS_TOKEN) {
+        if (overlay) overlay.classList.add('active');
+    } else {
+        if (overlay) overlay.classList.remove('active');
+        // Optional: verify token validity with backend /users/me here
+    }
+}
+
+function switchAuthTab(tab) {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const tabs = document.querySelectorAll('.auth-tab');
+
+    document.getElementById('auth-error').style.display = 'none';
+
+    if (tab === 'login') {
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+        tabs[0].classList.add('active');
+        tabs[1].classList.remove('active');
+    } else {
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'block';
+        tabs[0].classList.remove('active');
+        tabs[1].classList.add('active');
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('auth-error');
+
+    try {
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const res = await fetch(`${API_URL}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        });
+
+        if (!res.ok) throw new Error('Invalid credentials');
+
+        const data = await res.json();
+        saveSession(data);
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const username = document.getElementById('reg-username').value;
+    const fullName = document.getElementById('reg-fullname').value;
+    const role = document.getElementById('reg-role').value;
+    const password = document.getElementById('reg-password').value;
+    const errorEl = document.getElementById('auth-error');
+
+    try {
+        const res = await fetch(`${API_URL}/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, full_name: fullName, role, password })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || 'Registration failed');
+        }
+
+        const data = await res.json();
+        saveSession(data);
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+    }
+}
+
+function saveSession(data) {
+    ACCESS_TOKEN = data.access_token;
+    USER_ROLE = data.role;
+    localStorage.setItem('access_token', ACCESS_TOKEN);
+    localStorage.setItem('user_role', USER_ROLE);
+    localStorage.setItem('username', data.username);
+
+    document.getElementById('auth-overlay').classList.remove('active');
+
+    // Refresh admin view if admin
+    if (USER_ROLE === 'admin') {
+        // Show extra admin controls if any
+    }
+}
+
+function logout() {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user_role');
+    localStorage.removeItem('username');
+    ACCESS_TOKEN = null;
+    location.reload();
+}
 
 // Chat History State
 let chatHistory = JSON.parse(localStorage.getItem('svu_chat_history') || '[]');
@@ -63,13 +189,242 @@ function loadChatHistory() {
     if (chatHistory.length > 0) scrollToBottom();
 }
 
-function showSection(sectionId) {
-    document.getElementById('chat-section').style.display = sectionId === 'chat' ? 'flex' : 'none';
-    document.getElementById('admin-section').style.display = sectionId === 'admin' ? 'block' : 'none';
-    document.getElementById('nav-chat').classList.toggle('active', sectionId === 'chat');
-    document.getElementById('nav-admin').classList.toggle('active', sectionId === 'admin');
-    if (sectionId === 'admin') loadFAQs();
+// ... existing code ...
+
+const incognitoToggle = document.getElementById('incognito-toggle');
+let isIncognito = false;
+
+if (incognitoToggle) {
+    incognitoToggle.addEventListener('change', (e) => {
+        isIncognito = e.target.checked;
+        if (isIncognito) {
+            document.body.classList.add('incognito-active');
+            appendMessage("Entered Incognito Mode. Your chats will not be saved.", "bot");
+        } else {
+            document.body.classList.remove('incognito-active');
+            appendMessage("Exited Incognito Mode.", "bot");
+        }
+    });
 }
+
+// Polling for Notifications
+setInterval(checkNotifications, 10000); // Check every 10 seconds for demo
+
+async function checkNotifications() {
+    if (!ACCESS_TOKEN) return;
+
+    try {
+        const res = await fetch(`${API_URL}/notifications`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+
+        const notifications = await res.json();
+        // Simple logic: if new notification ID is greater than last seen, show toast
+        const lastSeenId = parseInt(localStorage.getItem('last_notification_id') || '0');
+
+        notifications.forEach(notif => {
+            if (notif.id > lastSeenId) {
+                showToast(notif.title, notif.message);
+                localStorage.setItem('last_notification_id', notif.id);
+            }
+        });
+    } catch (e) {
+        // console.error("Notification Poll Error", e);
+    }
+}
+
+function showToast(title, message) {
+    // Create toast container if needed
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10001;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+        document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.innerHTML = `
+        <div class="toast-header">
+            <strong class="me-auto">${title}</strong>
+            <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()">×</button>
+        </div>
+        <div class="toast-body">${message}</div>
+    `;
+
+    // Inline styles for toast (can move to css)
+    toast.style.cssText = `
+        background: white;
+        border-left: 4px solid #0f766e;
+        padding: 15px;
+        border-radius: 4px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        min-width: 250px;
+        animation: slideIn 0.3s ease-out;
+        color: #333;
+    `;
+
+    // Basic styling for internal elements
+    const header = toast.querySelector('.toast-header');
+    header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; color: #0f766e;";
+
+    const btn = toast.querySelector('.btn-close');
+    btn.style.cssText = "background: none; border: none; font-size: 20px; cursor: pointer; color: #666; width:auto; border-radius:0;";
+
+    container.appendChild(toast);
+
+    // Auto remove
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.5s';
+        setTimeout(() => toast.remove(), 500);
+    }, 5000);
+
+    // Browser Notification
+    if (Notification.permission === 'granted') {
+        new Notification(title, { body: message, icon: '/static/images/svu_logo_final_v2.jpg' });
+    }
+}
+
+function showSection(sectionId) {
+    document.getElementById('chat-section').style.display = 'none';
+    document.getElementById('admin-section').style.display = 'none'; // Legacy ID might be replaced
+    document.getElementById('dashboard-section').style.display = 'none';
+
+    document.getElementById('nav-chat').classList.remove('active');
+    document.getElementById('nav-admin').classList.remove('active'); // Legacy
+    document.getElementById('nav-dashboard').classList.remove('active');
+
+    if (sectionId === 'chat') {
+        document.getElementById('chat-section').style.display = 'flex';
+        document.getElementById('nav-chat').classList.add('active');
+    } else if (sectionId === 'dashboard') {
+        document.getElementById('dashboard-section').style.display = 'block';
+        document.getElementById('nav-dashboard').classList.add('active');
+        loadDashboard(); // Load stats
+        loadFAQs(); // Load FAQs (shared view)
+    }
+}
+
+async function sendMessage() {
+    const text = userInput.value?.trim();
+    if (!text) return;
+
+    // Hide welcome screen if visible
+    if (welcomeScreen && welcomeScreen.style.display !== 'none') {
+        welcomeScreen.style.display = 'none';
+    }
+
+    // Add user message
+    appendMessage(text, 'user');
+    userInput.value = '';
+
+    // Show typing indicator
+    showTypingIndicator();
+
+    // Scroll to bottom
+    scrollToBottom();
+
+    // Get Session ID (if using session history)
+    let sessionId = localStorage.getItem('chat_session_id');
+    if (!sessionId) {
+        sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('chat_session_id', sessionId);
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                message: text,
+                session_id: sessionId,
+                incognito: isIncognito
+            })
+        });
+
+        if (!response.ok) throw new Error('Backend unavailable');
+        const data = await response.json();
+
+        // Hide typing indicator before showing response
+        hideTypingIndicator();
+
+        appendMessage(data.response || "I'm having trouble connecting right now.", 'bot');
+
+    } catch (err) {
+        hideTypingIndicator();
+        appendMessage("I apologize, but I'm unable to reach the server at the moment. Please try again later.", 'bot');
+    }
+
+    scrollToBottom();
+}
+
+function saveSession(data) {
+    // ... existing ...
+
+    if (USER_ROLE === 'admin') {
+        document.getElementById('nav-dashboard').style.display = 'block'; // Show dashboard link
+    }
+}
+
+// Analytics Chart
+let roleChartInstance = null;
+
+async function loadDashboard() {
+    try {
+        const res = await fetch(`${API_URL}/dashboard-stats`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        document.getElementById('total-queries').textContent = data.total_queries;
+        document.getElementById('active-users').textContent = data.active_users;
+
+        renderChart(data.role_distribution);
+    } catch (e) {
+        console.error("Dashboard Error", e);
+    }
+}
+
+function renderChart(roleData) {
+    const ctx = document.getElementById('roleChart').getContext('2d');
+
+    if (roleChartInstance) roleChartInstance.destroy();
+
+    roleChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(roleData),
+            datasets: [{
+                data: Object.values(roleData),
+                backgroundColor: ['#0f766e', '#f59e0b', '#ef4444'],
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' },
+                title: { display: true, text: 'Queries by User Role' }
+            }
+        }
+    });
+}
+
 
 // Chat Logic
 if (userInput) {
@@ -112,7 +467,10 @@ async function sendMessage() {
     try {
         const response = await fetch(`${API_URL}/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
             body: JSON.stringify({ message: text, session_id: sessionId })
         });
 
@@ -166,7 +524,7 @@ function appendMessage(text, sender, save = true) {
         speakBtn.className = 'speech-btn';
         speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
         speakBtn.title = 'Read Aloud';
-        speakBtn.onclick = () => speakText(text); // Use global speakText
+        speakBtn.onclick = () => speakText(text, textDiv); // Pass element for highlighting
 
         actionsDiv.appendChild(copyBtn);
         actionsDiv.appendChild(speakBtn);
@@ -293,28 +651,142 @@ function clearChat() {
 // --- Voice Assistant Implementation ---
 
 // 1. Text-to-Speech (TTS)
+// 1. Text-to-Speech (TTS)
 const synth = window.speechSynthesis;
-let isSpeaking = false;
+let currentUtterance = null;
+let currentHighlightedElement = null;
+let originalHtmlContent = null;
 
-function speakText(text) {
-    if (synth.speaking) {
-        synth.cancel(); // Stop currently playing
-        isSpeaking = false;
-        return;
+function speakText(text, element = null) {
+    // 1. Cancel existing speech
+    if (synth.speaking || currentHighlightedElement) {
+        resetHighlighting();
+        synth.cancel();
+
+        // If clicking the same button, just stop
+        if (currentHighlightedElement === element) {
+            currentHighlightedElement = null;
+            return;
+        }
     }
 
-    // Strip markdown symbols for cleaner speech
-    const cleanText = text.replace(/\*/g, '').replace(/#/g, '').replace(/`/g, '');
+    // 2. Setup Highlighting & Text Construction
+    let textToSpeak = text;
+    let spans = [];
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = 'en-IN'; // Indian English context
+    if (element) {
+        currentHighlightedElement = element;
+        originalHtmlContent = element.innerHTML;
+
+        // Wrap words and get the EXACT text that matches the DOM structure
+        const result = wrapWordsAndGetText(element);
+        spans = result.spans;
+        textToSpeak = result.fullText; // This is the key for perfect alignment
+    } else {
+        // Fallback for non-element text (clean markdown)
+        textToSpeak = text.replace(/\*/g, '').replace(/#/g, '').replace(/`/g, '');
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    utterance.lang = 'en-IN';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
+    currentUtterance = utterance;
 
-    utterance.onstart = () => { isSpeaking = true; };
-    utterance.onend = () => { isSpeaking = false; };
+    if (element) {
+        utterance.onboundary = (event) => {
+            if (event.name === 'word') {
+                highlightWordAt(event.charIndex, spans);
+            }
+        };
+
+        utterance.onend = () => resetHighlighting();
+        utterance.onerror = (e) => {
+            console.error("TTS Error:", e);
+            resetHighlighting();
+        };
+    }
 
     synth.speak(utterance);
+}
+
+function wrapWordsAndGetText(element) {
+    // We use a TreeWalker to find all text nodes
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    let node;
+    while (node = walker.nextNode()) {
+        if (node.nodeValue.length > 0) { // Keep all text nodes including pure whitespace for structure
+            textNodes.push(node);
+        }
+    }
+
+    const allSpans = [];
+    let fullText = "";
+    let runningCharCount = 0;
+
+    textNodes.forEach(textNode => {
+        const originalText = textNode.nodeValue;
+        // Split by whitespace but keep delimiters
+        const parts = originalText.split(/(\s+)/);
+
+        const fragment = document.createDocumentFragment();
+
+        parts.forEach(part => {
+            if (part.length === 0) return;
+
+            // Check if it's purely whitespace
+            if (/^\s+$/.test(part)) {
+                fragment.appendChild(document.createTextNode(part));
+                fullText += part;
+                runningCharCount += part.length;
+            } else {
+                // It's a word
+                const span = document.createElement('span');
+                span.textContent = part;
+                span.dataset.start = runningCharCount;
+                span.dataset.end = runningCharCount + part.length;
+                span.className = 'speech-word';
+                fragment.appendChild(span);
+
+                allSpans.push(span);
+
+                fullText += part;
+                runningCharCount += part.length;
+            }
+        });
+
+        textNode.parentNode.replaceChild(fragment, textNode);
+    });
+
+    return { spans: allSpans, fullText: fullText };
+}
+
+function highlightWordAt(charIndex, spans) {
+    // Remove previous highlights
+    const active = document.querySelector('.highlight-word');
+    if (active) active.classList.remove('highlight-word');
+
+    // Find the span that covers this charIndex
+    const targetSpan = spans.find(span => {
+        const start = parseInt(span.dataset.start);
+        const end = parseInt(span.dataset.end);
+        // Strict match works better since we aligned text manually
+        return charIndex >= start && charIndex < end;
+    });
+
+    if (targetSpan) {
+        targetSpan.classList.add('highlight-word');
+    }
+}
+
+function resetHighlighting() {
+    if (currentHighlightedElement && originalHtmlContent) {
+        currentHighlightedElement.innerHTML = originalHtmlContent;
+    }
+    currentHighlightedElement = null;
+    originalHtmlContent = null;
+    currentUtterance = null;
 }
 
 // 2. Speech-to-Text (STT)
@@ -325,7 +797,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = false; // changed to true if you want real-time feedback
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
@@ -347,6 +819,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     recognition.onerror = (event) => {
         console.error("Speech recognition error", event.error);
         stopVoiceInput();
+        micBtn.classList.remove('listening');
     };
 } else {
     if (micBtn) micBtn.style.display = 'none'; // Hide if not supported
