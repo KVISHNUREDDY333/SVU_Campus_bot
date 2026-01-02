@@ -1,0 +1,124 @@
+{
+  "intents": [
+    {
+      "tag": "greeting",
+      "patterns": ["Hi", "Hello", "Hey", "Is anyone there?", "Good day"],
+      "responses": ["Hello! How can I assist you about SV University today?"]
+    },
+    {
+      "tag": "courses",
+      "keywords": ["courses", "programs", "UG", "PG", "departments"],
+      "patterns": [
+        "What are the courses offered at SV University for undergraduate students?",
+        "What courses are offered?",
+        "List available programs",
+        "Show departments",
+        "What are the departments?",
+        "What are the UG programs?",
+        "What are the PG programs?",
+        "Are there any special programs like B.Tech + M.Tech or integrated courses?",
+        "Distance Education courses"
+      ],
+      "responses": [
+        "SVU offers UG, PG, and Doctoral programs in various disciplines including Engineering, Sciences, Arts, and Management. Please visit https://svuniversity.edu.in/academics/ for detailed info.",
+        "UG degrees: BEd, BA, BSc (Hons), BCom/BBA, BCA, BPharm, Law (BA-LLB, BBA-LLB, BCom-LLB), BTech (CSE, ECE, EEE, Mechanical, Civil, Chemical), B.Voc in Food Processing, Dairying & Animal Husbandry, Horticulture.",
+        "PG degrees: MA, MSc, MEd, MPhil, MTech, MPharm, MBA, MCA, MS in many specializations.",
+        "Integrated Courses: B.Tech (EEE)+M.Tech (Power Systems), B.Tech (ECE)+M.Tech (Signal Processing), B.Tech (CSE)+M.Tech (CSE), B.Tech (Civil)+M.Tech (Structural/Env. Engg), B.Tech (Mech)+M.Tech (Industrial/Production), Integrated BA LLB / BBA LLB / BCom LLB.",
+        "Distance Education: BA, BCom, BSc, MA, MCom, MSc, MBA, MLISc, MSW,MS in Data science, PG Diplomas."
+      ]
+    },
+    {
+      "tag": "curriculum",
+      "keywords": ["subjects", "exams", "grading system", "marks", "credit"],
+      "patterns": [
+        "Can I change my stream after joining?",
+        "Does changing stream is possible?",
+        "Is there any possibility to change stream?",
+        "Subjects in first year",
+        "How many subjects are there in the first year?",
+        "How often are the exams conducted?",
+        "How are lab exams conducted?",
+        "Is there any credit-based system?",
+        "What is the grading system?",
+        "Are internal marks added to final marks?",
+        "Is there a system for revaluation?"
+      ],
+      "responses": [
+        "Stream change post-admission is limited and subject to rules and availability—apply early to the college office.",
+        "Typically 4–6 subjects per semester in first year plus labs/practical components.",
+        "Semester end exams occur twice a year, with continuous internal assessments.",
+        "Lab exams are scheduled by departments with internal/external examiners.",
+        "SVU follows CBCS with credit system and grade points as per UGC guidelines.",
+        "Internal assessment (tests, assignments, attendance) contributes to final marks."
+      ]
+    },
+    {
+      "tag": "fees",
+      "keywords": ["fees", "tuition", "scholarships"],
+      "patterns": [
+        "What is the fee structure?",
+        "Tell me about tuition fees",
+        "How much are the course fees?",
+        "Are there any additional costs apart from tuition?",
+        "Is there any fee concession for SC/ST/OBC students?",
+        "Are there any scholarships provided by SV University?",
+        "How can I apply for government scholarships?"
+      ],
+      "responses": [
+        "Tuition fee varies by programme/college; contact your accounts office or visit https://svuniversity.edu.in for details.",
+        "Additional costs include lab, library, hostel, mess and exam fees.",
+        "SC/ST/BC/EWS concessions and state fee reimbursement schemes are available.",
+        "Government scholarships and departmental awards are available; apply via the e-Pass portal with institute verification."
+      ]
+    },
+    {
+      "tag": "hostel",
+      "patterns": [
+        "Is hostel available?",
+        "Tell me about accommodation",
+        "Is hostel facility available for boys and girls?",
+        "Are hostels inside the campus?",
+        "Is Wi-Fi available in hostels?",
+        "Is hostel food good and hygienic?"
+      ],
+      "responses": [
+        "Yes, SV University provides hostels for both boys and girls. Women: 9 blocks, Men: several including RS Hostel. Visit https://svuniversity.edu.in/hostels/.",
+        "Wi-Fi is available in academic buildings; hostel Wi-Fi depends on block provisioning.",
+        "Hostel messes function under student committees; hygiene is overseen by the hostel office."
+      ]
+    },
+    {
+      "tag": "admissions",
+      "patterns": [
+        "When will the classes start for first-year students?",
+        "What documents should I bring during admission?",
+        "How do I get a bonafide certificate?",
+        "Can I get a transfer to another university after 1st year?",
+        "Whom should I contact if I have any doubts regarding admission?",
+        "How do I get my TC back after joining?",
+        "Will the university keep original certificates?",
+        "How can I apply for migration certificate?",
+        "How do I get a duplicate ID card if lost?",
+        "Can I get my marks memo online?"
+      ],
+      "responses": [
+        "Classes start dates vary by programme—check with your department.",
+        "Bring originals and copies of certificates, TC, migration, rank card, caste/income certificates, Aadhar, photos and ID proofs.",
+        "Apply to your college office for a bonafide certificate.",
+        "Transfers require migration certificate/NOC—apply to COE/Admissions.",
+        "Contact Directorate of Admissions (PG/Research) or follow APSCHE/EAPCET counselling for UG.",
+        "Originals are verified and usually returned after verification.",
+        "Apply with prescribed form and fee to COE/Admissions for migration certificate.",
+        "Report lost ID, apply at college office with reissue fee.",
+        "Marks memos are issued by COE; consolidated transcripts available on request."
+      ]
+    },
+    {
+      "tag": "contact",
+      "patterns": ["How to contact university?", "Phone number of SVU", "University email"],
+      "responses": [
+        "You can reach SV University at +91 877 2248589 or email registrar@svuniversity.edu.in."
+      ]
+    }
+  ]
+}
