@@ -256,9 +256,6 @@ async def health():
 
 if __name__ == "__main__":
     import uvicorn
-    # Use port 5000 to match old flask app if needed, or 8000. 
-    # User was running on 5000 in main.py. FastAPI default is 8000. 
-    # I'll stick to 8000 to avoid conflicts if old generic main.py is running.
-    # But user might expect 5000. I'll print a message.
-    print("Running on http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    print(f"Running on http://localhost:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
