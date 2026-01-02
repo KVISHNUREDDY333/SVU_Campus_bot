@@ -132,6 +132,9 @@
             <div class="input-container">
                 <div class="input-box">
                     <input type="text" id="userInput" placeholder="Type your question about SV University..." maxlength="500" autocomplete="off">
+                    <button id="micBtn" onclick="toggleRecord()" title="Speak">
+                        <span id="micIcon">🎤</span>
+                    </button>
                     <button id="sendBtn" onclick="sendMessage()">
                         <span id="sendIcon">➤</span>
                         <span id="loadingIcon" style="display: none;">⏳</span>
@@ -152,6 +155,8 @@
         let isConnected = false;
         let retryCount = 0;
         const maxRetries = 3;
+        let recognition = null;
+        let isRecording = false;
 
         document.addEventListener('DOMContentLoaded', function() {
             const userInput = document.getElementById('userInput');
@@ -167,7 +172,57 @@
 
             checkConnection();
             userInput.focus();
+            
+            // Init Speech Recognition
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.continuous = false;
+                recognition.lang = 'en-US';
+                
+                recognition.onstart = function() {
+                    isRecording = true;
+                    document.getElementById('micBtn').style.background = '#dc3545';
+                    document.getElementById('micIcon').textContent = '⏹️';
+                    document.getElementById('userInput').placeholder = "Listening...";
+                };
+                
+                recognition.onend = function() {
+                    isRecording = false;
+                    document.getElementById('micBtn').style.background = ''; // reset to default
+                    document.getElementById('micIcon').textContent = '🎤';
+                    document.getElementById('userInput').placeholder = "Type your question about SV University...";
+                };
+                
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    document.getElementById('userInput').value = transcript;
+                    setTimeout(sendMessage, 500); // Auto send after brief pause
+                };
+                
+                recognition.onerror = function(event) {
+                    console.error("Speech recognition error", event.error);
+                    stopRecord();
+                };
+            } else {
+                const micBtn = document.getElementById('micBtn');
+                if(micBtn) micBtn.style.display = 'none';
+            }
         });
+
+        function toggleRecord() {
+            if (!recognition) return;
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+            }
+        }
+        
+        function stopRecord() {
+            if (recognition && isRecording) {
+                recognition.stop();
+            }
+        }
 
         function getCurrentTime() {
             const now = new Date();
