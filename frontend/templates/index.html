@@ -1,11 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SV University Campus Chatbot</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Times New Roman', serif;
@@ -17,7 +22,14 @@
             flex-direction: column;
         }
 
-        .container { max-width: 1000px; margin: 0 auto; padding: 20px; flex: 1; display: flex; flex-direction: column; }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
 
         .header {
             background: rgba(255, 255, 255, 0.9);
@@ -29,12 +41,37 @@
             border: 2px solid rgba(179, 219, 255, 0.3);
         }
 
-        .header h1 { font-size: 2.5rem; color: #1a5490; margin-bottom: 10px; }
-        .header p { font-size: 1.1rem; color: #333; opacity: 0.8; }
+        .header h1 {
+            font-size: 2.5rem;
+            color: #1a5490;
+            margin-bottom: 10px;
+        }
 
-        .connection-status { display: flex; align-items: center; justify-content: center; margin-top: 10px; font-size: 0.9rem; }
-        .status-indicator { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: #28a745; }
-        .status-indicator.disconnected { background: #dc3545; }
+        .header p {
+            font-size: 1.1rem;
+            color: #333;
+            opacity: 0.8;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #28a745;
+        }
+
+        .status-indicator.disconnected {
+            background: #dc3545;
+        }
 
         .chat-container {
             background: rgba(255, 255, 255, 0.95);
@@ -58,18 +95,72 @@
             border: 1px solid rgba(179, 219, 255, 0.4);
         }
 
-        .message { margin-bottom: 20px; padding: 15px 20px; border-radius: 15px; max-width: 85%; position: relative; animation: slideIn 0.3s ease-out; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: translateY(0);} }
+        .message {
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 15px;
+            max-width: 85%;
+            position: relative;
+            animation: slideIn 0.3s ease-out;
+        }
 
-        .user-message { background: linear-gradient(135deg, #4a90e2, #357abd); color: white; margin-left: auto; border-bottom-right-radius: 5px; }
-        .bot-message { background: linear-gradient(135deg, #f8f9fa, #e9ecef); color: #000; margin-right: auto; border-bottom-left-radius: 5px; border-left: 4px solid #4a90e2; }
-        .error-message { background: linear-gradient(135deg, #ffebee, #ffcdd2); color: #c62828; border-left: 4px solid #c62828; }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
 
-        .message-content { font-size: 1rem; line-height: 1.5; }
-        .message-time { font-size: 0.8rem; opacity: 0.7; margin-top: 5px; text-align: right; }
-        .bot-message .message-time { text-align: left; }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-        .suggestions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding: 0 10px; }
+        .user-message {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .bot-message {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            color: #000;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+            border-left: 4px solid #4a90e2;
+        }
+
+        .error-message {
+            background: linear-gradient(135deg, #ffebee, #ffcdd2);
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .message-content {
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .message-time {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-top: 5px;
+            text-align: right;
+        }
+
+        .bot-message .message-time {
+            text-align: left;
+        }
+
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+
         .suggestion-btn {
             background: linear-gradient(135deg, #e6f3ff, #cce7ff);
             border: 2px solid #4a90e2;
@@ -80,26 +171,96 @@
             font-family: 'Times New Roman', serif;
             font-size: 0.9rem;
         }
-        .suggestion-btn:hover { background: linear-gradient(135deg, #4a90e2, #357abd); color: white; }
 
-        .input-container { background: rgba(248, 249, 250, 0.9); border-radius: 15px; padding: 15px; border: 2px solid rgba(179, 219, 255, 0.4); }
-        .input-box { display: flex; gap: 10px; align-items: center; }
-        #userInput { flex: 1; padding: 15px 20px; border: 2px solid #cce7ff; border-radius: 25px; font-size: 1rem; }
-        #sendBtn { background: linear-gradient(135deg, #4a90e2, #357abd); color: white; border: none; padding: 15px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; }
-        #sendBtn:hover { background: linear-gradient(135deg, #357abd, #2968a3); transform: scale(1.1); }
-        #sendBtn:disabled { background: #ccc; cursor: not-allowed; }
+        .suggestion-btn:hover {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+        }
 
-        .input-footer { text-align: center; margin-top: 10px; color: #666; font-size: 0.8rem; }
+        .input-container {
+            background: rgba(248, 249, 250, 0.9);
+            border-radius: 15px;
+            padding: 15px;
+            border: 2px solid rgba(179, 219, 255, 0.4);
+        }
 
-        .footer { background: rgba(255, 255, 255, 0.9); padding: 20px; text-align: center; border-radius: 15px; margin-top: 20px; border: 1px solid rgba(179, 219, 255, 0.3); }
-        .footer a { color: #4a90e2; text-decoration: none; font-weight: bold; }
-        .footer a:hover { text-decoration: underline; }
+        .input-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #cce7ff;
+            border-radius: 25px;
+            font-size: 1rem;
+        }
+
+        #sendBtn {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.2rem;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #sendBtn:hover {
+            background: linear-gradient(135deg, #357abd, #2968a3);
+            transform: scale(1.1);
+        }
+
+        #sendBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .input-footer {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.8rem;
+        }
+
+        .footer {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            text-align: center;
+            border-radius: 15px;
+            margin-top: 20px;
+            border: 1px solid rgba(179, 219, 255, 0.3);
+        }
+
+        .footer a {
+            color: #4a90e2;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
 
         /* Scrollbar styling */
-        .chat-box::-webkit-scrollbar { width: 8px; }
-        .chat-box::-webkit-scrollbar-thumb { background: rgba(74, 144, 226, 0.5); border-radius: 10px; }
+        .chat-box::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-box::-webkit-scrollbar-thumb {
+            background: rgba(74, 144, 226, 0.5);
+            border-radius: 10px;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <header class="header">
@@ -115,7 +276,8 @@
             <div class="chat-box" id="chatBox">
                 <div class="message bot-message">
                     <div class="message-content">
-                        <strong>🤖 Campus Assistant:</strong> Hello! I'm here to help you with any questions about SV University. <br>
+                        <strong>🤖 Campus Assistant:</strong> Hello! I'm here to help you with any questions about SV
+                        University. <br>
                         Ask me about: Courses, Admissions, Fees, Hostels, Placements, Campus Life.
                     </div>
                     <div class="message-time" id="welcomeTime"></div>
@@ -123,15 +285,20 @@
             </div>
 
             <div class="suggestions" id="suggestions">
-                <button class="suggestion-btn" onclick="sendSuggestion('What courses are offered at SV University?')">Available Courses</button>
-                <button class="suggestion-btn" onclick="sendSuggestion('Is hostel facility available?')">Hostel Info</button>
-                <button class="suggestion-btn" onclick="sendSuggestion('What about fees and scholarships?')">Fees & Scholarships</button>
-                <button class="suggestion-btn" onclick="sendSuggestion('How to apply for admission?')">Admission Process</button>
+                <button class="suggestion-btn"
+                    onclick="sendSuggestion('What courses are offered at SV University?')">Available Courses</button>
+                <button class="suggestion-btn" onclick="sendSuggestion('Is hostel facility available?')">Hostel
+                    Info</button>
+                <button class="suggestion-btn" onclick="sendSuggestion('What about fees and scholarships?')">Fees &
+                    Scholarships</button>
+                <button class="suggestion-btn" onclick="sendSuggestion('How to apply for admission?')">Admission
+                    Process</button>
             </div>
 
             <div class="input-container">
                 <div class="input-box">
-                    <input type="text" id="userInput" placeholder="Type your question about SV University..." maxlength="500" autocomplete="off">
+                    <input type="text" id="userInput" placeholder="Type your question about SV University..."
+                        maxlength="500" autocomplete="off">
                     <button id="micBtn" onclick="toggleRecord()" title="Speak">
                         <span id="micIcon">🎤</span>
                     </button>
@@ -148,7 +315,8 @@
     </div>
 
     <footer class="footer">
-        <p>&copy; 2024 SV University Campus Assistant | For official info, visit <a href="https://svuniversity.edu.in/" target="_blank">svuniversity.edu.in</a></p>
+        <p>&copy; 2024 SV University Campus Assistant | For official info, visit <a href="https://svuniversity.edu.in/"
+                target="_blank">svuniversity.edu.in</a></p>
     </footer>
 
     <script>
@@ -157,13 +325,19 @@
         const maxRetries = 3;
         let recognition = null;
         let isRecording = false;
+        let sessionId = localStorage.getItem('chat_session_id');
 
-        document.addEventListener('DOMContentLoaded', function() {
+        if (!sessionId) {
+            sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('chat_session_id', sessionId);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
             const userInput = document.getElementById('userInput');
             const welcomeTime = document.getElementById('welcomeTime');
             welcomeTime.textContent = getCurrentTime();
 
-            userInput.addEventListener('keypress', function(e) {
+            userInput.addEventListener('keypress', function (e) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
@@ -172,40 +346,40 @@
 
             checkConnection();
             userInput.focus();
-            
+
             // Init Speech Recognition
             if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
                 recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
                 recognition.continuous = false;
                 recognition.lang = 'en-US';
-                
-                recognition.onstart = function() {
+
+                recognition.onstart = function () {
                     isRecording = true;
                     document.getElementById('micBtn').style.background = '#dc3545';
                     document.getElementById('micIcon').textContent = '⏹️';
                     document.getElementById('userInput').placeholder = "Listening...";
                 };
-                
-                recognition.onend = function() {
+
+                recognition.onend = function () {
                     isRecording = false;
                     document.getElementById('micBtn').style.background = ''; // reset to default
                     document.getElementById('micIcon').textContent = '🎤';
                     document.getElementById('userInput').placeholder = "Type your question about SV University...";
                 };
-                
-                recognition.onresult = function(event) {
+
+                recognition.onresult = function (event) {
                     const transcript = event.results[0][0].transcript;
                     document.getElementById('userInput').value = transcript;
                     setTimeout(sendMessage, 500); // Auto send after brief pause
                 };
-                
-                recognition.onerror = function(event) {
+
+                recognition.onerror = function (event) {
                     console.error("Speech recognition error", event.error);
                     stopRecord();
                 };
             } else {
                 const micBtn = document.getElementById('micBtn');
-                if(micBtn) micBtn.style.display = 'none';
+                if (micBtn) micBtn.style.display = 'none';
             }
         });
 
@@ -217,7 +391,7 @@
                 recognition.start();
             }
         }
-        
+
         function stopRecord() {
             if (recognition && isRecording) {
                 recognition.stop();
@@ -247,18 +421,18 @@
 
         function checkConnection() {
             fetch('/health')
-            .then(response => {
-                if (response.ok) return response.json();
-                throw new Error(`HTTP ${response.status}`);
-            })
-            .then(() => updateConnectionStatus(true))
-            .catch(() => {
-                updateConnectionStatus(false, 'Connection failed');
-                if (retryCount < maxRetries) {
-                    retryCount++;
-                    setTimeout(checkConnection, 3000);
-                }
-            });
+                .then(response => {
+                    if (response.ok) return response.json();
+                    throw new Error(`HTTP ${response.status}`);
+                })
+                .then(() => updateConnectionStatus(true))
+                .catch(() => {
+                    updateConnectionStatus(false, 'Connection failed');
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(checkConnection, 3000);
+                    }
+                });
         }
 
         function sendMessage() {
@@ -275,20 +449,23 @@
             fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: message })
+                body: JSON.stringify({
+                    message: message,
+                    session_id: sessionId
+                })
             })
-            .then(res => res.json())
-            .then(data => {
-                document.getElementById('sendIcon').style.display = 'inline';
-                document.getElementById('loadingIcon').style.display = 'none';
-                if (data.status === 'success') addMessage(data.response, 'bot');
-                else addMessage(data.error || 'Something went wrong', 'error');
-            })
-            .catch(() => {
-                document.getElementById('sendIcon').style.display = 'inline';
-                document.getElementById('loadingIcon').style.display = 'none';
-                addMessage('⚠️ Failed to connect to server', 'error');
-            });
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('sendIcon').style.display = 'inline';
+                    document.getElementById('loadingIcon').style.display = 'none';
+                    if (data.status === 'success') addMessage(data.response, 'bot');
+                    else addMessage(data.error || 'Something went wrong', 'error');
+                })
+                .catch(() => {
+                    document.getElementById('sendIcon').style.display = 'inline';
+                    document.getElementById('loadingIcon').style.display = 'none';
+                    addMessage('⚠️ Failed to connect to server', 'error');
+                });
         }
 
         function sendSuggestion(text) {
@@ -314,4 +491,5 @@
         }
     </script>
 </body>
+
 </html>

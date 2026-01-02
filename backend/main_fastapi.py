@@ -16,6 +16,12 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
+from typing import Dict
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 load_dotenv()
 logger = logging.getLogger("uvicorn")
 logger.setLevel(logging.INFO)
@@ -24,6 +30,14 @@ logger.setLevel(logging.INFO)
 vector_db = None
 llm = None
 retrieval_chain = None
+
+# In-memory history storage
+store: Dict[str, BaseChatMessageHistory] = {}
+
+def get_session_history(session_id: str) -> BaseChatMessageHistory:
+    if session_id not in store:
+        store[session_id] = ChatMessageHistory()
+    return store[session_id]
 
 # Paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +48,7 @@ DB_PATH = os.path.join(BASE_DIR, 'chroma_db')
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: str = "default_session"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,35 +90,75 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("GROQ_API_KEY not found.")
         
-    # 4. Setup Chain
+    # 4. Setup Chain with History
     if vector_db and llm:
         retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         
-        template = """
-        You are an intelligent campus assistant for SV University. Use the following context to answer the student's question.
-        If the answer is not in the context, say you don't know politely or provide general advice if appropriate.
+        # Contextualize question prompt
+        contextualize_q_system_prompt = """Given a chat history and the latest user question 
+        which might reference context in the chat history, formulate a standalone question 
+        which can be understood without the chat history. Do NOT answer the question, 
+        just reformulate it if needed and otherwise return it as is."""
+        
+        contextualize_q_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", contextualize_q_system_prompt),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}"),
+            ]
+        )
+        
+        history_aware_retriever = (
+            {
+                    "chat_history": lambda x: x["chat_history"], 
+                    "input": lambda x: x["input"]
+            }
+            | contextualize_q_prompt 
+            | llm 
+            | StrOutputParser() 
+            | retriever
+        )
+        
+        # QA prompt
+        qa_system_prompt = """You are an intelligent campus assistant for SV University. 
+        Use the following pieces of retrieved context to answer the question.
+        If the answer is not in the context, say you don't know politely.
         Keep answers concise, helpful, and friendly.
         
-        Context:
-        {context}
+        Context: {context}"""
         
-        Question: {question}
-        
-        Answer:
-        """
-        
-        prompt = PromptTemplate.from_template(template)
+        qa_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", qa_system_prompt),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{input}"),
+            ]
+        )
         
         def format_docs(docs):
-            return "\n\n".join(doc.page_content for doc in docs)
-            
-        retrieval_chain = (
-            {"context": retriever | format_docs, "question": RunnablePassthrough()}
-            | prompt
+            if isinstance(docs, list):
+                return "\n\n".join(doc.page_content for doc in docs)
+            return ""
+
+        question_answer_chain = (
+            {
+                "context": history_aware_retriever | format_docs,
+                "chat_history": lambda x: x["chat_history"],
+                "input": lambda x: x["input"]
+            }
+            | qa_prompt
             | llm
             | StrOutputParser()
         )
-        logger.info("RAG Chain initialized successfully.")
+        
+        retrieval_chain = RunnableWithMessageHistory(
+            question_answer_chain,
+            get_session_history,
+            input_messages_key="input",
+            history_messages_key="chat_history",
+        )
+        
+        logger.info("RAG Chain with Memory initialized successfully.")
             
     yield
     # Shutdown
@@ -142,7 +197,10 @@ async def chat_endpoint(request: ChatRequest):
         }
         
     try:
-        response_text = retrieval_chain.invoke(request.message)
+        response_text = retrieval_chain.invoke(
+            {"input": request.message},
+            config={"configurable": {"session_id": request.session_id}}
+        )
         return {"status": "success", "response": response_text}
     except Exception as e:
         logger.error(f"Error generating response: {e}")
