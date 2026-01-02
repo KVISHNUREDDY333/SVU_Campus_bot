@@ -239,6 +239,11 @@
                 <div class="form-group">
                     <label>Password</label>
                     <input type="password" id="login-password" required placeholder="********">
+                    <div style="text-align: right; margin-top: 5px;">
+                        <a href="#" onclick="showForgotPassword()"
+                            style="color: var(--accent-color); font-size: 13px; text-decoration: none;">Forgot
+                            Password?</a>
+                    </div>
                 </div>
                 <button type="submit" class="btn-submit auth-btn">Log In</button>
             </form>
@@ -249,6 +254,7 @@
                     <label>Username (ID)</label>
                     <input type="text" id="reg-username" required placeholder="Create a unique ID">
                 </div>
+                <!-- ... existing form fields ... -->
                 <div class="form-group">
                     <label>Full Name</label>
                     <input type="text" id="reg-fullname" required placeholder="e.g. Vishnu Reddy">
@@ -267,6 +273,37 @@
                     <input type="password" id="reg-password" required placeholder="Create password">
                 </div>
                 <button type="submit" class="btn-submit auth-btn">Create Account</button>
+            </form>
+
+            <!-- Forgot Password Form -->
+            <form id="forgot-form" style="display: none;">
+                <h3 style="text-align: center; margin-bottom: 20px; font-size: 18px;">Reset Password</h3>
+
+                <div id="step-email">
+                    <div class="form-group">
+                        <label>Enter your registrered email</label>
+                        <input type="email" id="forgot-email" placeholder="vishwureddy@example.com">
+                    </div>
+                    <button type="button" class="btn-submit auth-btn" onclick="handleForgotPassword(event)">Send
+                        OTP</button>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <a href="#" onclick="switchAuthTab('login')"
+                            style="color: #666; font-size: 13px; text-decoration: none;">Back to Login</a>
+                    </div>
+                </div>
+
+                <div id="step-otp" style="display: none;">
+                    <div class="form-group">
+                        <label>Enter OTP (sent to email)</label>
+                        <input type="text" id="forgot-otp" placeholder="Enter 6-digit OTP">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="forgot-new-password" placeholder="New secure password">
+                    </div>
+                    <button type="button" class="btn-submit auth-btn" onclick="handleResetPassword(event)">Update
+                        Password</button>
+                </div>
             </form>
             <p id="auth-error" style="color: red; text-align: center; margin-top: 10px; display: none;"></p>
         </div>

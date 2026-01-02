@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 # Auth dependencies
 import jwt
-from passlib.context import CryptContext
+import bcrypt
 
 # LangChain Imports
 from langchain_groq import ChatGroq
@@ -34,7 +34,7 @@ logger = logging.getLogger("uvicorn")
 logger.setLevel(logging.INFO)
 
 # --- Configuration & Secrets ---
-SECRET_KEY = os.getenv("SECRET_KEY", "super_secret_jwt_key_change_in_prod")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -43,6 +43,7 @@ MONGODB_URI = os.getenv('MONGODB_URI')
 DB_NAME = os.getenv('MONGODB_DB', 'svu_chatbot')
 COLLECTION_NAME = os.getenv('MONGODB_COLLECTION', 'svu_vectors')
 USERS_COLLECTION = "users"
+OTPS_COLLECTION = "otps"
 
 # Global variables
 vector_db = None
@@ -50,6 +51,7 @@ llm = None
 retrieval_chain = None
 mongo_client = None
 users_db = None
+otps_db = None # New OTP collection
 
 # In-memory chat history (production should use Redis/Mongo)
 store: Dict[str, BaseChatMessageHistory] = {}
@@ -66,7 +68,7 @@ STATIC_DIR = os.path.join(FRONTEND_DIR, 'static')
 TEMPLATES_DIR = os.path.join(FRONTEND_DIR, 'templates')
 
 # --- Auth Setup ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 class User(BaseModel):
@@ -91,10 +93,12 @@ class RegisterRequest(BaseModel):
     role: str = "student"
 
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    # bcrypt requires bytes
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    # bcrypt returns bytes, decode to string for storage
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: Optional[datetime.timedelta] = None):
     to_encode = data.copy()
@@ -128,7 +132,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
 # --- Chat Models ---
 # ... (Existing Imports)
-from datetime import datetime
 # ...
 
 # Global variables
@@ -147,7 +150,7 @@ class ChatRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global vector_db, llm, retrieval_chain, mongo_client, users_db, analytics_db
+    global vector_db, llm, retrieval_chain, mongo_client, users_db, analytics_db, otps_db
     
     logger.info("Starting SVU Campus Assistant Backend v2 (RBAC Enabled)...")
     
@@ -158,10 +161,13 @@ async def lifespan(app: FastAPI):
             db = mongo_client[DB_NAME]
             users_db = db[USERS_COLLECTION]
             analytics_db = db["analytics"]
+            otps_db = db[OTPS_COLLECTION]
             logger.info("Connected to MongoDB for User & Analytics Data.")
             
             # Ensure index on username
             users_db.create_index("username", unique=True)
+            # Ensure TTL index on OTPs (expire after 10 mins)
+            otps_db.create_index("created_at", expireAfterSeconds=600)
             
             # Init Embeddings & Vector DB
             embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
@@ -285,10 +291,28 @@ async def login_page():
 @app.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user_dict = users_db.find_one({"username": form_data.username})
-    if not user_dict or not verify_password(form_data.password, user_dict['hashed_password']):
+    if not user_dict:
+        logger.warning(f"Login failed: User {form_data.username} not found")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    try:
+        if not verify_password(form_data.password, user_dict['hashed_password']):
+            logger.warning(f"Login failed: Incorrect password for user {form_data.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    except Exception as e:
+        logger.error(f"Login error (crypto): {e}")
+        # If hash is invalid, it's effectively an auth failure (or corrupted user)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed due to system error (invalid credential data)",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -327,7 +351,7 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
         # Analytics Logging
         if not request.incognito and analytics_db is not None:
             analytics_db.insert_one({
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.datetime.utcnow(),
                 "role": current_user.role,
                 "user_id": str(current_user.username),
                 "topic": "general",
@@ -372,13 +396,13 @@ class Notification(BaseModel):
     id: int
     title: str
     message: str
-    timestamp: datetime
+    timestamp: datetime.datetime
     read: bool = False
 
 # Mock Notifications Data
 mock_notifications = [
-    Notification(id=1, title="Exam Schedule", message="Semester 4 exams start next Monday.", timestamp=datetime.utcnow()),
-    Notification(id=2, title="Library Alert", message="Library will be closed this Sunday for maintenance.", timestamp=datetime.utcnow()),
+    Notification(id=1, title="Exam Schedule", message="Semester 4 exams start next Monday.", timestamp=datetime.datetime.utcnow()),
+    Notification(id=2, title="Library Alert", message="Library will be closed this Sunday for maintenance.", timestamp=datetime.datetime.utcnow()),
 ]
 
 @app.get("/notifications", response_model=List[Notification])
@@ -392,7 +416,7 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
             id=new_id, 
             title="Update", 
             message=f"New announcement #{new_id}: Please check the notice board.", 
-            timestamp=datetime.utcnow()
+            timestamp=datetime.datetime.utcnow()
         ))
     # Return sorted by time, newest first
     return sorted(mock_notifications, key=lambda x: x.timestamp, reverse=True)[:5]

@@ -83,6 +83,7 @@ function checkAuth() {
 function switchAuthTab(tab) {
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
+    const forgotForm = document.getElementById('forgot-form'); // New
     const tabs = document.querySelectorAll('.auth-tab');
 
     document.getElementById('auth-error').style.display = 'none';
@@ -90,13 +91,75 @@ function switchAuthTab(tab) {
     if (tab === 'login') {
         loginForm.style.display = 'block';
         registerForm.style.display = 'none';
+        forgotForm.style.display = 'none';
         tabs[0].classList.add('active');
         tabs[1].classList.remove('active');
     } else {
         loginForm.style.display = 'none';
         registerForm.style.display = 'block';
+        forgotForm.style.display = 'none';
         tabs[0].classList.remove('active');
         tabs[1].classList.add('active');
+    }
+}
+
+function showForgotPassword() {
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('forgot-form').style.display = 'block';
+    document.getElementById('auth-error').style.display = 'none';
+}
+
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value;
+    const errorEl = document.getElementById('auth-error');
+
+    try {
+        const res = await fetch(`${API_URL}/forgot-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: email })
+        });
+
+        const data = await res.json();
+        if (data.status === 'success') {
+            document.getElementById('step-email').style.display = 'none';
+            document.getElementById('step-otp').style.display = 'block';
+            errorEl.style.display = 'none';
+        } else {
+            throw new Error(data.message || 'Failed to send OTP');
+        }
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+    }
+}
+
+async function handleResetPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('forgot-email').value;
+    const otp = document.getElementById('forgot-otp').value;
+    const newPassword = document.getElementById('forgot-new-password').value;
+    const errorEl = document.getElementById('auth-error');
+
+    try {
+        const res = await fetch(`${API_URL}/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: email, otp, new_password: newPassword })
+        });
+
+        const data = await res.json();
+        if (data.status === 'success') {
+            alert('Password reset successful! Please log in.');
+            location.reload();
+        } else {
+            throw new Error(data.detail || 'Failed to reset password');
+        }
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
     }
 }
 
@@ -144,6 +207,12 @@ async function handleRegister(e) {
 
         if (!res.ok) {
             const errData = await res.json();
+            if (errData.detail === "Username already registered") {
+                errorEl.textContent = "This email is already registered. Please log in.";
+                errorEl.style.display = 'block';
+                setTimeout(() => switchAuthTab('login'), 2000);
+                return;
+            }
             throw new Error(errData.detail || 'Registration failed');
         }
 
