@@ -1,4 +1,5 @@
-const API_URL = "";
+const API_URL = window.location.origin;
+console.log("Using API_URL:", API_URL);
 
 // DOM Elements
 const chatBox = document.getElementById('chat-box');
@@ -173,6 +174,7 @@ async function handleLogin(e) {
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
+        console.log("Login Payload:", formData.toString());
 
         const res = await fetch(`${API_URL}/token`, {
             method: 'POST',
@@ -180,15 +182,34 @@ async function handleLogin(e) {
             body: formData
         });
 
-        if (!res.ok) throw new Error('Invalid credentials');
+        if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.detail || 'Invalid credentials');
+        }
 
         const data = await res.json();
+        console.log("Login successful:", data.username);
         saveSession(data);
     } catch (err) {
+        console.error("Login error:", err.message);
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
     }
 }
+
+const validateEmail = (email) => {
+    return String(email)
+        .toLowerCase()
+        .match(
+            /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+        );
+};
+
+const validatePassword = (password) => {
+    // Min 8 chars, 1 upper, 1 lower, 1 number, 1 special char
+    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    return re.test(password);
+};
 
 async function handleRegister(e) {
     e.preventDefault();
@@ -198,7 +219,21 @@ async function handleRegister(e) {
     const password = document.getElementById('reg-password').value;
     const errorEl = document.getElementById('auth-error');
 
+    // Frontend Validation
+    if (!validateEmail(username)) {
+        errorEl.textContent = "Invalid email format.";
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    if (!validatePassword(password)) {
+        errorEl.textContent = "Password must be 8+ chars, with Upper, Lower, Number & Special char.";
+        errorEl.style.display = 'block';
+        return;
+    }
+
     try {
+        console.log("Registering user:", username);
         const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -207,6 +242,7 @@ async function handleRegister(e) {
 
         if (!res.ok) {
             const errData = await res.json();
+            console.error("Register Error Response:", errData);
             if (errData.detail === "Username already registered") {
                 errorEl.textContent = "This email is already registered. Please log in.";
                 errorEl.style.display = 'block';
@@ -216,9 +252,13 @@ async function handleRegister(e) {
             throw new Error(errData.detail || 'Registration failed');
         }
 
-        const data = await res.json();
-        saveSession(data);
+        // Success Popup & Redirect to Login
+        console.info("Registration successful, alerting user.");
+        alert("User registration successful! Please log in with your credentials.");
+        switchAuthTab('login');
+
     } catch (err) {
+        console.error("Registration error:", err.message);
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
     }
