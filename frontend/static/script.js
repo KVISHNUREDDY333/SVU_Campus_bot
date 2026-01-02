@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (userInput) userInput.focus();
     loadChatHistory();
+    populateSidebarProfile();
 });
 
 // --- Auth Functions ---
@@ -169,6 +170,10 @@ async function handleLogin(e) {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
     const errorEl = document.getElementById('auth-error');
+    const loadingOverlay = document.getElementById('loading-overlay');
+
+    if (loadingOverlay) loadingOverlay.style.display = 'flex';
+    errorEl.style.display = 'none';
 
     try {
         const formData = new URLSearchParams();
@@ -194,6 +199,8 @@ async function handleLogin(e) {
         console.error("Login error:", err.message);
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
+    } finally {
+        if (loadingOverlay) loadingOverlay.style.display = 'none';
     }
 }
 
@@ -270,12 +277,21 @@ function saveSession(data) {
     localStorage.setItem('access_token', ACCESS_TOKEN);
     localStorage.setItem('user_role', USER_ROLE);
     localStorage.setItem('username', data.username);
+    localStorage.setItem('full_name', data.full_name || data.username);
 
-    document.getElementById('auth-overlay').classList.remove('active');
+    // Redirection: Hide auth overlay and show chat
+    const authOverlay = document.getElementById('auth-overlay');
+    if (authOverlay) authOverlay.classList.remove('active');
 
-    // Refresh admin view if admin
+    showSection('chat');
+    populateSidebarProfile();
+
+    // Refresh admin/dashboard views if needed
     if (USER_ROLE === 'admin') {
-        // Show extra admin controls if any
+        const navAdmin = document.getElementById('nav-admin');
+        const navDashboard = document.getElementById('nav-dashboard');
+        if (navAdmin) navAdmin.style.display = 'block';
+        if (navDashboard) navDashboard.style.display = 'block';
     }
 }
 
@@ -306,18 +322,61 @@ let isIncognito = false;
 if (incognitoToggle) {
     incognitoToggle.addEventListener('change', (e) => {
         isIncognito = e.target.checked;
+        const badge = document.getElementById('incognito-badge');
+
         if (isIncognito) {
             document.body.classList.add('incognito-active');
-            appendMessage("Entered Incognito Mode. Your chats will not be saved.", "bot");
+            if (badge) badge.style.display = 'flex';
+            showStatusPopup('<i class="fa-solid fa-ghost"></i> Entered Incognito Mode');
         } else {
             document.body.classList.remove('incognito-active');
-            appendMessage("Exited Incognito Mode.", "bot");
+            if (badge) badge.style.display = 'none';
+            showStatusPopup('Exited Incognito Mode');
         }
     });
 }
 
-// Polling for Notifications
-setInterval(checkNotifications, 10000); // Check every 10 seconds for demo
+// Polling for Notifications (DISABLED per user request)
+// setInterval(checkNotifications, 10000); 
+
+
+function populateSidebarProfile() {
+    const fullName = localStorage.getItem('full_name');
+    const role = localStorage.getItem('user_role');
+    const profileEl = document.getElementById('sidebar-profile');
+
+    if (ACCESS_TOKEN && fullName && profileEl) {
+        profileEl.style.display = 'flex';
+        const nameEl = document.getElementById('profile-name');
+        const roleEl = document.getElementById('profile-role');
+        const avatarEl = document.getElementById('profile-avatar');
+
+        if (nameEl) nameEl.textContent = fullName;
+        if (roleEl) roleEl.textContent = role;
+        if (avatarEl) avatarEl.textContent = fullName.charAt(0).toUpperCase();
+    } else if (profileEl) {
+        profileEl.style.display = 'none';
+    }
+}
+
+
+
+function showStatusPopup(message, duration = 2000) {
+    let popup = document.getElementById('status-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'status-popup';
+        popup.className = 'status-popup';
+        document.body.appendChild(popup);
+    }
+
+    popup.innerHTML = message;
+    popup.classList.add('active');
+
+    setTimeout(() => {
+        popup.classList.remove('active');
+    }, duration);
+}
 
 async function checkNotifications() {
     if (!ACCESS_TOKEN) return;
@@ -406,22 +465,31 @@ function showToast(title, message) {
 }
 
 function showSection(sectionId) {
-    document.getElementById('chat-section').style.display = 'none';
-    document.getElementById('admin-section').style.display = 'none'; // Legacy ID might be replaced
-    document.getElementById('dashboard-section').style.display = 'none';
+    const sections = ['chat-section', 'admin-section', 'dashboard-section'];
+    const navs = ['nav-chat', 'nav-admin', 'nav-dashboard'];
 
-    document.getElementById('nav-chat').classList.remove('active');
-    document.getElementById('nav-admin').classList.remove('active'); // Legacy
-    document.getElementById('nav-dashboard').classList.remove('active');
+    sections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+
+    navs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+    });
 
     if (sectionId === 'chat') {
-        document.getElementById('chat-section').style.display = 'flex';
-        document.getElementById('nav-chat').classList.add('active');
+        const chatSec = document.getElementById('chat-section');
+        const chatNav = document.getElementById('nav-chat');
+        if (chatSec) chatSec.style.display = 'flex';
+        if (chatNav) chatNav.classList.add('active');
     } else if (sectionId === 'dashboard') {
-        document.getElementById('dashboard-section').style.display = 'block';
-        document.getElementById('nav-dashboard').classList.add('active');
-        loadDashboard(); // Load stats
-        loadFAQs(); // Load FAQs (shared view)
+        const dashSec = document.getElementById('dashboard-section');
+        const dashNav = document.getElementById('nav-dashboard');
+        if (dashSec) dashSec.style.display = 'block';
+        if (dashNav) dashNav.classList.add('active');
+        loadDashboard();
+        loadFAQs();
     }
 }
 
@@ -435,7 +503,7 @@ async function sendMessage() {
     }
 
     // Add user message
-    appendMessage(text, 'user');
+    appendMessage(text, 'user', !isIncognito);
     userInput.value = '';
 
     // Show typing indicator
@@ -471,7 +539,7 @@ async function sendMessage() {
         // Hide typing indicator before showing response
         hideTypingIndicator();
 
-        appendMessage(data.response || "I'm having trouble connecting right now.", 'bot');
+        appendMessage(data.response || "I'm having trouble connecting right now.", 'bot', !isIncognito);
 
     } catch (err) {
         hideTypingIndicator();
@@ -481,13 +549,8 @@ async function sendMessage() {
     scrollToBottom();
 }
 
-function saveSession(data) {
-    // ... existing ...
+// Removing duplicate saveSession placeholder
 
-    if (USER_ROLE === 'admin') {
-        document.getElementById('nav-dashboard').style.display = 'block'; // Show dashboard link
-    }
-}
 
 // Analytics Chart
 let roleChartInstance = null;
@@ -547,57 +610,8 @@ function appendQuick(text) {
     sendMessage();
 }
 
-async function sendMessage() {
-    const text = userInput.value?.trim();
-    if (!text) return;
+// Section for consolidated functions - removing duplicate sendMessage placeholder
 
-    // Hide welcome screen if visible
-    if (welcomeScreen && welcomeScreen.style.display !== 'none') {
-        welcomeScreen.style.display = 'none';
-    }
-
-    // Add user message
-    appendMessage(text, 'user');
-    userInput.value = '';
-
-    // Show typing indicator
-    showTypingIndicator();
-
-    // Scroll to bottom
-    scrollToBottom();
-
-    // Get Session ID (if using session history)
-    let sessionId = localStorage.getItem('chat_session_id');
-    if (!sessionId) {
-        sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem('chat_session_id', sessionId);
-    }
-
-    try {
-        const response = await fetch(`${API_URL}/chat`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ACCESS_TOKEN}`
-            },
-            body: JSON.stringify({ message: text, session_id: sessionId })
-        });
-
-        if (!response.ok) throw new Error('Backend unavailable');
-        const data = await response.json();
-
-        // Hide typing indicator before showing response
-        hideTypingIndicator();
-
-        appendMessage(data.response || "I'm having trouble connecting right now.", 'bot');
-
-    } catch (err) {
-        hideTypingIndicator();
-        appendMessage("I apologize, but I'm unable to reach the server at the moment. Please try again later.", 'bot');
-    }
-
-    scrollToBottom();
-}
 
 function appendMessage(text, sender, save = true) {
     if (save) {

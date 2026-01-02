@@ -90,6 +90,7 @@ class Token(BaseModel):
     token_type: str
     username: str
     role: str
+    full_name: str
 
 class RegisterRequest(BaseModel):
     username: str
@@ -372,7 +373,13 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"sub": user_dict["username"], "role": user_dict.get("role", "student")},
         expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer", "username": user_dict["username"], "role": user_dict.get("role", "student")}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer", 
+        "username": user_dict["username"], 
+        "role": user_dict.get("role", "student"),
+        "full_name": user_dict.get("full_name", "User")
+    }
 
 @app.post("/register", response_model=Token)
 async def register(req: RegisterRequest):

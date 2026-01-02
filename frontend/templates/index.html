@@ -28,6 +28,14 @@
         </div>
     </div>
 
+    <!-- Processing Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loader-content">
+            <div class="spinner"></div>
+            <p>Authenticating...</p>
+        </div>
+    </div>
+
     <div class="container">
         <!-- Sidebar -->
         <aside class="sidebar">
@@ -39,16 +47,39 @@
                 <ul>
                     <li onclick="showSection('chat')" class="active" id="nav-chat"><i
                             class="fa-regular fa-comment-dots"></i> Home</li>
-                    <li onclick="showSection('admin')" id="nav-admin"><i class="fa-solid fa-gear"></i> Admin</li>
+                    <li onclick="showSection('admin')" id="nav-admin" style="display: none;"><i
+                            class="fa-solid fa-gear"></i> Admin</li>
+                    <li onclick="showSection('dashboard')" id="nav-dashboard" style="display: none;"><i
+                            class="fa-solid fa-chart-line"></i> Dashboard</li>
                     <li><a href="https://svuniversity.edu.in/" target="_blank"><i class="fa-solid fa-globe"></i>
                             Official Website</a></li>
                     <li id="nav-location" onclick="openLocations()"><i class="fa-solid fa-location-dot"></i> Locations
+                    </li>
+                    <li id="nav-incognito">
+                        <i class="fa-solid fa-ghost"></i>
+                        <span>Incognito</span>
+                        <label class="switch-small" style="margin-left: auto;">
+                            <input type="checkbox" id="incognito-toggle">
+                            <span class="slider-small round"></span>
+                        </label>
                     </li>
                     <li id="nav-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i> <span
                             id="theme-text">Dark Mode</span></li>
                     <li id="nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</li>
                 </ul>
             </nav>
+
+            <!-- User Profile Section -->
+            <div class="sidebar-user-profile" id="sidebar-profile" style="display: none;">
+                <div class="profile-avatar" id="profile-avatar">U</div>
+                <div class="profile-info">
+                    <div class="profile-name" id="profile-name">User Name</div>
+                    <div class="profile-role" id="profile-role">Student</div>
+                </div>
+                <div class="profile-actions">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                </div>
+            </div>
         </aside>
 
         <!-- Main Content -->
@@ -59,6 +90,9 @@
                 <!-- Header -->
                 <div class="header">
                     <h3></h3>
+                    <div id="incognito-badge" class="incognito-badge" style="display: none;">
+                        <i class="fa-solid fa-mask"></i> Incognito Active
+                    </div>
                     <div class="actions">
                         <i class="fa-solid fa-plus" title="New Thread" onclick="clearChat()"></i>
                         <i class="fa-solid fa-rotate-right" title="Refresh" onclick="window.location.reload()"></i>
@@ -126,14 +160,7 @@
             <li id="nav-dashboard" onclick="showSection('dashboard')" style="display: none;"><i
                     class="fa-solid fa-chart-line"></i> Dashboard</li>
 
-            <!-- Add Toggle in Header -->
-            <div class="header-toggle">
-                <label class="switch">
-                    <input type="checkbox" id="incognito-toggle">
-                    <span class="slider round"></span>
-                </label>
-                <span>Incognito Mode</span>
-            </div>
+
 
             <!-- Dashboard Section -->
             <section id="dashboard-section" style="display: none;">
@@ -254,7 +281,7 @@
                     <label>Email Address</label>
                     <input type="email" id="reg-username" required placeholder="Enter your email">
                 </div>
-                <!-- ... existing form fields ... -->
+
                 <div class="form-group">
                     <label>Full Name</label>
                     <input type="text" id="reg-fullname" required placeholder="e.g. Vishnu Reddy">
