@@ -22,6 +22,9 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from pymongo import MongoClient
+from langchain_mongodb import MongoDBAtlasVectorSearch
+
 load_dotenv()
 logger = logging.getLogger("uvicorn")
 logger.setLevel(logging.INFO)
@@ -44,7 +47,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(BASE_DIR, '..', 'frontend')
 STATIC_DIR = os.path.join(FRONTEND_DIR, 'static')
 TEMPLATES_DIR = os.path.join(FRONTEND_DIR, 'templates')
-DB_PATH = os.path.join(BASE_DIR, 'chroma_db')
+
+# MongoDB Config
+MONGODB_URI = os.getenv('MONGODB_URI')
+DB_NAME = os.getenv('MONGODB_DB', 'svu_chatbot')
+COLLECTION_NAME = os.getenv('MONGODB_COLLECTION', 'svu_vectors')
+INDEX_NAME = "default" 
 
 class ChatRequest(BaseModel):
     message: str
@@ -65,15 +73,22 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to load embeddings: {e}")
         embeddings = None
     
-    # 2. Load Vector DB
-    if embeddings and os.path.exists(DB_PATH):
+    # 2. Connect to MongoDB
+    if embeddings and MONGODB_URI:
         try:
-            vector_db = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
-            logger.info(f"Vector DB loaded from {DB_PATH}")
+            client = MongoClient(MONGODB_URI)
+            collection = client[DB_NAME][COLLECTION_NAME]
+            
+            vector_db = MongoDBAtlasVectorSearch(
+                collection=collection,
+                embedding=embeddings,
+                index_name=INDEX_NAME
+            )
+            logger.info(f"Connected to MongoDB Atlas Vector Store: {DB_NAME}.{COLLECTION_NAME}")
         except Exception as e:
-            logger.error(f"Failed to load Vector DB: {e}")
+            logger.error(f"Failed to connect to MongoDB: {e}")
     else:
-        logger.warning(f"Vector DB not found at {DB_PATH}. Please run build_vector_db.py")
+        logger.warning("MONGODB_URI or Embeddings missing.")
         
     # 3. Init Groq LLM
     groq_api_key = os.getenv("GROQ_API_KEY")
@@ -208,6 +223,28 @@ async def chat_endpoint(request: ChatRequest):
             status_code=500, 
             content={"status": "error", "error": "Internal processing error"}
         )
+
+# Mock Data for Admin Panel
+faqs_db = [
+    {"id": 1, "question": "What are the library timings?", "answer": "The central library is open from 8 AM to 8 PM on weekdays."},
+    {"id": 2, "question": "How to access Wi-Fi?", "answer": "Students can register their devices at the computer center to access campus Wi-Fi."},
+    {"id": 3, "question": "Where is the health center?", "answer": "The health center is located near the main entrance, opposite to the administrative block."}
+]
+
+@app.get("/faqs")
+async def get_faqs():
+    return faqs_db
+
+class FAQItem(BaseModel):
+    question: str
+    answer: str
+
+@app.post("/faqs")
+async def add_faq(faq: FAQItem):
+    new_id = len(faqs_db) + 1
+    new_item = {"id": new_id, "question": faq.question, "answer": faq.answer}
+    faqs_db.append(new_item)
+    return {"status": "success", "message": "FAQ added successfully", "faq": new_item}
 
 @app.get("/health")
 async def health():
