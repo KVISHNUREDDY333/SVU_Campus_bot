@@ -19,3 +19,7 @@ wtforms
 email-validator
 dnspython
 sentence-transformers
+pypdf
+authlib
+itsdangerous
+httpx
