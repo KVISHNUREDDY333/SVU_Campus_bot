@@ -33,6 +33,30 @@ let ACCESS_TOKEN = localStorage.getItem('access_token');
 let USER_ROLE = localStorage.getItem('user_role');
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Check for Google OAuth callback params
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    const error = urlParams.get('error');
+
+    if (error) {
+        alert("Authentication Failed: " + error);
+        window.history.replaceState({}, document.title, "/");
+    } else if (token) {
+        const role = urlParams.get('role');
+        const username = urlParams.get('username');
+
+        console.log("Google Login Success:", username);
+        saveSession({
+            access_token: token,
+            role: role,
+            username: username,
+            full_name: urlParams.get('name') // Optional if backend sends it
+        });
+
+        // Clean URL
+        window.history.replaceState({}, document.title, "/");
+    }
+
     // Check Auth first
     checkAuth();
 
@@ -121,7 +145,7 @@ async function handleForgotPassword(e) {
         const res = await fetch(`${API_URL}/forgot-password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: email })
+            body: JSON.stringify({ email: email })
         });
 
         const data = await res.json();
@@ -146,10 +170,10 @@ async function handleResetPassword(e) {
     const errorEl = document.getElementById('auth-error');
 
     try {
-        const res = await fetch(`${API_URL}/reset-password`, {
+        const res = await fetch(`${API_URL}/verify-otp-reset`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: email, otp, new_password: newPassword })
+            body: JSON.stringify({ email: email, otp, new_password: newPassword })
         });
 
         const data = await res.json();
@@ -179,7 +203,6 @@ async function handleLogin(e) {
         const formData = new URLSearchParams();
         formData.append('username', username);
         formData.append('password', password);
-        console.log("Login Payload:", formData.toString());
 
         const res = await fetch(`${API_URL}/token`, {
             method: 'POST',
@@ -188,8 +211,15 @@ async function handleLogin(e) {
         });
 
         if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.detail || 'Invalid credentials');
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const errData = await res.json();
+                throw new Error(errData.detail || 'Invalid credentials');
+            } else {
+                const text = await res.text();
+                console.error("Non-JSON Login Error:", text);
+                throw new Error("Server error during login. Please try again.");
+            }
         }
 
         const data = await res.json();
@@ -244,11 +274,19 @@ async function handleRegister(e) {
         const res = await fetch(`${API_URL}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, full_name: fullName, role, password })
+            body: JSON.stringify({ email: username, full_name: fullName, role, password })
         });
 
         if (!res.ok) {
-            const errData = await res.json();
+            const contentType = res.headers.get("content-type");
+            let errData;
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                errData = await res.json();
+            } else {
+                const text = await res.text();
+                console.error("Non-JSON Register Error:", text);
+                throw new Error("Server error during registration. please check logs.");
+            }
             console.error("Register Error Response:", errData);
             if (errData.detail === "Username already registered") {
                 errorEl.textContent = "This email is already registered. Please log in.";
@@ -256,7 +294,16 @@ async function handleRegister(e) {
                 setTimeout(() => switchAuthTab('login'), 2000);
                 return;
             }
-            throw new Error(errData.detail || 'Registration failed');
+            let msg = 'Registration failed';
+            if (typeof errData.detail === 'string') {
+                msg = errData.detail;
+            } else if (Array.isArray(errData.detail)) {
+                // Handle Pydantic validation errors
+                msg = errData.detail.map(e => e.msg).join(', ');
+            } else if (typeof errData.detail === 'object') {
+                msg = JSON.stringify(errData.detail);
+            }
+            throw new Error(msg);
         }
 
         // Success Popup & Redirect to Login
@@ -336,8 +383,8 @@ if (incognitoToggle) {
     });
 }
 
-// Polling for Notifications (DISABLED per user request)
-// setInterval(checkNotifications, 10000); 
+// Polling for Notifications
+setInterval(checkNotifications, 10000);
 
 
 function populateSidebarProfile() {
@@ -987,9 +1034,15 @@ function renderFAQs(faqsToRender) {
     }
 
     faqsToRender.forEach(item => {
+        const deleteBtn = USER_ROLE === 'admin'
+            ? `<button onclick="deleteFAQ('${item.id}')" style="float:right; color:#ef4444; background:none; border:none; cursor:pointer;" title="Delete"><i class="fa-solid fa-trash"></i></button>`
+            : '';
+
         list.innerHTML += `
             <div class="faq-card">
+                ${deleteBtn}
                 <h4>${escapeHtml(item.question)}</h4>
+                <div class="faq-meta" style="font-size: 0.8em; color: #0f766e; margin-bottom: 5px;">${escapeHtml(item.category || 'General')}</div>
                 <p>${escapeHtml(item.answer)}</p>
             </div>`;
     });
@@ -1013,9 +1066,52 @@ function openModal() { if (modal) modal.style.display = 'block'; }
 function closeModal() { if (modal) modal.style.display = 'none'; }
 
 async function saveFAQ() {
-    // Stub for saving FAQ - would implement POST request here
-    closeModal();
-    loadFAQs();
+    const question = document.getElementById('faq-question').value;
+    const answer = document.getElementById('faq-answer').value;
+    const category = document.getElementById('faq-category').value;
+
+    if (!question || !answer) {
+        alert("Please fill all fields.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/faqs`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ question, answer, category })
+        });
+
+        if (res.ok) {
+            closeModal();
+            loadFAQs();
+            // Clear form
+            document.getElementById('faq-question').value = '';
+            document.getElementById('faq-answer').value = '';
+        } else {
+            alert("Failed to save FAQ");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteFAQ(id) {
+    if (!confirm("Are you sure you want to delete this FAQ?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            loadFAQs();
+        } else {
+            alert("Failed to delete FAQ");
+        }
+    } catch (e) { console.error(e); }
 }
 
 // Locations Logic
@@ -1087,6 +1183,66 @@ const locations = [
 const locationsModal = document.getElementById('locations-modal');
 const locationsListEl = document.getElementById('locations-list');
 
+// --- Document Upload Logic ---
+
+function openUploadModal() {
+    document.getElementById('upload-modal').style.display = 'flex';
+    document.getElementById('upload-file').value = ""; // Reset
+    document.getElementById('upload-progress').style.display = 'none';
+}
+
+function closeUploadModal() {
+    document.getElementById('upload-modal').style.display = 'none';
+}
+
+async function submitDocument() {
+    const fileInput = document.getElementById('upload-file');
+    const file = fileInput.files[0];
+    const statusText = document.getElementById('upload-status');
+    const progressBar = document.getElementById('upload-bar');
+    const progressDiv = document.getElementById('upload-progress');
+
+    if (!file) {
+        alert("Please select a PDF file first.");
+        return;
+    }
+
+    progressDiv.style.display = 'block';
+    statusText.textContent = "Uploading and processing...";
+    progressBar.style.width = "50%";
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        const res = await fetch(`${API_URL}/admin/upload`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
+            body: formData
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Upload failed");
+        }
+
+        const data = await res.json();
+        progressBar.style.width = "100%";
+        statusText.textContent = "Complete! " + data.message;
+
+        setTimeout(() => {
+            closeUploadModal();
+            alert("Document uploaded and ingested successfully!");
+            // Optionally refresh a document list here
+        }, 1500);
+
+    } catch (e) {
+        progressBar.style.backgroundColor = "#ef4444";
+        statusText.textContent = "Error: " + e.message;
+    }
+}
+
+// --- Original Locations Logic Below ---
 function openLocations() {
     if (locationsListEl) {
         locationsListEl.innerHTML = '';
