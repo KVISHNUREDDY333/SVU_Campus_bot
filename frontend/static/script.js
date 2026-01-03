@@ -615,10 +615,73 @@ async function loadDashboard() {
         document.getElementById('active-users').textContent = data.active_users;
 
         renderChart(data.role_distribution);
+
+        // Also load other admin data
+        loadFAQs();
+        loadDocuments();
+
     } catch (e) {
         console.error("Dashboard Error", e);
     }
 }
+
+async function loadDocuments() {
+    try {
+        const res = await fetch(`${API_URL}/admin/documents`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const docs = await res.json();
+        renderDocuments(docs);
+    } catch (e) { console.error("Load Docs Error", e); }
+}
+
+function renderDocuments(docs) {
+    const tbody = document.getElementById('documents-table-body');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (docs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No documents found.</td></tr>';
+        return;
+    }
+
+    docs.forEach(doc => {
+        const dateStr = new Date(doc.upload_date).toLocaleDateString() + ' ' + new Date(doc.upload_date).toLocaleTimeString();
+        tbody.innerHTML += `
+            <tr>
+                <td>${escapeHtml(doc.filename)}</td>
+                <td>${escapeHtml(doc.uploaded_by || 'Admin')}</td>
+                <td>${dateStr}</td>
+                <td style="text-align: center;">${doc.chunks}</td>
+                <td style="text-align: right;">
+                    <button class="btn-delete" onclick="deleteDocument('${doc._id}')" title="Delete">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+async function deleteDocument(docId) {
+    if (!confirm("Are you sure you want to delete this document?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/documents/${docId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            alert("Document deleted.");
+            loadDocuments();
+        } else {
+            alert("Failed to delete document.");
+        }
+    } catch (e) { console.error(e); }
+}
+
 
 function renderChart(roleData) {
     const ctx = document.getElementById('roleChart').getContext('2d');
@@ -1234,6 +1297,7 @@ async function submitDocument() {
             closeUploadModal();
             alert("Document uploaded and ingested successfully!");
             // Optionally refresh a document list here
+            loadDocuments();
         }, 1500);
 
     } catch (e) {

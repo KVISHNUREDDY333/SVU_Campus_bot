@@ -197,6 +197,27 @@
                         <i class="fa-solid fa-magnifying-glass admin-search-icon"></i>
                     </div>
 
+                    <!-- Documents List -->
+                    <div class="documents-list-container" style="margin-top: 20px;">
+                        <table class="documents-table" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr
+                                    style="background: var(--sidebar-bg); border-bottom: 1px solid var(--border-color);">
+                                    <th style="padding: 10px; text-align: left;">Filename</th>
+                                    <th style="padding: 10px; text-align: left;">Uploaded By</th>
+                                    <th style="padding: 10px; text-align: left;">Date</th>
+                                    <th style="padding: 10px; text-align: center;">Chunks</th>
+                                    <th style="padding: 10px; text-align: right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="documents-table-body">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; padding: 20px;">Loading documents...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
                     <div class="faq-list" id="faq-list">
                         <!-- FAQs populated here -->
                     </div>
