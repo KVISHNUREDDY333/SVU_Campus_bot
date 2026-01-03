@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: svu_campus_bot
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/backend/uploads
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - svu-network
+
+networks:
+  svu-network:
+    driver: bridge

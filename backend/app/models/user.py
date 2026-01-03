@@ -1,0 +1,33 @@
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+class User(BaseModel):
+    username: str
+    password_hash: Optional[str] = None
+    role: str = "student" # student, faculty, admin, parent
+    created_at: datetime = datetime.utcnow()
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    role: str
+    username: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    role: Optional[str] = None
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    full_name: str
+    role: str = "student"
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class VerifyOTPRequest(BaseModel):
+    email: str
+    otp: str
+    new_password: str
