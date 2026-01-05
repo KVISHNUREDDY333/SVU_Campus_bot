@@ -59,14 +59,7 @@
                             Official Website</a></li>
                     <li id="nav-location" onclick="openLocations()"><i class="fa-solid fa-location-dot"></i> Locations
                     </li>
-                    <li id="nav-incognito">
-                        <i class="fa-solid fa-user-secret"></i>
-                        <span>Incognito</span>
-                        <label class="switch-small" style="margin-left: auto;">
-                            <input type="checkbox" id="incognito-toggle">
-                            <span class="slider-small round"></span>
-                        </label>
-                    </li>
+
                     <li id="nav-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i> <span
                             id="theme-text">Dark Mode</span></li>
                     <li id="nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</li>
@@ -392,19 +385,19 @@
                             style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
                             <div class="health-item">
                                 <span>API Gateway</span>
-                                <span class="badge success">Healthy</span>
+                                <span class="badge success" id="health-api">Healthy</span>
                             </div>
                             <div class="health-item">
                                 <span>Vector DB</span>
-                                <span class="badge success">Connected</span>
+                                <span class="badge success" id="health-vector">Connected</span>
                             </div>
                             <div class="health-item">
                                 <span>LLM Service</span>
-                                <span class="badge success">Online</span>
+                                <span class="badge success" id="health-llm">Online</span>
                             </div>
                             <div class="health-item">
-                                <span>RBAC System</span>
-                                <span class="badge success">Active</span>
+                                <span>MongoDB</span>
+                                <span class="badge success" id="health-mongo">Connected</span>
                             </div>
                         </div>
                         <div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 16px;">
@@ -614,6 +607,8 @@
             </div>
 
             <div class="locations-list" id="locations-list">
+                <!-- Floating Highlighter -->
+                <div id="locations-highlighter" class="locations-highlighter"></div>
                 <!-- populated by script -->
             </div>
         </div>

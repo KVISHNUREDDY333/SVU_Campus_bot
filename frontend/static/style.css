@@ -548,7 +548,8 @@ body.dark-mode .suggestion-card:hover {
     border-radius: 20px;
     font-size: 16px;
     line-height: 1.6;
-    max-width: 85%;
+    max-width: 100%;
+    /* Controlled by parent .message-body */
     position: relative;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
@@ -565,6 +566,104 @@ body.dark-mode .suggestion-card:hover {
     color: var(--user-msg-text);
     border-top-right-radius: 4px;
     box-shadow: 0 8px 16px -4px rgba(13, 148, 136, 0.3);
+}
+
+/* Message Layout Restructure */
+.message-body {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+    gap: 4px;
+}
+
+.message.user .message-body {
+    align-items: flex-end;
+}
+
+/* Message Actions - Positioned Below and Outside */
+.msg-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 2px 8px;
+    width: fit-content;
+}
+
+.message.user .msg-actions {
+    justify-content: flex-end;
+    margin-right: 12px;
+}
+
+.message.bot .msg-actions {
+    margin-left: 12px;
+}
+
+.speech-btn {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+}
+
+.speech-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--accent-color);
+}
+
+body.dark-mode .speech-btn {
+    color: #94a3b8;
+}
+
+body.dark-mode .speech-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* TTS Speaking Highlight - Amber Yellow */
+.speaking-word {
+    background-color: #fef3c7 !important;
+    /* Light amber */
+    color: #92400e !important;
+    /* Darker amber text */
+    border-radius: 4px;
+    padding: 0 2px;
+    box-shadow: 0 0 0 2px #fef3c7;
+    transition: all 0.1s;
+}
+
+body.dark-mode .speaking-word {
+    background-color: #f59e0b !important;
+    color: white !important;
+}
+
+.speech-word {
+    transition: all 0.2s;
+}
+
+/* Incognito Badge & Controls */
+.incognito-badge {
+    background: rgba(15, 23, 42, 0.1);
+    color: #0f172a;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+body.dark-mode .incognito-badge {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
 }
 
 /* Splash Screen */
@@ -973,15 +1072,25 @@ body.dark-mode .send-btn:hover {
     border-radius: 12px;
     display: flex;
     flex-direction: column;
+    position: relative;
+    /* For highlighter positioning */
 }
 
-.locations-list::-webkit-scrollbar {
-    width: 6px;
+/* Floating Highlighter */
+.locations-highlighter {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    background: #fef3c7;
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
 }
 
-.locations-list::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 10px;
+body.dark-mode .locations-highlighter {
+    background: rgba(245, 158, 11, 0.2);
 }
 
 .location-item {
@@ -991,20 +1100,36 @@ body.dark-mode .send-btn:hover {
     font-size: 15px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.1s;
+    /* Faster transition for the text/color */
     text-decoration: none;
     display: block;
+    position: relative;
+    z-index: 1;
+    /* Above highlighter */
 }
 
 .location-item:hover {
-    background: #f8fafc;
-    color: var(--accent-color);
+    color: #92400e;
+    transform: translateX(4px);
+}
+
+body.dark-mode .location-item {
+    color: #cbd5e1;
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .location-item:hover {
+    color: #fbbf24;
 }
 
 .location-item.active {
-    background: #f59e0b;
-    color: white;
+    background: #f59e0b !important;
+    color: white !important;
     border-bottom: none;
+    border-radius: 8px;
+    margin: 4px 8px;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .location-item:last-child {
@@ -1765,6 +1890,107 @@ body.dark-mode .stat-card {
 body.dark-mode .chart-container {
     background: rgba(30, 41, 59, 0.4);
     border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Modern Form Styling for Modals */
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    transition: all 0.2s;
+    background: #fff;
+    color: #1e293b;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+body.dark-mode .search-input {
+    background: #1e293b;
+    border-color: #334155;
+    color: #e2e8f0;
+}
+
+body.dark-mode .search-input:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+}
+
+.helper-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    line-height: 1.5;
+}
+
+/* Modal Actions */
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.btn-cancel {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+body.dark-mode .btn-cancel {
+    border-color: #475569;
+    color: #94a3b8;
+}
+
+body.dark-mode .btn-cancel:hover {
+    background: #1e293b;
+    color: #cbd5e1;
+}
+
+.btn-submit {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    background: var(--accent-color);
+    border: none;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(13, 148, 136, 0.2);
+    transition: all 0.2s;
+}
+
+.btn-submit:hover {
+    background: #0f766e;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 15px -3px rgba(13, 148, 136, 0.3);
 }
 
 /* Pulse Animation for Status Badges */

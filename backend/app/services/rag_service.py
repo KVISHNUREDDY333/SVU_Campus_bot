@@ -58,8 +58,7 @@ def setup_rag_chain():
             relevance_score_fn="cosine",
         )
         
-        logger.info("Initializing LLM...")
-        llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY")) # Ensure GROQ_API_KEY is in env or config
+        llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=Config.GROQ_API_KEY)
         
         retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         

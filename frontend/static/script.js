@@ -383,14 +383,10 @@ let isIncognito = false;
 if (incognitoToggle) {
     incognitoToggle.addEventListener('change', (e) => {
         isIncognito = e.target.checked;
-        const badge = document.getElementById('incognito-badge');
-
         if (isIncognito) {
             document.body.classList.add('incognito-active');
-            // if (badge) badge.style.display = 'flex';
         } else {
             document.body.classList.remove('incognito-active');
-            // if (badge) badge.style.display = 'none';
         }
     });
 }
@@ -649,9 +645,29 @@ async function loadDashboard() {
         document.getElementById('total-queries').textContent = data.total_queries;
         document.getElementById('active-users').textContent = data.active_users;
 
+        // Update document count placeholder in dashboard
+        const docCountEl = document.querySelector('.stat-card .doc-icon + .stat-info p');
+        if (docCountEl) docCountEl.textContent = data.active_users; // Fallback or handle separately
+
+        // Fetch specific doc count if needed, or use a general admin endpoint
+        const docsRes = await fetch(`${API_URL}/admin/documents`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (docsRes.ok) {
+            const docs = await docsRes.json();
+            if (docCountEl) docCountEl.textContent = docs.length;
+            // Also update the description text
+            const docDesc = document.querySelector('.settings-card p');
+            if (docDesc && docDesc.textContent.includes('documents in your knowledge base')) {
+                docDesc.textContent = `You have ${docs.length} documents in your knowledge base. Use the Admin Settings to add, remove, or update documents.`;
+            }
+        }
+
         renderChart(data.role_distribution);
 
-        // Also load other admin data
+        // Load real-time system health
+        loadSystemHealth();
+
         loadFAQs();
         loadDocuments();
         loadUsers();
@@ -808,15 +824,21 @@ function appendMessage(text, sender, save = true) {
     const div = document.createElement('div');
     div.classList.add('message', sender);
 
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'message-body'; // Container for bubble + actions
+
+    const bubble = document.createElement('div');
+    bubble.className = 'text'; // This is the actual bubble
+
     if (sender === 'bot') {
         const botIconDiv = document.createElement('div');
         botIconDiv.className = 'bot-icon';
-        // Placeholder or actual bot avatar
         botIconDiv.innerHTML = '<img src="/static/images/bot_avatar.svg" alt="Bot" style="width: 100%; height: 100%;">';
 
-        const textDiv = document.createElement('div');
-        textDiv.className = 'text';
-        textDiv.innerHTML = formatText(text);
+        // Message text container
+        const textSpan = document.createElement('div');
+        textSpan.className = 'message-content';
+        textSpan.innerHTML = formatText(text);
 
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'msg-actions';
@@ -825,47 +847,45 @@ function appendMessage(text, sender, save = true) {
         const copyBtn = document.createElement('button');
         copyBtn.className = 'speech-btn';
         copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
-        copyBtn.title = 'Copy Text';
-        copyBtn.onclick = () => copyText(textDiv, copyBtn); // Pass element reference
+        copyBtn.onclick = () => copyText(textSpan, copyBtn);
 
         // Speak Button
         const speakBtn = document.createElement('button');
         speakBtn.className = 'speech-btn';
         speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-        speakBtn.title = 'Read Aloud';
-        speakBtn.onclick = () => speakText(text, textDiv); // Pass element for highlighting
+        speakBtn.onclick = () => speakText(text, textSpan, speakBtn);
 
         actionsDiv.appendChild(copyBtn);
         actionsDiv.appendChild(speakBtn);
 
-        textDiv.appendChild(actionsDiv);
+        bubble.appendChild(textSpan);
+        contentWrapper.appendChild(bubble);
+        contentWrapper.appendChild(actionsDiv);
 
         div.appendChild(botIconDiv);
-        div.appendChild(textDiv);
+        div.appendChild(contentWrapper);
     } else {
-        const textDiv = document.createElement('div');
-        textDiv.className = 'text';
-        textDiv.textContent = text;
+        const textSpan = document.createElement('div');
+        textSpan.className = 'message-content';
+        textSpan.textContent = text;
 
-        // Copy Button for User
         const actionsDiv = document.createElement('div');
-        actionsDiv.className = 'msg-actions user-actions';
-        actionsDiv.style.justifyContent = 'flex-end'; // Align to right for user
+        actionsDiv.className = 'msg-actions';
 
         const copyBtn = document.createElement('button');
         copyBtn.className = 'speech-btn';
         copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
-        copyBtn.title = 'Copy Text';
-        copyBtn.style.color = '#64748b'; // Darker gray for visibility on user bubble
-        copyBtn.onclick = () => copyText(textDiv, copyBtn);
+        copyBtn.onclick = () => copyText(textSpan, copyBtn);
 
         actionsDiv.appendChild(copyBtn);
-        textDiv.appendChild(actionsDiv);
 
-        div.appendChild(textDiv);
+        bubble.appendChild(textSpan);
+        contentWrapper.appendChild(bubble);
+        contentWrapper.appendChild(actionsDiv);
+
+        div.appendChild(contentWrapper);
     }
 
-    // Insert before typing indicator
     if (typingIndicator) {
         chatBox.insertBefore(div, typingIndicator);
     } else {
@@ -882,6 +902,30 @@ function showTypingIndicator() {
 
 function hideTypingIndicator() {
     if (typingIndicator) typingIndicator.style.display = 'none';
+}
+
+async function loadSystemHealth() {
+    try {
+        const res = await fetch(`${API_URL}/admin/system-health`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const updateStatus = (id, status) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                el.className = `badge ${status === 'healthy' || status === 'connected' || status === 'active' || status === 'online' ? 'success' : 'danger'}`;
+            }
+        };
+
+        updateStatus('health-api', data.api_status);
+        updateStatus('health-vector', data.vector_db_status);
+        updateStatus('health-llm', data.llm_service);
+        updateStatus('health-mongo', data.mongodb_status);
+
+    } catch (e) { console.error("Health Check Error", e); }
 }
 
 function scrollToBottom() {
@@ -960,13 +1004,25 @@ function clearChat() {
 // --- Voice Assistant Implementation ---
 
 // 1. Text-to-Speech (TTS)
-// 1. Text-to-Speech (TTS)
 const synth = window.speechSynthesis;
-let currentUtterance = null;
-let currentHighlightedElement = null;
-let originalHtmlContent = null;
+let currentSpeechBtn = null;
 
-function speakText(text, element = null) {
+// Helper to handle async voice loading
+const waitForVoices = () => {
+    return new Promise((resolve) => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            resolve(voices);
+        } else {
+            window.speechSynthesis.onvoiceschanged = () => {
+                const updatedVoices = window.speechSynthesis.getVoices();
+                resolve(updatedVoices);
+            };
+        }
+    });
+};
+
+async function speakText(text, element = null, button = null) {
     // 1. Cancel existing speech
     if (synth.speaking || currentHighlightedElement) {
         resetHighlighting();
@@ -975,8 +1031,15 @@ function speakText(text, element = null) {
         // If clicking the same button, just stop
         if (currentHighlightedElement === element) {
             currentHighlightedElement = null;
+            currentSpeechBtn = null;
             return;
         }
+    }
+
+    if (button) {
+        currentSpeechBtn = button;
+        button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+        button.style.color = '#ef4444';
     }
 
     // 2. Setup Highlighting & Text Construction
@@ -990,16 +1053,37 @@ function speakText(text, element = null) {
         // Wrap words and get the EXACT text that matches the DOM structure
         const result = wrapWordsAndGetText(element);
         spans = result.spans;
-        textToSpeak = result.fullText; // This is the key for perfect alignment
+        // CRITICAL: Use the extracted DOM text for TTS to ensure indices match highlighting
+        textToSpeak = result.fullText;
     } else {
-        // Fallback for non-element text (clean markdown)
-        textToSpeak = text.replace(/\*/g, '').replace(/#/g, '').replace(/`/g, '');
+        // Fallback cleanup if not using DOM element
+        textToSpeak = text.replace(/[*#`]/g, '');
     }
 
+    // 3. Prepare Utterance
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = 'en-IN';
+
+    // 4. Voice Selection (Female / English Priority)
+    const voices = await waitForVoices();
+    const preferredVoice = voices.find(v =>
+        (v.name.includes("Female") ||
+            v.name.includes("Google US English") ||
+            v.name.includes("Zira") ||
+            v.name.includes("Lisa")) &&
+        v.lang.startsWith("en")
+    );
+
+    if (preferredVoice) {
+        utterance.voice = preferredVoice;
+    } else {
+        // Fallback to any English voice
+        const anyEnglish = voices.find(v => v.lang.startsWith("en"));
+        if (anyEnglish) utterance.voice = anyEnglish;
+    }
+
+    utterance.lang = 'en-US';
     utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    utterance.pitch = 1.0; // Slightly higher pitch for female-like quality if synthetic
     currentUtterance = utterance;
 
     if (element) {
@@ -1016,7 +1100,12 @@ function speakText(text, element = null) {
         };
     }
 
-    synth.speak(utterance);
+    // 5. Execution (Cancel-Resume-Speak Pattern)
+    synth.cancel();
+    setTimeout(() => {
+        synth.resume();
+        synth.speak(utterance);
+    }, 50);
 }
 
 function wrapWordsAndGetText(element) {
@@ -1072,20 +1161,20 @@ function wrapWordsAndGetText(element) {
 }
 
 function highlightWordAt(charIndex, spans) {
-    // Remove previous highlights
-    const active = document.querySelector('.highlight-word');
-    if (active) active.classList.remove('highlight-word');
+    if (!currentHighlightedElement) return;
 
-    // Find the span that covers this charIndex
+    // Remove previous highlights
+    const active = currentHighlightedElement.querySelector('.speaking-word');
+    if (active) active.classList.remove('speaking-word');
+
     const targetSpan = spans.find(span => {
         const start = parseInt(span.dataset.start);
         const end = parseInt(span.dataset.end);
-        // Strict match works better since we aligned text manually
         return charIndex >= start && charIndex < end;
     });
 
     if (targetSpan) {
-        targetSpan.classList.add('highlight-word');
+        targetSpan.classList.add('speaking-word');
     }
 }
 
@@ -1093,9 +1182,13 @@ function resetHighlighting() {
     if (currentHighlightedElement && originalHtmlContent) {
         currentHighlightedElement.innerHTML = originalHtmlContent;
     }
+    if (currentSpeechBtn) {
+        currentSpeechBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    }
     currentHighlightedElement = null;
     originalHtmlContent = null;
     currentUtterance = null;
+    currentSpeechBtn = null;
 }
 
 // 2. Speech-to-Text (STT)
@@ -1255,7 +1348,7 @@ async function deleteFAQ(id) {
 
 // Locations Logic
 const locations = [
-    "Sri Venkateswara University, Tirupati 13.628582153331918, 79.397880633949",
+    "Sri Venkateswara University, Tirupati",
     "Computer Centre",
     "Department of Adult & Continuing Education",
     "Department of Ancient Indian History, Culture & Archaeology",
@@ -1389,15 +1482,36 @@ async function submitUrl() {
 // --- Original Locations Logic Below ---
 function openLocations() {
     if (locationsListEl) {
-        locationsListEl.innerHTML = '';
+        // Keep the highlighter, clear and re-populate the rest
+        const highlighter = document.getElementById('locations-highlighter');
+        // Clear all except highlighter
+        Array.from(locationsListEl.children).forEach(child => {
+            if (child.id !== 'locations-highlighter') child.remove();
+        });
+
         locations.forEach((name, index) => {
             const a = document.createElement('a');
             a.href = '#';
             a.className = 'location-item';
-            if (index === 0) a.classList.add('active'); // Match image highlight
+            if (index === 0) a.classList.add('active');
             a.textContent = name;
+
+            a.onmouseenter = () => {
+                if (highlighter) {
+                    highlighter.style.top = `${a.offsetTop}px`;
+                    highlighter.style.height = `${a.offsetHeight}px`;
+                    highlighter.style.opacity = '1';
+                }
+            };
+
+            a.onmouseleave = () => {
+                if (highlighter) highlighter.style.opacity = '0';
+            };
+
             a.onclick = (e) => {
                 e.preventDefault();
+                document.querySelectorAll('.location-item').forEach(item => item.classList.remove('active'));
+                a.classList.add('active');
                 openLocationMap(name);
             };
             locationsListEl.appendChild(a);

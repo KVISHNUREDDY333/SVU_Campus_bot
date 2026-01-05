@@ -194,7 +194,7 @@ async def auth_google(request: Request):
         
         # Redirect to frontend
         # Assuming frontend is at root. We pass token as query param to be picked up by JS
-        return RedirectResponse(url=f"/?token={access_token}&role={role}&username={email}")
+        return RedirectResponse(url=f"/?token={access_token}&role={role}&username={email}&name={name}")
         
     except Exception as e:
         logger.error(f"Google Auth Error: {e}")

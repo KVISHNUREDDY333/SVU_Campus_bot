@@ -148,12 +148,17 @@ async def get_system_health(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Mock health check
+    mongo_status = "connected" if database.mongo_client else "disconnected"
+    
+    # Check if vector DB is initialized (assuming rag_service logic)
+    from ..services import rag_service
+    vector_status = "active" if rag_service.vector_db else "initializing"
+    
     return {
         "api_status": "healthy",
-        "mongodb_status": "connected",
-        "vector_db_status": "active",
-        "llm_service": "online",
+        "mongodb_status": mongo_status,
+        "vector_db_status": vector_status,
+        "llm_service": "online" if Config.GROQ_API_KEY else "offline",
         "uptime": "99.9%",
-        "last_reindexed": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+        "last_reindexed": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     }
