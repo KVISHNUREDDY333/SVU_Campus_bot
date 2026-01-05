@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from .auth import get_current_admin_user
-from ..services.rag_service import ingest_pdf
+from ..services.rag_service import ingest_pdf, ingest_url
 from ..core import database
 import shutil
 import os
@@ -11,6 +11,7 @@ from typing import List
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
+import pydantic
 
 UPLOAD_DIR = "backend/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -41,7 +42,7 @@ async def upload_document(file: UploadFile = File(...), admin_user = Depends(get
             "upload_date": datetime.utcnow(),
             "status": "processed",
             "chunks": num_chunks,
-            "uploaded_by": admin_user['username']
+            "uploaded_by": admin_user.username
         }
         database.documents_db.insert_one(doc_record)
         
@@ -49,6 +50,30 @@ async def upload_document(file: UploadFile = File(...), admin_user = Depends(get
     except Exception as e:
         logger.error(f"Ingestion Failed: {e}")
         # Record failure if possible, or just error out
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+class UrlRequest(pydantic.BaseModel):
+    url: str
+
+@router.post("/admin/ingest-url")
+async def ingest_url_endpoint(request: UrlRequest, admin_user = Depends(get_current_admin_user)):
+    try:
+        num_chunks = await ingest_url(request.url)
+        
+        # Save Metadata
+        doc_record = {
+            "filename": request.url,
+            "upload_date": datetime.utcnow(),
+            "status": "processed",
+            "chunks": num_chunks,
+            "uploaded_by": admin_user.username,
+            "type": "url"
+        }
+        database.documents_db.insert_one(doc_record)
+        
+        return {"status": "success", "message": f"Successfully ingested {request.url}", "chunks": num_chunks}
+    except Exception as e:
+        logger.error(f"URL Ingestion Failed: {e}")
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
 
 @router.get("/admin/documents")

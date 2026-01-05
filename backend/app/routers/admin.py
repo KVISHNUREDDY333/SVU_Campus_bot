@@ -142,3 +142,18 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@router.get("/admin/system-health")
+async def get_system_health(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Mock health check
+    return {
+        "api_status": "healthy",
+        "mongodb_status": "connected",
+        "vector_db_status": "active",
+        "llm_service": "online",
+        "uptime": "99.9%",
+        "last_reindexed": datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    }

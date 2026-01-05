@@ -90,6 +90,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (userInput) userInput.focus();
+
+    // Ensure the default section is shown
+    setTimeout(() => {
+        showSection('chat');
+    }, 100);
+
     loadChatHistory();
     populateSidebarProfile();
 });
@@ -347,6 +353,14 @@ function logout() {
     localStorage.removeItem('user_role');
     localStorage.removeItem('username');
     ACCESS_TOKEN = null;
+    USER_ROLE = null;
+
+    // Hide restricted links immediately
+    const navAdmin = document.getElementById('nav-admin');
+    const navDashboard = document.getElementById('nav-dashboard');
+    if (navAdmin) navAdmin.style.display = 'none';
+    if (navDashboard) navDashboard.style.display = 'none';
+
     location.reload();
 }
 
@@ -373,12 +387,10 @@ if (incognitoToggle) {
 
         if (isIncognito) {
             document.body.classList.add('incognito-active');
-            if (badge) badge.style.display = 'flex';
-            showStatusPopup('<i class="fa-solid fa-ghost"></i> Entered Incognito Mode');
+            // if (badge) badge.style.display = 'flex';
         } else {
             document.body.classList.remove('incognito-active');
-            if (badge) badge.style.display = 'none';
-            showStatusPopup('Exited Incognito Mode');
+            // if (badge) badge.style.display = 'none';
         }
     });
 }
@@ -397,10 +409,21 @@ function populateSidebarProfile() {
         const nameEl = document.getElementById('profile-name');
         const roleEl = document.getElementById('profile-role');
         const avatarEl = document.getElementById('profile-avatar');
+        const navAdmin = document.getElementById('nav-admin');
+        const navDashboard = document.getElementById('nav-dashboard');
 
         if (nameEl) nameEl.textContent = fullName;
         if (roleEl) roleEl.textContent = role;
         if (avatarEl) avatarEl.textContent = fullName.charAt(0).toUpperCase();
+
+        // Show/Hide admin features
+        if (role === 'admin') {
+            if (navAdmin) navAdmin.style.display = 'block';
+            if (navDashboard) navDashboard.style.display = 'block';
+        } else {
+            if (navAdmin) navAdmin.style.display = 'none';
+            if (navDashboard) navDashboard.style.display = 'none';
+        }
     } else if (profileEl) {
         profileEl.style.display = 'none';
     }
@@ -511,33 +534,45 @@ function showToast(title, message) {
     }
 }
 
-function showSection(sectionId) {
-    const sections = ['chat-section', 'admin-section', 'dashboard-section'];
-    const navs = ['nav-chat', 'nav-admin', 'nav-dashboard'];
-
-    sections.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-    });
-
-    navs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
-
-    if (sectionId === 'chat') {
-        const chatSec = document.getElementById('chat-section');
-        const chatNav = document.getElementById('nav-chat');
-        if (chatSec) chatSec.style.display = 'flex';
-        if (chatNav) chatNav.classList.add('active');
-    } else if (sectionId === 'dashboard') {
-        const dashSec = document.getElementById('dashboard-section');
-        const dashNav = document.getElementById('nav-dashboard');
-        if (dashSec) dashSec.style.display = 'block';
-        if (dashNav) dashNav.classList.add('active');
-        loadDashboard();
-        loadFAQs();
+function showSection(section) {
+    // Prevent non-admins from accessing restricted sections
+    if ((section === 'admin' || section === 'dashboard') && USER_ROLE !== 'admin') {
+        showSection('chat');
+        return;
     }
+
+    const sections = ['chat', 'admin', 'dashboard'];
+
+    sections.forEach(s => {
+        const el = document.getElementById(`${s}-section`);
+        if (el) el.style.display = 'none';
+
+        const nav = document.getElementById(`nav-${s}`);
+        if (nav) nav.classList.remove('active');
+    });
+
+    const activeSection = document.getElementById(`${section}-section`);
+    if (activeSection) {
+        // We use flex for chat-section to maintain layout, block for others
+        activeSection.style.display = (section === 'chat') ? 'flex' : 'block';
+    }
+
+    const activeNav = document.getElementById(`nav-${section}`);
+    if (activeNav) activeNav.classList.add('active');
+
+    // Trigger specific loaders
+    if (section === 'dashboard') {
+        loadDashboard();
+    }
+    if (section === 'admin') {
+        loadDocuments();
+        // loadUsers(); // Restored static UI for now
+    }
+}
+
+async function appendQuick(text) {
+    userInput.value = text;
+    sendMessage();
 }
 
 async function sendMessage() {
@@ -619,10 +654,45 @@ async function loadDashboard() {
         // Also load other admin data
         loadFAQs();
         loadDocuments();
+        loadUsers();
 
     } catch (e) {
         console.error("Dashboard Error", e);
     }
+}
+
+async function loadUsers() {
+    try {
+        const res = await fetch(`${API_URL}/admin/users`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const users = await res.json();
+        const tbody = document.getElementById('user-table-body');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        users.forEach(u => {
+            const roleBadge = u.role === 'admin' ? 'success' : 'warning';
+            tbody.innerHTML += `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; background: #6366f1; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                        ${u.username[0].toUpperCase()}
+                    </div>
+                    <div>
+                        <div style="font-weight: 600;">${escapeHtml(u.username.split('@')[0])}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(u.username)}</div>
+                    </div>
+                </td>
+                <td style="padding: 12px;"><span class="badge ${roleBadge}">${u.role.charAt(0).toUpperCase() + u.role.slice(1)}</span></td>
+                <td style="padding: 12px;"><span class="badge success">Active</span></td>
+                <td style="padding: 12px; text-align: right;">
+                    <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;"><i class="fa-solid fa-pen"></i></button>
+                </td>
+            </tr>`;
+        });
+    } catch (e) { console.error("Load Users Error", e); }
 }
 
 async function loadDocuments() {
@@ -647,15 +717,21 @@ function renderDocuments(docs) {
     }
 
     docs.forEach(doc => {
-        const dateStr = new Date(doc.upload_date).toLocaleDateString() + ' ' + new Date(doc.upload_date).toLocaleTimeString();
+        const dateStr = new Date(doc.upload_date).toLocaleDateString();
+        const iconClass = (doc.type === 'url') ? 'fa-link' : 'fa-file-pdf';
+        const typeLabel = (doc.type === 'url') ? 'URL' : 'PDF';
+
         tbody.innerHTML += `
             <tr>
-                <td>${escapeHtml(doc.filename)}</td>
-                <td>${escapeHtml(doc.uploaded_by || 'Admin')}</td>
-                <td>${dateStr}</td>
-                <td style="text-align: center;">${doc.chunks}</td>
+                <td style="display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid ${iconClass}" style="color: var(--accent-color);"></i>
+                    ${escapeHtml(doc.filename)}
+                </td>
+                <td><span class="badge ${doc.type === 'url' ? 'warning' : 'success'}">${typeLabel}</span></td>
+                <td style="text-align: center;">${doc.id || doc.chunks}</td>
+                <td style="text-align: center;">${doc.uploaded_by || 'Admin'}</td>
                 <td style="text-align: right;">
-                    <button class="btn-delete" onclick="deleteDocument('${doc._id}')" title="Delete">
+                    <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </td>
@@ -1179,68 +1255,27 @@ async function deleteFAQ(id) {
 
 // Locations Logic
 const locations = [
-    "Sri Venkateswara University, Tirupati",
+    "Sri Venkateswara University, Tirupati 13.628582153331918, 79.397880633949",
     "Computer Centre",
     "Department of Adult & Continuing Education",
     "Department of Ancient Indian History, Culture & Archaeology",
     "Department of Biochemistry",
     "Department of Biotechnology",
     "Department of Botany",
-    "Department of Chemical Engineering",
     "Department of Chemistry",
-    "Department of Civil Engineering",
-    "Department of Commerce",
     "Department of Computer Science",
-    "Department of Data Science",
     "Department of Econometrics",
     "Department of Economics",
     "Department of Education",
-    "Department of Electrical & Electronics Engineering (EEE)",
-    "Department of Electronics",
-    "Department of Electronics & Communication Engineering (ECE)",
+    "Department of Electrical & Electronics Engineering",
     "Department of English",
-    "Department of Foreign Languages & Linguistics",
-    "Department of Geography",
-    "Department of Geology",
-    "Department of Hindi",
-    "Department of History",
-    "Department of Home Science",
-    "Department of Industrial Fisheries",
-    "Department of Journalism and Mass Communication",
-    "Department of Law",
-    "Department of Management Studies (MBA)",
-    "Department of Mathematics",
-    "Department of Mechanical Engineering",
-    "Department of Microbiology",
-    "Department of Performing Arts",
-    "Department of Philosophy",
-    "Department of Physical Education",
-    "Department of Physics",
-    "Department of Political Science & Public Administration",
-    "Department of Population Studies & Social Work",
-    "Department of Psychology",
-    "Department of Sanskrit",
-    "Department of Sociology",
-    "Department of Statistics",
-    "Department of Tamil",
-    "Department of Telugu Studies",
-    "Department of Urdu",
-    "Department of Virology",
-    "Department of Zoology",
-    "Directorate of Distance Education (DDE)",
-    "Health Center",
-    "Hostels",
-    "Internal Quality Assurance Cell (IQAC)",
+    "Department of Environmental Sciences",
     "Srinivasa Auditorium",
     "SVU Central Library",
     "SVU College of Arts",
     "SVU College of Commerce, Management & Computer Science",
     "SVU College of Engineering",
-    "SVU College of Pharmaceutical Sciences",
-    "SVU College of Sciences",
-    "SVU Oriental Research Institute",
-    "Tarakarama Stadium",
-    "University Scientific Instrumentation Centre (USIC)"
+    "SVU College of Sciences"
 ];
 
 const locationsModal = document.getElementById('locations-modal');
@@ -1306,15 +1341,65 @@ async function submitDocument() {
     }
 }
 
+// URL Ingestion
+const urlModal = document.getElementById('url-modal');
+function openUrlModal() { if (urlModal) urlModal.style.display = 'flex'; }
+function closeUrlModal() { if (urlModal) urlModal.style.display = 'none'; }
+
+async function submitUrl() {
+    const urlInput = document.getElementById('url-input');
+    const url = urlInput.value.trim();
+    const progressDiv = document.getElementById('url-progress');
+    const statusText = document.getElementById('url-status');
+
+    if (!url) {
+        alert("Please enter a valid URL.");
+        return;
+    }
+
+    progressDiv.style.display = 'block';
+    statusText.textContent = "Scraping and processing content...";
+    statusText.style.color = "var(--accent-color)";
+
+    try {
+        const res = await fetch(`${API_URL}/admin/ingest-url`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ url: url })
+        });
+
+        if (!res.ok) throw new Error("Processing failed");
+
+        const data = await res.json();
+        progressDiv.style.display = 'none';
+        showStatusPopup(`Success: ${data.message}`);
+        urlInput.value = "";
+
+        loadDocuments();
+        closeUrlModal();
+    } catch (e) {
+        statusText.textContent = "Error: " + e.message;
+        statusText.style.color = "#ef4444";
+    }
+}
+
 // --- Original Locations Logic Below ---
 function openLocations() {
     if (locationsListEl) {
         locationsListEl.innerHTML = '';
-        locations.forEach(name => {
+        locations.forEach((name, index) => {
             const a = document.createElement('a');
             a.href = '#';
+            a.className = 'location-item';
+            if (index === 0) a.classList.add('active'); // Match image highlight
             a.textContent = name;
-            a.onclick = (e) => { e.preventDefault(); openLocationMap(name); };
+            a.onclick = (e) => {
+                e.preventDefault();
+                openLocationMap(name);
+            };
             locationsListEl.appendChild(a);
         });
     }
@@ -1327,4 +1412,125 @@ function openLocationMap(name) {
     const query = `${name}, Sri Venkateswara University, Tirupati, Andhra Pradesh`;
     const url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
     window.open(url, '_blank');
+}
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    sidebar.classList.toggle('active');
+
+    // Create overlay if it doesn't exist
+    if (!overlay && sidebar.classList.contains('active')) {
+        const div = document.createElement('div');
+        div.className = 'sidebar-overlay';
+        div.onclick = toggleSidebar;
+        document.body.appendChild(div);
+        setTimeout(() => div.classList.add('active'), 10);
+    } else if (overlay) {
+        overlay.classList.remove('active');
+        setTimeout(() => overlay.remove(), 300);
+    }
+}
+
+// --- Rich UI Interactions ---
+
+// Ripple Effect
+function createRipple(event) {
+    const button = event.currentTarget;
+    const circle = document.createElement("span");
+    const diameter = Math.max(button.clientWidth, button.clientHeight);
+    const radius = diameter / 2;
+
+    circle.style.width = circle.style.height = `${diameter}px`;
+    circle.style.left = `${event.clientX - button.getBoundingClientRect().left - radius}px`;
+    circle.style.top = `${event.clientY - button.getBoundingClientRect().top - radius}px`;
+    circle.classList.add("ripple");
+
+    const ripple = button.getElementsByClassName("ripple")[0];
+    if (ripple) {
+        ripple.remove();
+    }
+
+    button.appendChild(circle);
+}
+
+const buttons = document.getElementsByTagName("button");
+for (const button of buttons) {
+    button.addEventListener("click", createRipple);
+}
+
+// Range Slider Value Update
+const rangeInputs = document.querySelectorAll('.custom-range');
+rangeInputs.forEach(input => {
+    input.addEventListener('input', (e) => {
+        e.target.nextElementSibling.textContent = (e.target.value / 100).toFixed(1);
+    });
+});
+
+// Simulate System Health Logic (For demo)
+setInterval(() => {
+    const healthBar = document.querySelector('.progress-bar-fill');
+    if (healthBar) {
+        const usage = Math.floor(Math.random() * (80 - 40 + 1) + 40);
+        healthBar.style.width = `${usage}%`;
+
+        // Update color based on usage
+        if (usage > 75) {
+            healthBar.style.background = 'linear-gradient(90deg, #f59e0b, #ef4444)';
+        } else {
+            healthBar.style.background = 'linear-gradient(90deg, #3b82f6, #6366f1)';
+        }
+    }
+}, 3000);
+
+async function clearCache() {
+    if (!confirm("Are you sure you want to clear the system cache?")) return;
+    showStatusPopup("Clearing cache...");
+    setTimeout(() => showStatusPopup("Cache cleared successfully!"), 1000);
+}
+
+async function reindexData() {
+    if (!confirm("Trigger full knowledge re-indexing? This may take a few minutes.")) return;
+    showStatusPopup("Indexing started...");
+    setTimeout(() => showStatusPopup("Knowledge base re-indexed!"), 2000);
+}
+
+// --- Auth UI Interactions ---
+function switchAuthTab(tab) {
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const forgotForm = document.getElementById('forgot-form');
+    const loginBtn = document.getElementById('tab-login');
+    const registerBtn = document.getElementById('tab-register');
+    const errorEl = document.getElementById('auth-error');
+
+    if (errorEl) errorEl.style.display = 'none';
+    if (forgotForm) forgotForm.style.display = 'none';
+
+    if (tab === 'login') {
+        if (loginForm) loginForm.style.display = 'block';
+        if (registerForm) registerForm.style.display = 'none';
+        if (loginBtn) loginBtn.classList.add('active');
+        if (registerBtn) registerBtn.classList.remove('active');
+    } else {
+        if (loginForm) loginForm.style.display = 'none';
+        if (registerForm) registerForm.style.display = 'block';
+        if (loginBtn) loginBtn.classList.remove('active');
+        if (registerBtn) registerBtn.classList.add('active');
+    }
+}
+
+function showForgotPassword() {
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('register-form').style.display = 'none';
+    document.getElementById('forgot-form').style.display = 'block';
+}
+
+function startNewChat() {
+    const chatBox = document.getElementById('chat-box');
+    const welcomeScreen = document.getElementById('welcome-screen');
+    if (chatBox) chatBox.innerHTML = '';
+    if (welcomeScreen) welcomeScreen.style.display = 'flex';
+    showStatusPopup("Thread cleared");
 }

@@ -7,7 +7,9 @@
     <title>CampusConnect AI</title>
     <link rel="stylesheet" href="/static/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <!-- Using a placeholder for favicon if not exists -->
     <link rel="icon" href="/static/images/svu_logo_final_v2.jpg" type="image/x-icon">
     <link rel="manifest" href="/static/manifest.json">
@@ -38,7 +40,7 @@
 
     <div class="container">
         <!-- Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <div class="logo">
                 <img src="/static/images/svu_logo_final_v2.jpg" alt="SVU logo" class="logo-img">
                 <h2>CampusConnect AI</h2>
@@ -48,15 +50,17 @@
                     <li onclick="showSection('chat')" class="active" id="nav-chat"><i
                             class="fa-regular fa-comment-dots"></i> Home</li>
                     <li onclick="showSection('admin')" id="nav-admin" style="display: none;"><i
-                            class="fa-solid fa-gear"></i> Admin</li>
+                            class="fa-solid fa-cogs"></i> Admin Settings
+                    </li>
                     <li onclick="showSection('dashboard')" id="nav-dashboard" style="display: none;"><i
-                            class="fa-solid fa-chart-line"></i> Dashboard</li>
+                            class="fa-solid fa-chart-line"></i>
+                        Dashboard</li>
                     <li><a href="https://svuniversity.edu.in/" target="_blank"><i class="fa-solid fa-globe"></i>
                             Official Website</a></li>
                     <li id="nav-location" onclick="openLocations()"><i class="fa-solid fa-location-dot"></i> Locations
                     </li>
                     <li id="nav-incognito">
-                        <i class="fa-solid fa-ghost"></i>
+                        <i class="fa-solid fa-user-secret"></i>
                         <span>Incognito</span>
                         <label class="switch-small" style="margin-left: auto;">
                             <input type="checkbox" id="incognito-toggle">
@@ -70,14 +74,16 @@
             </nav>
 
             <!-- User Profile Section -->
-            <div class="sidebar-user-profile" id="sidebar-profile" style="display: none;">
-                <div class="profile-avatar" id="profile-avatar">U</div>
-                <div class="profile-info">
-                    <div class="profile-name" id="profile-name">User Name</div>
-                    <div class="profile-role" id="profile-role">Student</div>
-                </div>
-                <div class="profile-actions">
-                    <i class="fa-solid fa-ellipsis-vertical"></i>
+            <div class="sidebar-user-footer">
+                <div class="sidebar-user-profile" id="sidebar-profile">
+                    <div class="profile-avatar" id="profile-avatar">U</div>
+                    <div class="profile-info">
+                        <div class="profile-name" id="profile-name">User Name</div>
+                        <div class="profile-role" id="profile-role">Student</div>
+                    </div>
+                    <div class="profile-more">
+                        <i class="fa-solid fa-ellipsis"></i>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -86,16 +92,35 @@
         <main class="main-content">
 
             <!-- Chat Interface -->
-            <section id="chat-section">
+            <section id="chat-section" class="content-section">
                 <!-- Header -->
                 <div class="header">
-                    <h3></h3>
-                    <div id="incognito-badge" class="incognito-badge" style="display: none;">
-                        <i class="fa-solid fa-mask"></i> Incognito Active
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <i class="fa-solid fa-bars mobile-toggle" id="sidebar-toggle"
+                            style="font-size: 18px; cursor: pointer; color: var(--text-primary);"
+                            onclick="toggleSidebar()"></i>
+                        <h3
+                            style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--text-primary);">
+                            Assistant</h3>
                     </div>
-                    <div class="actions">
-                        <i class="fa-solid fa-plus" title="New Thread" onclick="clearChat()"></i>
-                        <i class="fa-solid fa-rotate-right" title="Refresh" onclick="window.location.reload()"></i>
+
+                    <div class="header-actions"
+                        style="display: flex; gap: 16px; color: var(--text-secondary); align-items: center;">
+
+                        <!-- Incognito Toggle in Header -->
+                        <div class="incognito-control"
+                            style="display: flex; align-items: center; gap: 8px; margin-right: 8px;">
+                            <i class="fa-solid fa-user-secret" title="Incognito Mode" style="font-size: 16px;"></i>
+                            <label class="switch-small">
+                                <input type="checkbox" id="incognito-toggle">
+                                <span class="slider-small round"></span>
+                            </label>
+                        </div>
+
+                        <i class="fa-solid fa-plus" title="New Chat" onclick="clearChat()"
+                            style="cursor: pointer; font-size: 18px;"></i>
+                        <i class="fa-solid fa-rotate-right" title="Refresh" onclick="window.location.reload()"
+                            style="cursor: pointer; font-size: 18px;"></i>
                     </div>
                 </div>
 
@@ -104,28 +129,41 @@
 
                     <!-- Welcome Screen (Initial State) -->
                     <div id="welcome-screen" class="welcome-screen">
+                        <div class="welcome-badge">SVU OFFICIAL ASSISTANT</div>
                         <img src="/static/images/svu_logo_final_v2.jpg" class="welcome-logo" alt="Logo">
                         <div class="welcome-text">
-                            <h1>How can I help you?</h1>
-                            <p>Ask me anything about courses, facilities, placements, or campus life at Sri Venkateswara
-                                University.</p>
+                            <h1>How can I assist you today?</h1>
+                            <p>Get instant answers about courses, admissions, campus facilities, and student life at Sri
+                                Venkateswara University.</p>
                         </div>
                         <div class="suggestions-grid">
-                            <div class="suggestion-card" onclick="appendQuick('What courses do you offer?')">
-                                <div class="title">Academic Programs</div>
-                                <div class="desc">What courses does SVU offer?</div>
+                            <div class="suggestion-card" onclick="appendQuick('What courses does SVU offer?')">
+                                <div class="icon"><i class="fa-solid fa-graduation-cap"></i></div>
+                                <div>
+                                    <div class="title">Academic Programs</div>
+                                    <div class="desc">Explore UG/PG courses</div>
+                                </div>
                             </div>
-                            <div class="suggestion-card" onclick="appendQuick('Tell me about the library facilities')">
-                                <div class="title">Campus Facilities</div>
-                                <div class="desc">Tell me about the library</div>
+                            <div class="suggestion-card" onclick="appendQuick('Tell me about the campus facilities')">
+                                <div class="icon"><i class="fa-solid fa-hotel"></i></div>
+                                <div>
+                                    <div class="title">Infrastructure</div>
+                                    <div class="desc">Library, labs, and amenities</div>
+                                </div>
                             </div>
                             <div class="suggestion-card" onclick="appendQuick('What is the admission procedure?')">
-                                <div class="title">Admissions</div>
-                                <div class="desc">How can I apply?</div>
+                                <div class="icon"><i class="fa-solid fa-file-signature"></i></div>
+                                <div>
+                                    <div class="title">Admissions 2026</div>
+                                    <div class="desc">Process and eligibility</div>
+                                </div>
                             </div>
-                            <div class="suggestion-card" onclick="appendQuick('Where are the hostels located?')">
-                                <div class="title">Accommodation</div>
-                                <div class="desc">Where are the hostels?</div>
+                            <div class="suggestion-card" onclick="appendQuick('How to contact administration?')">
+                                <div class="icon"><i class="fa-solid fa-headset"></i></div>
+                                <div>
+                                    <div class="title">Quick Support</div>
+                                    <div class="desc">Helpdesk and contacts</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -145,7 +183,7 @@
                     <div class="input-container">
                         <input type="text" id="user-input" placeholder="Ask anything... (Type or Speak)"
                             autocomplete="off">
-                        <button id="mic-btn" class="icon-btn" onclick="toggleVoiceInput()"><i
+                        <button id="mic-btn" class="mic-btn" onclick="toggleVoiceInput()"><i
                                 class="fa-solid fa-microphone"></i></button>
                         <button id="send-btn" class="send-btn" onclick="sendMessage()"><i
                                 class="fa-solid fa-arrow-up"></i></button>
@@ -153,73 +191,312 @@
                 </div>
             </section>
 
-            <!-- Add to Head -->
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <!-- Admin Configuration Section -->
+            <section id="admin-section" class="content-section" style="display: none;">
+                <div class="header">
+                    <h3>System Configuration</h3>
+                </div>
+                <div class="admin-content">
 
-            <!-- Add to Sidebar -->
-            <li id="nav-dashboard" onclick="showSection('dashboard')" style="display: none;"><i
-                    class="fa-solid fa-chart-line"></i> Dashboard</li>
+                    <!-- Top Row: Config & Health -->
+                    <div class="grid-container"
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px;">
+                        <!-- Configuration Card -->
+                        <div class="settings-card">
+                            <div class="card-header">
+                                <div class="card-icon"><i class="fa-solid fa-robot"></i></div>
+                                <h4>LLM Configuration</h4>
+                            </div>
+                            <div class="form-group">
+                                <label>Groq Model Selection</label>
+                                <select class="custom-select">
+                                    <option value="llama3-8b-8192" selected>Llama 3 8B (Fast)</option>
+                                    <option value="llama3-70b-8192">Llama 3 70B (High Quality)</option>
+                                    <option value="mixtral-8x7b-32768">Mixtral 8x7B (Balanced)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Temperature (Creativity)</label>
+                                <div class="range-wrapper">
+                                    <input type="range" min="0" max="100" value="70" class="custom-range">
+                                    <span class="range-val">0.7</span>
+                                </div>
+                            </div>
+                            <div class="form-group row-group">
+                                <label>Stream Responses</label>
+                                <label class="switch-small">
+                                    <input type="checkbox" checked>
+                                    <span class="slider-small round"></span>
+                                </label>
+                            </div>
+                        </div>
 
+                        <!-- System Health Card -->
+                        <div class="settings-card">
+                            <div class="card-header">
+                                <div class="card-icon warning"><i class="fa-solid fa-server"></i></div>
+                                <h4>System Status</h4>
+                            </div>
+                            <div class="health-item">
+                                <span>Vector DB connection</span>
+                                <span class="badge success">Connected</span>
+                            </div>
+                            <div class="health-item">
+                                <span>RAG Pipeline</span>
+                                <span class="badge success">Operational</span>
+                            </div>
+                            <div class="health-item">
+                                <span>API Latency</span>
+                                <span class="badge warning">124ms</span>
+                            </div>
+                            <div class="health-item">
+                                <span>Memory Usage</span>
+                                <div class="progress-bar-wrapper">
+                                    <div class="progress-bar-fill" style="width: 65%;"></div>
+                                </div>
+                            </div>
+                            <div class="action-buttons" style="margin-top: 20px;">
+                                <button class="btn-secondary" onclick="alert('Cache cleared!')"><i
+                                        class="fa-solid fa-broom"></i> Clear Cache</button>
+                            </div>
+                        </div>
+                    </div>
 
+                    <!-- User Management Section -->
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon"
+                                style="background: linear-gradient(135deg, #ec4899, #db2777); box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);">
+                                <i class="fa-solid fa-users-gear"></i>
+                            </div>
+                            <h4>User Management</h4>
+                            <button class="btn-primary"
+                                style="margin-left: auto; font-size: 13px; padding: 8px 16px;"><i
+                                    class="fa-solid fa-user-plus"></i> Add User</button>
+                        </div>
+                        <table class="documents-table" style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <th style="padding: 12px; text-align: left;">User</th>
+                                    <th style="padding: 12px; text-align: left;">Role</th>
+                                    <th style="padding: 12px; text-align: left;">Status</th>
+                                    <th style="padding: 12px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="user-table-body">
+                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                    <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
+                                        <div
+                                            style="width: 32px; height: 32px; background: #6366f1; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                                            A</div>
+                                        <div>
+                                            <div style="font-weight: 600;">Admin User</div>
+                                            <div style="font-size: 11px; color: var(--text-secondary);">admin@svu.edu.in
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 12px;"><span class="badge success">Admin</span></td>
+                                    <td style="padding: 12px;"><span class="badge success">Active</span></td>
+                                    <td style="padding: 12px; text-align: right;">
+                                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;"><i
+                                                class="fa-solid fa-pen"></i></button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
+                                        <div
+                                            style="width: 32px; height: 32px; background: #10b981; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                                            S</div>
+                                        <div>
+                                            <div style="font-weight: 600;">Student User</div>
+                                            <div style="font-size: 11px; color: var(--text-secondary);">
+                                                student@svu.edu.in</div>
+                                        </div>
+                                    </td>
+                                    <td style="padding: 12px;"><span class="badge warning">Student</span></td>
+                                    <td style="padding: 12px;"><span class="badge success">Active</span></td>
+                                    <td style="padding: 12px; text-align: right;">
+                                        <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;"><i
+                                                class="fa-solid fa-pen"></i></button>
+                                        <button class="icon-btn"
+                                            style="width: 32px; height: 32px; font-size: 14px; color: #ef4444;"><i
+                                                class="fa-solid fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Knowledge Base Management -->
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon"
+                                style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);">
+                                <i class="fa-solid fa-book-open"></i>
+                            </div>
+                            <h4>Knowledge Base</h4>
+                            <div style="margin-left: auto; display: flex; gap: 10px;">
+                                <div class="admin-search-container" style="margin: 0; width: 250px;">
+                                    <input type="text" id="admin-search-input" placeholder="Search docs..."
+                                        class="admin-search-input" style="padding: 8px 12px; font-size: 13px;">
+                                    <i class="fa-solid fa-magnifying-glass admin-search-icon"
+                                        style="top: 50%; transform: translateY(-50%); right: 10px;"></i>
+                                </div>
+                                <button class="btn-primary" onclick="openUploadModal()"
+                                    style="font-size: 13px; padding: 8px 16px;"><i
+                                        class="fa-solid fa-cloud-arrow-up"></i> Upload PDF</button>
+                                <button class="btn-primary" onclick="openUrlModal()"
+                                    style="font-size: 13px; padding: 8px 16px; background: var(--gradient-card); border: 1px solid var(--glass-border);"><i
+                                        class="fa-solid fa-link"></i> Add URL</button>
+                            </div>
+                        </div>
+
+                        <div class="documents-list-container">
+                            <table class="documents-table">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">Document Name</th>
+                                        <th style="text-align: left;">Type</th>
+                                        <th style="text-align: center;">Size</th>
+                                        <th style="text-align: center;">Chunks</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="documents-table-body">
+                                    <tr>
+                                        <td colspan="5"
+                                            style="text-align: center; padding: 30px; color: var(--text-secondary);">
+                                            <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                                            Loading knowledge base...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- System Health & Maintenance (New) -->
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                                <i class="fa-solid fa-heart-pulse"></i>
+                            </div>
+                            <h4>System Health & Governance</h4>
+                            <button class="btn-primary" style="margin-left: auto; background: #ef4444; font-size: 12px;"
+                                onclick="clearCache()">
+                                <i class="fa-solid fa-trash-can"></i> Clear Cache
+                            </button>
+                        </div>
+                        <div class="health-grid"
+                            style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                            <div class="health-item">
+                                <span>API Gateway</span>
+                                <span class="badge success">Healthy</span>
+                            </div>
+                            <div class="health-item">
+                                <span>Vector DB</span>
+                                <span class="badge success">Connected</span>
+                            </div>
+                            <div class="health-item">
+                                <span>LLM Service</span>
+                                <span class="badge success">Online</span>
+                            </div>
+                            <div class="health-item">
+                                <span>RBAC System</span>
+                                <span class="badge success">Active</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 16px;">
+                            <button class="btn-secondary" style="width: 100%; text-align: center;"
+                                onclick="reindexData()">
+                                <i class="fa-solid fa-sync"></i> Trigger Knowledge Re-indexing
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- System Logs -->
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon"
+                                style="background: linear-gradient(135deg, #64748b, #475569); box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);">
+                                <i class="fa-solid fa-terminal"></i>
+                            </div>
+                            <h4>System Logs</h4>
+                        </div>
+                        <div
+                            style="background: #1e293b; color: #cbd5e1; padding: 16px; border-radius: 12px; font-family: 'Fira Code', monospace; font-size: 12px; height: 150px; overflow-y: auto;">
+                            <div style="margin-bottom: 4px;"><span style="color: #6366f1;">[INFO]</span> Starting RAG
+                                Pipeline init...</div>
+                            <div style="margin-bottom: 4px;"><span style="color: #10b981;">[SUCCESS]</span> Connected to
+                                MongoDB Atlas.</div>
+                            <div style="margin-bottom: 4px;"><span style="color: #10b981;">[SUCCESS]</span> Loaded 12
+                                documents into vector store.</div>
+                            <div style="margin-bottom: 4px;"><span style="color: #6366f1;">[INFO]</span> Server
+                                listening on port 8000.</div>
+                            <div style="margin-bottom: 4px;"><span style="color: #f59e0b;">[WARN]</span> High latency
+                                detected on /chat endpoint (124ms).</div>
+                            <div><span style="color: #6366f1;">[INFO]</span> User login: admin@svu.edu.in</div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
 
             <!-- Dashboard Section -->
-            <section id="dashboard-section" style="display: none;">
+            <section id="dashboard-section" class="content-section" style="display: none;">
                 <div class="header">
                     <h3>Analytics Dashboard</h3>
                 </div>
                 <div class="admin-content">
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <h3>Total Queries</h3>
-                            <p id="total-queries">Loading...</p>
+                            <div class="stat-icon query-icon"><i class="fa-solid fa-comments"></i></div>
+                            <div class="stat-info">
+                                <h3>Total Queries</h3>
+                                <p id="total-queries">Loading...</p>
+                                <div style="font-size: 11px; color: #10b981; margin-top: 4px;"><i
+                                        class="fa-solid fa-arrow-up"></i> 12% vs last week</div>
+                            </div>
                         </div>
                         <div class="stat-card">
-                            <h3>Active Users</h3>
-                            <p id="active-users">Loading...</p>
+                            <div class="stat-icon user-icon"><i class="fa-solid fa-users"></i></div>
+                            <div class="stat-info">
+                                <h3>Active Users</h3>
+                                <p id="active-users">Loading...</p>
+                                <div style="font-size: 11px; color: #10b981; margin-top: 4px;"><i
+                                        class="fa-solid fa-arrow-up"></i> 5 new today</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon doc-icon"><i class="fa-solid fa-database"></i></div>
+                            <div class="stat-info">
+                                <h3>Documents</h3>
+                                <p>12</p>
+                                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Updated 2h
+                                    ago</div>
+                            </div>
                         </div>
                     </div>
                     <div class="chart-container">
                         <canvas id="roleChart"></canvas>
                     </div>
 
-                    <!-- Existing FAQ Management -->
-                    <div class="admin-divider"></div>
-                    <div class="admin-divider"></div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h4 class="section-title">Manage Knowledge Base</h4>
-                        <button class="btn-primary" onclick="openUploadModal()">
-                            <i class="fa-solid fa-file-arrow-up"></i> Upload Document
-                        </button>
-                    </div>
-                    <div class="admin-search-container">
-                        <input type="text" id="admin-search-input" placeholder="Search knowledge base..."
-                            class="admin-search-input">
-                        <i class="fa-solid fa-magnifying-glass admin-search-icon"></i>
-                    </div>
-
-                    <!-- Documents List -->
-                    <div class="documents-list-container" style="margin-top: 20px;">
-                        <table class="documents-table" style="width: 100%; border-collapse: collapse;">
-                            <thead>
-                                <tr
-                                    style="background: var(--sidebar-bg); border-bottom: 1px solid var(--border-color);">
-                                    <th style="padding: 10px; text-align: left;">Filename</th>
-                                    <th style="padding: 10px; text-align: left;">Uploaded By</th>
-                                    <th style="padding: 10px; text-align: left;">Date</th>
-                                    <th style="padding: 10px; text-align: center;">Chunks</th>
-                                    <th style="padding: 10px; text-align: right;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="documents-table-body">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; padding: 20px;">Loading documents...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="faq-list" id="faq-list">
-                        <!-- FAQs populated here -->
+                    <!-- Knowledge Base Quick Access -->
+                    <div class="settings-card" style="margin-top: 32px;">
+                        <div class="card-header">
+                            <div class="card-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);"><i
+                                    class="fa-solid fa-book-open"></i></div>
+                            <h4>Knowledge Base</h4>
+                            <button class="btn-primary" onclick="showSection('admin')"
+                                style="margin-left: auto; font-size: 13px; padding: 8px 16px;">
+                                <i class="fa-solid fa-gears"></i> Manage All Data
+                            </button>
+                        </div>
+                        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 8px;">
+                            You have 12 documents in your knowledge base. Use the Admin Settings to add, remove, or
+                            update documents.
+                        </p>
                     </div>
                 </div>
             </section>
@@ -297,10 +574,37 @@
         </div>
     </div>
 
+    <!-- URL Input Modal -->
+    <div id="url-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Ingest Website Content</h3>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <div class="form-group">
+                    <label>Website URL</label>
+                    <input type="text" id="url-input" class="search-input" placeholder="https://svuniversity.edu.in/..."
+                        style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+                </div>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">
+                    The system will scrape the page, clean the content, and add it to the Knowledge Base.
+                </p>
+                <div id="url-progress" style="display: none; margin-top: 15px;">
+                    <p id="url-status" style="font-size: 13px; text-align: center; color: var(--accent-color);">
+                        Processing URL...</p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeUrlModal()">Cancel</button>
+                <button class="btn-submit" onclick="submitUrl()">Process URL</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Locations Modal -->
     <div id="locations-modal" class="locations-modal" style="display:none;">
         <div class="locations-card">
-            <button class="locations-close" onclick="closeLocations()">&times;</button>
+            <button class="locations-close" onclick="closeLocations()"><i class="fa-solid fa-xmark"></i></button>
             <h2 class="locations-title">University Locations</h2>
             <p class="locations-desc">Select a facility or department to ask the chatbot for its location.</p>
 
@@ -318,15 +622,13 @@
     <!-- Auth Overlay -->
     <div id="auth-overlay" class="auth-overlay">
         <div class="auth-card">
-            <div class="auth-header">
-                <img src="/static/images/svu_logo_final_v2.jpg" alt="Logo" class="auth-logo">
-                <h2>Welcome to SVU CampusConnect</h2>
-                <p>Please log in to access your personalized assistant.</p>
-            </div>
+            <img src="/static/images/svu_logo_final_v2.jpg" alt="Logo" class="welcome-logo">
+            <h2>Welcome to SVU CampusConnect</h2>
+            <p>Please log in to access your personalized assistant.</p>
 
             <div class="auth-tabs">
-                <button class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
-                <button class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+                <button id="tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Login</button>
+                <button id="tab-register" class="auth-tab" onclick="switchAuthTab('register')">Register</button>
             </div>
 
             <!-- Login Form -->

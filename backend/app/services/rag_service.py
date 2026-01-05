@@ -8,11 +8,10 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 import os
-from ..core.config import Config
 from ..core.config import Config
 from ..core import database
 
@@ -60,7 +59,7 @@ def setup_rag_chain():
         )
         
         logger.info("Initializing LLM...")
-        llm = ChatGroq(model="llama3-8b-8192", api_key=os.getenv("GROQ_API_KEY")) # Ensure GROQ_API_KEY is in env or config
+        llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=os.getenv("GROQ_API_KEY")) # Ensure GROQ_API_KEY is in env or config
         
         retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         
@@ -153,6 +152,33 @@ async def generate_response(message: str, session_id: str, user_role: str, incog
         config={"configurable": {"session_id": session_id if not incognito else "temp_session"}}
     )
     return response_text
+
+async def ingest_url(url: str):
+    """
+    Scrapes a URL, cleans it, splits it, and stores vectors in MongoDB.
+    """
+    if not vector_db:
+         setup_rag_chain()
+         if not vector_db:
+             raise Exception("Vector DB not initialized")
+
+    try:
+        logger.info(f"Ingesting URL: {url}")
+        loader = WebBaseLoader(url, requests_kwargs={"verify": False})
+        docs = loader.load()
+        
+        # Split text
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splits = text_splitter.split_documents(docs)
+        
+        # Add to Vector DB
+        vector_db.add_documents(splits)
+        
+        logger.info(f"Successfully ingested {len(splits)} chunks from {url}")
+        return len(splits)
+    except Exception as e:
+        logger.error(f"URL Ingestion Error: {e}")
+        raise e
 
 async def ingest_pdf(file_path: str):
     """
