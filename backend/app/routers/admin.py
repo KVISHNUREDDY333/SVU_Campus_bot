@@ -11,56 +11,54 @@ import os
 import shutil
 from fastapi import UploadFile, File
 from ..services.rag_service import ingest_pdf
+import pydantic
 
 router = APIRouter()
 
-# Mock Notifications Data
-mock_notifications = [
-    Notification(id=1, title="Exam Schedule", message="Semester 4 exams start next Monday.", timestamp=datetime.utcnow()),
-    Notification(id=2, title="Library Alert", message="Library will be closed this Sunday for maintenance.", timestamp=datetime.utcnow()),
-]
 
-@router.get("/dashboard-stats")
-async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    if database.analytics_db is None:
-         return {"total_queries": 0, "role_distribution": {}, "active_users": 0}
-
-    total_queries = database.analytics_db.count_documents({})
-    
-    pipeline = [
-        {"$group": {"_id": "$role", "count": {"$sum": 1}}}
-    ]
-    role_distribution = list(database.analytics_db.aggregate(pipeline))
-    roles = {item['_id']: item['count'] for item in role_distribution}
-    
-    return {
-        "total_queries": total_queries,
-        "role_distribution": roles,
-        "active_users": database.users_db.count_documents({})
-    }
-
-@router.get("/admin/users")
-async def list_users(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    users = list(database.users_db.find({}, {"username": 1, "role": 1, "created_at": 1}))
-    for u in users: u["_id"] = str(u["_id"])
-    return users
+# Request Model for creating a notification
+class NotificationCreate(pydantic.BaseModel):
+    title: str
+    message: str
 
 @router.get("/notifications", response_model=List[Notification])
 async def get_notifications(current_user: User = Depends(get_current_user)):
-    if random.random() > 0.8:
-        new_id = len(mock_notifications) + 1
-        mock_notifications.append(Notification(
-            id=new_id, 
-            title="Update", 
-            message=f"New announcement #{new_id}: Please check the notice board.", 
-            timestamp=datetime.utcnow()
+    if database.notifications_db is None:
+        return []
+    
+    # Fetch latest 10 notifications
+    cursor = database.notifications_db.find().sort("timestamp", -1).limit(10)
+    results = []
+    
+    for n in cursor:
+        results.append(Notification(
+            id=int(str(n["_id"])[-6:], 16), # Simple hash of ObjectID for int ID compatibility or just use string if frontend supports
+            title=n.get("title", ""),
+            message=n.get("message", ""),
+            timestamp=n.get("timestamp", datetime.utcnow())
         ))
-    return sorted(mock_notifications, key=lambda x: x.timestamp, reverse=True)[:5]
+    return results
+
+@router.post("/admin/notifications", response_model=Notification)
+async def create_notification(note: NotificationCreate, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    new_note = {
+        "title": note.title,
+        "message": note.message,
+        "timestamp": datetime.utcnow(),
+        "created_by": current_user.username
+    }
+    
+    result = database.notifications_db.insert_one(new_note)
+    
+    return Notification(
+        id=int(str(result.inserted_id)[-6:], 16),
+        title=new_note["title"],
+        message=new_note["message"],
+        timestamp=new_note["timestamp"]
+    )
 
 @router.get("/faqs", response_model=List[FAQResponse])
 async def get_faqs():
@@ -92,6 +90,16 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
     
     result = database.faqs_db.insert_one(new_faq)
     new_faq["id"] = str(result.inserted_id)
+    
+    # Sync with Vector DB for RAG
+    try:
+        from ..services.rag_service import ingest_text
+        faq_text = f"Question: {faq.question}\nAnswer: {faq.answer}\nCategory: {faq.category}"
+        await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq["id"], "category": faq.category})
+    except Exception as e:
+        # Don't fail the request if vector ingest fails, just log it
+        print(f"Failed to ingest FAQ into vector DB: {e}")
+        
     return new_faq
 
 @router.delete("/admin/faqs/{faq_id}")

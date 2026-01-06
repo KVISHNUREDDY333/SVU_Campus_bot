@@ -718,6 +718,7 @@ async function loadDocuments() {
         });
         if (!res.ok) return;
         const docs = await res.json();
+        allDocuments = docs; // Update global store
         renderDocuments(docs);
     } catch (e) { console.error("Load Docs Error", e); }
 }
@@ -1006,32 +1007,40 @@ function clearChat() {
 // 1. Text-to-Speech (TTS)
 const synth = window.speechSynthesis;
 let currentSpeechBtn = null;
+let currentUtterance = null; // GLOBAL reference to prevent GC
+let currentHighlightedElement = null;
+let originalHtmlContent = null;
 
-// Helper to handle async voice loading
-const waitForVoices = () => {
-    return new Promise((resolve) => {
-        const voices = window.speechSynthesis.getVoices();
-        if (voices.length > 0) {
-            resolve(voices);
-        } else {
-            window.speechSynthesis.onvoiceschanged = () => {
-                const updatedVoices = window.speechSynthesis.getVoices();
-                resolve(updatedVoices);
-            };
-        }
-    });
-};
+// Helper logic for voices
+let availableVoices = [];
+function loadVoices() {
+    availableVoices = synth.getVoices();
+    console.log(`[TTS] Voices loaded: ${availableVoices.length}`);
+}
+loadVoices();
+if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+}
 
-async function speakText(text, element = null, button = null) {
-    // 1. Cancel existing speech
+function speakText(text, element = null, button = null) {
+    console.log("[TTS] speakText called");
+
+    if (!window.speechSynthesis) {
+        showStatusPopup("Your browser does not support Text-to-Speech.", 3000);
+        return;
+    }
+
+    // 1. Cancel existing speech & Reset
+    // 1. Cancel existing speech & Reset
     if (synth.speaking || currentHighlightedElement) {
+        // Capture logic state BEFORE reset
+        const isSameElement = (currentHighlightedElement === element);
+
         resetHighlighting();
         synth.cancel();
 
-        // If clicking the same button, just stop
-        if (currentHighlightedElement === element) {
-            currentHighlightedElement = null;
-            currentSpeechBtn = null;
+        // If clicking the same button, just stop (toggle off)
+        if (isSameElement) {
             return;
         }
     }
@@ -1053,37 +1062,47 @@ async function speakText(text, element = null, button = null) {
         // Wrap words and get the EXACT text that matches the DOM structure
         const result = wrapWordsAndGetText(element);
         spans = result.spans;
-        // CRITICAL: Use the extracted DOM text for TTS to ensure indices match highlighting
         textToSpeak = result.fullText;
     } else {
-        // Fallback cleanup if not using DOM element
         textToSpeak = text.replace(/[*#`]/g, '');
+    }
+
+    if (!textToSpeak.trim()) {
+        console.warn("[TTS] Empty text, skipping");
+        return;
     }
 
     // 3. Prepare Utterance
     const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
-    // 4. Voice Selection (Female / English Priority)
-    const voices = await waitForVoices();
-    const preferredVoice = voices.find(v =>
-        (v.name.includes("Female") ||
+    // 4. Voice Selection (Synchronous Best Effort)
+    if (availableVoices.length === 0) {
+        availableVoices = synth.getVoices();
+    }
+
+    console.log(`[TTS] Available voices: ${availableVoices.length}`);
+
+    const preferredVoice = availableVoices.find(v =>
+        (v.name.includes("Zira") ||
             v.name.includes("Google US English") ||
-            v.name.includes("Zira") ||
-            v.name.includes("Lisa")) &&
+            v.name.includes("Female")) &&
         v.lang.startsWith("en")
     );
 
     if (preferredVoice) {
+        console.log(`[TTS] Using voice: ${preferredVoice.name}`);
         utterance.voice = preferredVoice;
     } else {
-        // Fallback to any English voice
-        const anyEnglish = voices.find(v => v.lang.startsWith("en"));
+        console.log("[TTS] No preferred voice found, using default/first English.");
+        const anyEnglish = availableVoices.find(v => v.lang.startsWith("en"));
         if (anyEnglish) utterance.voice = anyEnglish;
     }
 
     utterance.lang = 'en-US';
     utterance.rate = 1.0;
-    utterance.pitch = 1.0; // Slightly higher pitch for female-like quality if synthetic
+    utterance.pitch = 1.0;
+
+    // Store in global to prevent GC
     currentUtterance = utterance;
 
     if (element) {
@@ -1093,19 +1112,35 @@ async function speakText(text, element = null, button = null) {
             }
         };
 
-        utterance.onend = () => resetHighlighting();
+        utterance.onend = () => {
+            console.log("[TTS] Finished");
+            resetHighlighting();
+        };
         utterance.onerror = (e) => {
-            console.error("TTS Error:", e);
+            console.error("[TTS] Utterance Error:", e);
+            if (e.error !== 'interrupted') {
+                showStatusPopup(`TTS Error: ${e.error}`, 3000);
+            }
             resetHighlighting();
         };
     }
 
-    // 5. Execution (Cancel-Resume-Speak Pattern)
-    synth.cancel();
-    setTimeout(() => {
-        synth.resume();
+    // 5. Execution - Immediate
+    console.log("[TTS] Executing commands...");
+    try {
+        synth.cancel(); // Force clearing
+        synth.resume(); // Wake up engine
         synth.speak(utterance);
-    }, 50);
+
+        // Final fail-safe check
+        if (availableVoices.length === 0) {
+            showStatusPopup("Voice engine is busy or no voices found. Playing default...", 2000);
+        }
+
+    } catch (e) {
+        console.error("[TTS] Exception during speak:", e);
+        showStatusPopup("Audio Engine Failed. Please refresh.", 3000);
+    }
 }
 
 function wrapWordsAndGetText(element) {
@@ -1281,15 +1316,19 @@ function renderFAQs(faqsToRender) {
 }
 
 // Admin Search Listener
+// Global Store for Docs
+let allDocuments = [];
+
+// Admin Search Listener
 const adminSearchInput = document.getElementById('admin-search-input');
 if (adminSearchInput) {
     adminSearchInput.addEventListener('input', (e) => {
         const query = e.target.value.toLowerCase();
-        const filtered = allFAQs.filter(item =>
-            (item.question && item.question.toLowerCase().includes(query)) ||
-            (item.answer && item.answer.toLowerCase().includes(query))
+        const filtered = allDocuments.filter(doc =>
+            (doc.filename && doc.filename.toLowerCase().includes(query)) ||
+            (doc.uploaded_by && doc.uploaded_by.toLowerCase().includes(query))
         );
-        renderFAQs(filtered);
+        renderDocuments(filtered);
     });
 }
 
@@ -1647,4 +1686,53 @@ function startNewChat() {
     if (chatBox) chatBox.innerHTML = '';
     if (welcomeScreen) welcomeScreen.style.display = 'flex';
     showStatusPopup("Thread cleared");
+}
+
+
+// --- Helper for File Upload UI ---
+function handleFileSelect(input) {
+    const label = input.nextElementSibling;
+    const span = label.querySelector('span');
+    const container = input.parentElement;
+
+    if (input.files && input.files[0]) {
+        span.innerHTML = `<span class="file-name-display"><i class="fa-solid fa-file-pdf"></i> ${input.files[0].name}</span>`;
+        container.classList.add('file-selected');
+    } else {
+        span.textContent = "Click to upload PDF";
+        container.classList.remove('file-selected');
+    }
+}
+
+// --- New Toast Notification Implementation ---
+function showStatusPopup(message, duration = 2000) {
+    let toast = document.getElementById('toast-notification');
+    // Remove old style popup if it exists (legacy cleanup)
+    const oldPopup = document.getElementById('status-popup');
+    if (oldPopup) oldPopup.remove();
+
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-notification';
+        toast.className = 'toast-notification';
+        document.body.appendChild(toast);
+    }
+
+    // Icon based on message type
+    let icon = '<i class="fa-solid fa-circle-info" style="color: #2dd4bf;"></i>';
+    if (message.toLowerCase().includes('error')) icon = '<i class="fa-solid fa-circle-exclamation" style="color: #ef4444;"></i>';
+    if (message.toLowerCase().includes('success')) icon = '<i class="fa-solid fa-circle-check" style="color: #22c55e;"></i>';
+
+    toast.innerHTML = `${icon} <span>${message}</span>`;
+
+    // Force Reflow
+    void toast.offsetWidth;
+
+    toast.classList.add('show');
+
+    if (toast.timeoutId) clearTimeout(toast.timeoutId);
+
+    toast.timeoutId = setTimeout(() => {
+        toast.classList.remove('show');
+    }, duration);
 }

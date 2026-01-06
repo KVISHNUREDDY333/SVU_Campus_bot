@@ -35,7 +35,7 @@ async def seed_admin():
         user_data = {
             "username": email,
             "password_hash": hashed_pwd,
-            "full_name": "Admin Vishnu",
+            "full_name": "Admin",
             "role": "admin",
             "created_at": datetime.utcnow()
         }
@@ -97,6 +97,6 @@ async def read_root():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
-    print(f"Running on http://localhost:{port}")
+    print(f"Running on http://127.0.0.1:{port}")
     # Run the app object directly
     uvicorn.run(app, host="127.0.0.1", port=port)

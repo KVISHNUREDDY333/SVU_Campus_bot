@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CampusConnect AI</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap"
@@ -336,12 +337,12 @@
                                     <i class="fa-solid fa-magnifying-glass admin-search-icon"
                                         style="top: 50%; transform: translateY(-50%); right: 10px;"></i>
                                 </div>
-                                <button class="btn-primary" onclick="openUploadModal()"
-                                    style="font-size: 13px; padding: 8px 16px;"><i
-                                        class="fa-solid fa-cloud-arrow-up"></i> Upload PDF</button>
-                                <button class="btn-primary" onclick="openUrlModal()"
-                                    style="font-size: 13px; padding: 8px 16px; background: var(--gradient-card); border: 1px solid var(--glass-border);"><i
-                                        class="fa-solid fa-link"></i> Add URL</button>
+                                <button class="btn-upload btn-upload-pdf" onclick="openUploadModal()">
+                                    <i class="fa-solid fa-file-pdf"></i> Upload PDF
+                                </button>
+                                <button class="btn-upload btn-upload-url" onclick="openUrlModal()">
+                                    <i class="fa-solid fa-link"></i> Add URL
+                                </button>
                             </div>
                         </div>
 
@@ -536,60 +537,75 @@
     </div>
 
     <!-- Upload Modal -->
+    <!-- Upload Modal -->
     <div id="upload-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content premium-modal">
             <div class="modal-header">
-                <h3>Upload Document to Knowledge Base</h3>
+                <h3>Upload Document</h3>
             </div>
 
-            <div class="form-group">
-                <label>Select PDF File</label>
-                <div class="file-upload-wrapper">
-                    <input type="file" id="upload-file" accept=".pdf" style="width: 100%; padding: 10px;">
+            <div class="modal-body">
+                <div class="file-drop-zone" id="pdf-drop-zone">
+                    <input type="file" id="upload-file" accept=".pdf" hidden onchange="handleFileSelect(this)">
+                    <label for="upload-file">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span id="file-label-text">Click to upload PDF</span>
+                    </label>
                 </div>
-                <p style="font-size: 12px; color: #666; margin-top: 5px;">Only PDF files are supported. File will be
-                    parsed and added to the chatbot's knowledge.</p>
-            </div>
 
-            <div id="upload-progress" style="display: none; margin-top: 15px;">
-                <div style="background-color: #eee; border-radius: 4px; overflow: hidden;">
-                    <div id="upload-bar"
-                        style="width: 0%; height: 6px; background-color: var(--primary-color); transition: width 0.3s;">
+                <div id="upload-progress" style="display: none; margin-top: 15px;">
+                    <div style="background-color: rgba(0,0,0,0.05); border-radius: 4px; overflow: hidden; height: 6px;">
+                        <div id="upload-bar"
+                            style="width: 0%; height: 100%; background: linear-gradient(90deg, #0d9488, #2dd4bf); transition: width 0.3s;">
+                        </div>
                     </div>
+                    <p id="upload-status"
+                        style="font-size: 13px; text-align: center; margin-top: 8px; color: var(--text-secondary);">
+                        Uploading...</p>
                 </div>
-                <p id="upload-status" style="font-size: 13px; text-align: center; margin-top: 5px;">Uploading...</p>
             </div>
 
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeUploadModal()">Cancel</button>
-                <button class="btn-submit" onclick="submitDocument()">Upload & Process</button>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeUploadModal()">Cancel</button>
+                <button class="btn-primary" style="padding: 10px 24px; border-radius: 10px;" onclick="submitDocument()">
+                    <i class="fa-solid fa-bolt"></i> Process PDF
+                </button>
             </div>
         </div>
     </div>
 
     <!-- URL Input Modal -->
+    <!-- URL Input Modal -->
     <div id="url-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content premium-modal">
             <div class="modal-header">
-                <h3>Ingest Website Content</h3>
+                <h3>Ingest Website</h3>
             </div>
-            <div class="modal-body" style="padding: 24px;">
+            <div class="modal-body">
                 <div class="form-group">
                     <label>Website URL</label>
-                    <input type="text" id="url-input" class="search-input" placeholder="https://svuniversity.edu.in/..."
-                        style="width: 100%; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px;">
+                    <div style="position: relative;">
+                        <i class="fa-solid fa-link"
+                            style="position: absolute; left: 14px; top: 14px; color: var(--text-secondary); opacity: 0.7;"></i>
+                        <input type="text" id="url-input" class="search-input" placeholder="https://..."
+                            style="width: 100%; padding: 14px 14px 14px 42px; border-radius: 12px; border: 1px solid var(--border-color);">
+                    </div>
                 </div>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-top: 8px;">
-                    The system will scrape the page, clean the content, and add it to the Knowledge Base.
+                <p style="font-size: 13px; color: var(--text-secondary); opacity: 0.8; line-height: 1.5;">
+                    The system will scrape the page text and add it to the active Knowledge Base instantly.
                 </p>
                 <div id="url-progress" style="display: none; margin-top: 15px;">
-                    <p id="url-status" style="font-size: 13px; text-align: center; color: var(--accent-color);">
-                        Processing URL...</p>
+                    <p id="url-status"
+                        style="font-size: 13px; text-align: center; color: var(--accent-color); font-weight: 500;">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Processing URL...
+                    </p>
                 </div>
             </div>
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeUrlModal()">Cancel</button>
-                <button class="btn-submit" onclick="submitUrl()">Process URL</button>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeUrlModal()">Cancel</button>
+                <button class="btn-primary" style="padding: 10px 24px; border-radius: 10px;" onclick="submitUrl()">
+                    <i class="fa-solid fa-globe"></i> Ingest
+                </button>
             </div>
         </div>
     </div>
@@ -667,8 +683,6 @@
                         style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
                         <option value="student">Student</option>
                         <option value="faculty">Faculty</option>
-                        <option value="parent">Parent</option>
-                        <option value="admin">Admin (Dev)</option>
                     </select>
                 </div>
                 <div class="form-group">

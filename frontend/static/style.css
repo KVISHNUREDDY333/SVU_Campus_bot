@@ -1194,6 +1194,59 @@ body.dark-mode .location-item:hover {
     box-shadow: 0 8px 20px rgba(13, 148, 136, 0.4);
 }
 
+/* Upload Button Variants */
+.btn-upload {
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid transparent;
+}
+
+.btn-upload:hover {
+    transform: translateY(-2px);
+}
+
+.btn-upload-pdf {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25);
+}
+
+.btn-upload-pdf:hover {
+    box-shadow: 0 8px 15px rgba(239, 68, 68, 0.35);
+}
+
+.btn-upload-url {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-primary);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.btn-upload-url:hover {
+    background: #fff;
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+    box-shadow: 0 5px 15px rgba(13, 148, 136, 0.15);
+}
+
+body.dark-mode .btn-upload-url {
+    background: rgba(30, 41, 59, 0.5);
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.dark-mode .btn-upload-url:hover {
+    background: #1e293b;
+    color: var(--accent-color);
+}
+
 /* Auth Overlay - Glass */
 .auth-overlay {
     position: fixed;
@@ -2025,4 +2078,154 @@ nav li:not(.active):hover {
     background: linear-gradient(90deg, rgba(15, 118, 110, 0.05) 0%, transparent 100%);
     color: var(--accent-color);
     transform: translateX(4px);
+}
+
+/* --- Premium Modal & Drop Zone Styles --- */
+.modal-content.premium-modal {
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+    padding: 0;
+}
+
+body.dark-mode .modal-content.premium-modal {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.modal-body {
+    padding: 30px;
+}
+
+.file-drop-zone {
+    border: 2px dashed rgba(13, 148, 136, 0.3);
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+    background: rgba(13, 148, 136, 0.05);
+    /* Very light accent bg */
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.file-drop-zone:hover {
+    border-color: var(--accent-color);
+    background: rgba(13, 148, 136, 0.1);
+    transform: translateY(-2px);
+}
+
+.file-drop-zone label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+}
+
+.file-drop-zone i {
+    font-size: 32px;
+    color: var(--accent-color);
+    margin-bottom: 8px;
+    transition: transform 0.3s;
+}
+
+.file-drop-zone:hover i {
+    transform: scale(1.1);
+}
+
+.file-drop-zone span {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.file-selected .file-drop-zone {
+    border-style: solid;
+    border-color: var(--accent-color);
+    background: rgba(13, 148, 136, 0.15);
+}
+
+.file-name-display {
+    display: block;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+body.dark-mode .modal-footer {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
+}
+
+body.dark-mode .btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+/* --- Toast Notification (Centered Popup) --- */
+.toast-notification {
+    position: fixed;
+    top: 30px;
+    /* Top center */
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: rgba(15, 23, 42, 0.95);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 50px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(12px);
+    z-index: 10000;
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.toast-notification.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+body.dark-mode .toast-notification {
+    background: rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+    border-color: rgba(0, 0, 0, 0.05);
 }

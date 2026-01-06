@@ -88,10 +88,13 @@ def setup_rag_chain():
         
         qa_system_prompt = """You are an intelligent campus assistant for SV University. 
         
+        Current Time: {current_time}
+        
         Personal Context (User Specific Info):
         {user_context}
         
         Use the following pieces of retrieved context to answer the question.
+        Use the provided Current Time to answer time-sensitive questions (e.g., "is the library open now?").
         If the answer is not in the context, say you don't know politely.
         Keep answers concise, helpful, and friendly.
         
@@ -113,7 +116,8 @@ def setup_rag_chain():
                 "context": history_aware_retriever | format_docs,
                 "chat_history": lambda x: x["chat_history"],
                 "input": lambda x: x["input"],
-                "user_context": lambda x: x.get("user_context", "No personal data available.")
+                "user_context": lambda x: x.get("user_context", "No personal data available."),
+                "current_time": lambda x: x.get("current_time", "Unknown Time")
             }
             | qa_prompt
             | llm
@@ -131,7 +135,7 @@ def setup_rag_chain():
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
-async def generate_response(message: str, session_id: str, user_role: str, incognito: bool):
+async def generate_response(message: str, session_id: str, user_role: str, incognito: bool, current_time: str):
     if not retrieval_chain:
         return "System initializing, please try again in a moment."
 
@@ -146,11 +150,16 @@ async def generate_response(message: str, session_id: str, user_role: str, incog
     else:
             personal_context_str = "No specific personal data."
 
-    response_text = retrieval_chain.invoke(
-        {"input": message, "user_context": personal_context_str},
-        config={"configurable": {"session_id": session_id if not incognito else "temp_session"}}
-    )
-    return response_text
+    try:
+        response_text = await retrieval_chain.ainvoke(
+            {"input": message, "user_context": personal_context_str, "current_time": current_time},
+            config={"configurable": {"session_id": session_id if not incognito else "temp_session"}}
+        )
+        return response_text
+    except Exception as e:
+        import traceback
+        logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
+        raise e
 
 async def ingest_url(url: str):
     """
@@ -206,4 +215,29 @@ async def ingest_pdf(file_path: str):
         return len(splits)
     except Exception as e:
         logger.error(f"Ingestion Error: {e}")
+        raise e
+
+async def ingest_text(text: str, metadata: dict = None):
+    """
+    Ingests raw text into the vector database.
+    """
+    if not vector_db:
+         setup_rag_chain()
+         if not vector_db:
+             raise Exception("Vector DB not initialized")
+    
+    try:
+        from langchain.schema import Document
+        logger.info("Ingesting Text Chunk...")
+        
+        doc = Document(page_content=text, metadata=metadata or {})
+        
+        # Split text (optional for short FAQs but good practice)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splits = text_splitter.split_documents([doc])
+        
+        vector_db.add_documents(splits)
+        return len(splits)
+    except Exception as e:
+        logger.error(f"Text Ingestion Error: {e}")
         raise e

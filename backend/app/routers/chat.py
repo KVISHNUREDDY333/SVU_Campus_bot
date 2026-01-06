@@ -13,11 +13,14 @@ logger = logging.getLogger("uvicorn")
 @router.post("/chat")
 async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_current_user)):
     try:
+        current_time_str = datetime.now().strftime("%A, %b %d, %Y at %I:%M %p")
+        
         response_text = await generate_response(
             message=request.message,
             session_id=request.session_id,
             user_role=current_user.role,
-            incognito=request.incognito
+            incognito=request.incognito,
+            current_time=current_time_str
         )
         
         # Analytics Logging
@@ -27,6 +30,8 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
                 "role": current_user.role,
                 "user_id": str(current_user.username),
                 "topic": "general",
+                "question": request.message,
+                "response": response_text,
                 "length": len(request.message)
             })
              
