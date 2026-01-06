@@ -22,27 +22,37 @@ llm = None
 retrieval_chain = None
 store = {}
 
-# Mock Academic Data (Inject here for now)
-mock_academic_data = {
-    "student": {
-        "grades": "Current Semester (Sem 4): \n- Artificial Intelligence: A\n- Web Technologies: A+\n- Probability & Statistics: B+\n- CGPA: 8.5",
-        "schedule": "Monday: 09:00 AM - AI Class (Room 304)\nTuesday: 11:00 AM - Web Lab (Lab 2)\nWednesday: 10:00 AM - Library Hour"
-    },
-    "faculty": {
-        "schedule": "Monday: 10:00 AM - Staff Meeting\nWednesday: 02:00 PM - Research Review"
-    },
-    "admin": {
-        "access": "Full System Access. Maintenance scheduled for Sunday 2 AM."
-    }
-}
+# User profiles will be loaded from DB in future
+mock_academic_data = {}
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in store:
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
+# State for dynamic config
+CURRENT_MODEL_NAME = "llama-3.3-70b-versatile"
+CURRENT_TEMPERATURE = 0.7
+
+def update_llm_config(model_name: str, temperature: float):
+    global llm, CURRENT_MODEL_NAME, CURRENT_TEMPERATURE
+    CURRENT_MODEL_NAME = model_name
+    CURRENT_TEMPERATURE = temperature
+    
+    # Re-initialize LLM
+    try:
+        logger.info(f"Updating LLM to {model_name} with temp {temperature}")
+        llm = ChatGroq(model=model_name, api_key=Config.GROQ_API_KEY, temperature=temperature)
+        
+        # We need to rebuild the chains only, but re-running full setup is safer for now to ensure consistency
+        setup_rag_chain() 
+        return True
+    except Exception as e:
+        logger.error(f"Failed to update LLM: {e}")
+        return False
+
 def setup_rag_chain():
-    global vector_db, llm, retrieval_chain
+    global vector_db, llm, retrieval_chain, CURRENT_MODEL_NAME, CURRENT_TEMPERATURE
     if not database.mongo_client:
         logger.error("MongoDB client not initialized. Cannot setup RAG.")
         return
@@ -51,21 +61,28 @@ def setup_rag_chain():
         logger.info("Initializing Embeddings...")
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         
-        vector_db = MongoDBAtlasVectorSearch(
-            collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
-            embedding=embeddings,
-            index_name="vector_index",
-            relevance_score_fn="cosine",
-        )
+        # Initialize Vector DB if not exists (or always to be safe)
+        if not vector_db:
+             vector_db = MongoDBAtlasVectorSearch(
+                collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
+                embedding=embeddings,
+                index_name="vector_index",
+                relevance_score_fn="cosine",
+            )
         
-        llm = ChatGroq(model="llama-3.3-70b-versatile", api_key=Config.GROQ_API_KEY)
+        # Init LLM with current config
+        llm = ChatGroq(model=CURRENT_MODEL_NAME, api_key=Config.GROQ_API_KEY, temperature=CURRENT_TEMPERATURE)
         
         retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         
         contextualize_q_system_prompt = """Given a chat history and the latest user question 
         which might reference context in the chat history, formulate a standalone question 
-        which can be understood without the chat history. Do NOT answer the question, 
-        just reformulate it if needed and otherwise return it as is."""
+        which can be understood without the chat history. 
+        
+        CRITICAL: If the user's question is in a language other than English (e.g., Telugu, Hindi, or transliterated 'Hinglish'/'Tenglish'), YOU MUST TRANSLATE IT TO ENGLISH.
+        The standalone question must be in English to search the database effectively.
+        
+        Do NOT answer the question, just reformulate (and translate if needed) it and otherwise return it as is."""
         
         contextualize_q_prompt = ChatPromptTemplate.from_messages(
             [
@@ -94,8 +111,16 @@ def setup_rag_chain():
         {user_context}
         
         Use the following pieces of retrieved context to answer the question.
-        Use the provided Current Time to answer time-sensitive questions (e.g., "is the library open now?").
-        If the answer is not in the context, say you don't know politely.
+        
+        **CRITICAL INSTRUCTIONS**:
+        1. **Language Detection**: If the user asks in **Telugu**, reply in **Telugu**. If in **Hindi**, reply in **Hindi**. Otherwise, English.
+        2. **Maps**: If the user asks for a location (e.g., "Where is the Library?"), provide a clear description and append "[Map Link]" (frontend will handle this).
+        3. **Time**: Use {current_time} for time-sensitive queries.
+        4. **Unknowns**: If you don't know, say "I don't know, but you can raise a ticket for this." politely in the user's language.
+        
+        
+        **Language Instruction**: {language_instruction}
+        
         Keep answers concise, helpful, and friendly.
         
         Context: {context}"""
@@ -117,7 +142,8 @@ def setup_rag_chain():
                 "chat_history": lambda x: x["chat_history"],
                 "input": lambda x: x["input"],
                 "user_context": lambda x: x.get("user_context", "No personal data available."),
-                "current_time": lambda x: x.get("current_time", "Unknown Time")
+                "current_time": lambda x: x.get("current_time", "Unknown Time"),
+                "language_instruction": lambda x: x.get("language_instruction", "Reply in English")
             }
             | qa_prompt
             | llm
@@ -135,7 +161,7 @@ def setup_rag_chain():
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
-async def generate_response(message: str, session_id: str, user_role: str, incognito: bool, current_time: str):
+async def generate_response(message: str, session_id: str, user_role: str, incognito: bool, current_time: str, language: str = "en"):
     if not retrieval_chain:
         return "System initializing, please try again in a moment."
 
@@ -150,9 +176,21 @@ async def generate_response(message: str, session_id: str, user_role: str, incog
     else:
             personal_context_str = "No specific personal data."
 
+    if language == "te":
+        lang_instruction = "The user wants to converse in Telugu. Even if they type in English or Transliterated Telugu (e.g. 'ekkada'), understanding their intent and responding in proper Telugu script is mandatory."
+    elif language == "hi":
+        lang_instruction = "The user wants to converse in Hindi. Respond in Hindi (Devanagari script), regardless of whether the input is in English or Hinglish."
+    else:
+        lang_instruction = "Reply in English."
+
     try:
         response_text = await retrieval_chain.ainvoke(
-            {"input": message, "user_context": personal_context_str, "current_time": current_time},
+            {
+                "input": message, 
+                "user_context": personal_context_str, 
+                "current_time": current_time,
+                "language_instruction": lang_instruction
+            },
             config={"configurable": {"session_id": session_id if not incognito else "temp_session"}}
         )
         return response_text
@@ -164,6 +202,7 @@ async def generate_response(message: str, session_id: str, user_role: str, incog
 async def ingest_url(url: str):
     """
     Scrapes a URL, cleans it, splits it, and stores vectors in MongoDB.
+    Returns tuple: (num_chunks, full_text_content)
     """
     if not vector_db:
          setup_rag_chain()
@@ -175,6 +214,8 @@ async def ingest_url(url: str):
         loader = WebBaseLoader(url, requests_kwargs={"verify": False})
         docs = loader.load()
         
+        full_text = "\n\n".join([d.page_content for d in docs])
+
         # Split text
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
@@ -183,17 +224,17 @@ async def ingest_url(url: str):
         vector_db.add_documents(splits)
         
         logger.info(f"Successfully ingested {len(splits)} chunks from {url}")
-        return len(splits)
+        return len(splits), full_text
     except Exception as e:
         logger.error(f"URL Ingestion Error: {e}")
         raise e
 
 async def ingest_pdf(file_path: str):
     """
-    Parses a PDF, splits it into chunks, and stores vectors in MongoDB.
+    Parses a PDF, splits it, and stores vectors.
+    Returns tuple: (num_chunks, full_text_content)
     """
     if not vector_db:
-         # Try to initialize if not already done (e.g. if no server startup hook ran, though strictly it should have)
          setup_rag_chain()
          if not vector_db:
              raise Exception("Vector DB not initialized")
@@ -203,16 +244,17 @@ async def ingest_pdf(file_path: str):
         loader = PyPDFLoader(file_path)
         pages = loader.load()
         
+        full_text = "\n\n".join([d.page_content for d in pages])
+        
         # Split text
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(pages)
         
         # Add to Vector DB
-        # MongoDBAtlasVectorSearch logic inside langchain handles the embedding generation using the 'embedding' object we passed during init
         vector_db.add_documents(splits)
         
         logger.info(f"Successfully ingested {len(splits)} chunks from {file_path}")
-        return len(splits)
+        return len(splits), full_text
     except Exception as e:
         logger.error(f"Ingestion Error: {e}")
         raise e
@@ -241,3 +283,53 @@ async def ingest_text(text: str, metadata: dict = None):
     except Exception as e:
         logger.error(f"Text Ingestion Error: {e}")
         raise e
+
+async def extract_faqs_from_text(text: str):
+    """
+    Uses the LLM to extract potential FAQ pairs from the given text.
+    """
+    if not llm:
+         return []
+    
+    # We remove the hard limit. The model (likely Llama 3 70B) handles large context (128k).
+    # However, purely massive texts might still need chunking if they exceed ~100k chars.
+    # For now, we trust the uploaded document size is reasonable for a single pass or that the LLM service handles it.
+    
+    prompt = f"""
+    Analyze the provided text and extract comprehensive Frequently Asked Questions (FAQs).
+    
+    **Instructions:**
+    1. **Goal**: Extract AS MANY relevant FAQs as possible found in the text. Do not limit to 3-5. If there are 50 valid questions, extract 50.
+    2. **Format**: Output a VALID JSON object with a single key "faqs" containing a list of objects.
+    3. **Structure**: Each FAQ object MUST have:
+       - "id": A unique sequential identifier (e.g., "FAQ_001", "FAQ_002").
+       - "question": The clear, concise question.
+       - "answer": A detailed answer. 
+         * **CRITICAL**: If the answer involves data, lists, or steps, format it using **Markdown**.
+         * Use Markdown tables, bullet points, and bold text where appropriate to represent the data structure faithfully (e.g., Use `| Col1 | Col2 |` for tables).
+       - "category": One of "Academic", "Admissions", "Campus Life", "General", "Examinations", "Technical", "Placements".
+    
+    **Text Content**:
+    {text}
+    
+    **JSON Output**:
+    """
+    
+    try:
+        # Depending on the text length, this might take time.
+        response = await llm.ainvoke(prompt)
+        content = response.content
+        
+        import json
+        import re
+        
+        # cleaning markdown code blocks
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+            data = json.loads(json_str)
+            return data.get("faqs", [])
+        return []
+    except Exception as e:
+        logger.error(f"FAQ Extraction Error: {e}")
+        return []

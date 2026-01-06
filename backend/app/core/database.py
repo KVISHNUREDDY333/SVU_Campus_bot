@@ -12,9 +12,10 @@ documents_db = None
 analytics_db = None
 notifications_db = None
 tickets_db = None
+calendar_db = None
 
 def get_db_client():
-    global mongo_client, users_db, otps_db, faqs_db, documents_db, analytics_db, notifications_db, tickets_db
+    global mongo_client, users_db, otps_db, faqs_db, documents_db, analytics_db, notifications_db, tickets_db, calendar_db
     if Config.MONGODB_URI:
         try:
             mongo_client = MongoClient(Config.MONGODB_URI)
@@ -25,6 +26,8 @@ def get_db_client():
             documents_db = db["documents"]
             analytics_db = db["analytics_logs"]
             tickets_db = db["tickets"]
+            notifications_db = db["notifications"]
+            calendar_db = db["calendar"]
             logger.info("Connected to MongoDB")
         except Exception as e:
             logger.error(f"MongoDB Connection Error: {e}")

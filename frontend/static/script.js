@@ -537,7 +537,7 @@ function showSection(section) {
         return;
     }
 
-    const sections = ['chat', 'admin', 'dashboard'];
+    const sections = ['chat', 'admin', 'dashboard', 'calendar'];
 
     sections.forEach(s => {
         const el = document.getElementById(`${s}-section`);
@@ -562,7 +562,14 @@ function showSection(section) {
     }
     if (section === 'admin') {
         loadDocuments();
-        // loadUsers(); // Restored static UI for now
+        loadAllTickets();
+        loadCalendarAdmin();
+        loadUsers();
+        loadSystemHealth();
+        loadLLMConfig();
+    }
+    if (section === 'calendar') {
+        loadCalendar();
     }
 }
 
@@ -607,7 +614,8 @@ async function sendMessage() {
             body: JSON.stringify({
                 message: text,
                 session_id: sessionId,
-                incognito: isIncognito
+                incognito: isIncognito,
+                language: document.getElementById('lang-select')?.value || 'en'
             })
         });
 
@@ -617,7 +625,17 @@ async function sendMessage() {
         // Hide typing indicator before showing response
         hideTypingIndicator();
 
-        appendMessage(data.response || "I'm having trouble connecting right now.", 'bot', !isIncognito);
+        // Add Chat Message
+        const msgDiv = appendMessage(data.response || "I'm having trouble connecting right now.", 'bot', !isIncognito);
+
+        // If bot is unsure, add Ticket Button
+        if (data.response && (data.response.toLowerCase().includes("raise a ticket") || data.response.toLowerCase().includes("don't know"))) {
+            const ticketBtn = document.createElement("button");
+            ticketBtn.className = "ticket-action-btn";
+            ticketBtn.innerText = "🎫 Raise a Ticket";
+            ticketBtn.onclick = () => openTicketModal(text, data.response); // Pass context
+            msgDiv.appendChild(ticketBtn);
+        }
 
     } catch (err) {
         hideTypingIndicator();
@@ -627,11 +645,26 @@ async function sendMessage() {
     scrollToBottom();
 }
 
+function speak(text) {
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop previous
+        const utterance = new SpeechSynthesisUtterance(text);
+        // Try to select a natural voice
+        const voices = window.speechSynthesis.getVoices();
+        // Indian English or fallback to first available
+        const preferredVoice = voices.find(v => v.lang.includes('IN')) || voices[0];
+        if (preferredVoice) utterance.voice = preferredVoice;
+
+        window.speechSynthesis.speak(utterance);
+    }
+}
+
 // Removing duplicate saveSession placeholder
 
 
 // Analytics Chart
 let roleChartInstance = null;
+let sentimentChartInstance = null;
 
 async function loadDashboard() {
     try {
@@ -663,7 +696,7 @@ async function loadDashboard() {
             }
         }
 
-        renderChart(data.role_distribution);
+        renderCharts(data.role_distribution, data.sentiment_stats);
 
         // Load real-time system health
         loadSystemHealth();
@@ -719,21 +752,38 @@ async function loadDocuments() {
         if (!res.ok) return;
         const docs = await res.json();
         allDocuments = docs; // Update global store
-        renderDocuments(docs);
+        renderDocuments(docs, 3);
     } catch (e) { console.error("Load Docs Error", e); }
 }
 
-function renderDocuments(docs) {
+function renderDocuments(docs, limit = null) {
     const tbody = document.getElementById('documents-table-body');
     if (!tbody) return;
+    const container = tbody.parentElement.parentElement; // table -> .documents-list-container -> .settings-card
+    // Add View More button if not exists
+
+    // Add View More button if not exists
+    let btn = container.querySelector('.btn-view-more');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'btn-secondary btn-view-more';
+        btn.style.width = '100%';
+        btn.style.marginTop = '15px';
+        btn.style.textAlign = 'center';
+        container.appendChild(btn);
+    }
 
     tbody.innerHTML = '';
     if (docs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">No documents found.</td></tr>';
+        btn.style.display = 'none';
         return;
     }
 
-    docs.forEach(doc => {
+    const showCount = limit ? limit : docs.length;
+    const visibleDocs = docs.slice(0, showCount);
+
+    visibleDocs.forEach(doc => {
         const dateStr = new Date(doc.upload_date).toLocaleDateString();
         const iconClass = (doc.type === 'url') ? 'fa-link' : 'fa-file-pdf';
         const typeLabel = (doc.type === 'url') ? 'URL' : 'PDF';
@@ -755,6 +805,20 @@ function renderDocuments(docs) {
             </tr>
         `;
     });
+
+    // Toggle Button Logic
+    if (docs.length <= 3) {
+        btn.style.display = 'none';
+    } else {
+        btn.style.display = 'block';
+        if (limit) {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${docs.length - 3} more)`;
+            btn.onclick = () => renderDocuments(docs, null);
+        } else {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+            btn.onclick = () => renderDocuments(docs, 3);
+        }
+    }
 }
 
 async function deleteDocument(docId) {
@@ -776,18 +840,19 @@ async function deleteDocument(docId) {
 }
 
 
-function renderChart(roleData) {
-    const ctx = document.getElementById('roleChart').getContext('2d');
+function renderCharts(roleData, sentimentData) {
+    // 1. Role Chart
+    const ctxRole = document.getElementById('roleChart').getContext('2d');
 
     if (roleChartInstance) roleChartInstance.destroy();
 
-    roleChartInstance = new Chart(ctx, {
+    roleChartInstance = new Chart(ctxRole, {
         type: 'doughnut',
         data: {
             labels: Object.keys(roleData),
             datasets: [{
                 data: Object.values(roleData),
-                backgroundColor: ['#0f766e', '#f59e0b', '#ef4444'],
+                backgroundColor: ['#0f766e', '#f59e0b', '#ef4444', '#6366f1'],
             }]
         },
         options: {
@@ -795,6 +860,31 @@ function renderChart(roleData) {
             plugins: {
                 legend: { position: 'bottom' },
                 title: { display: true, text: 'Queries by User Role' }
+            }
+        }
+    });
+
+    // 2. Sentiment Chart
+    const ctxSent = document.getElementById('sentimentChart').getContext('2d');
+    if (sentimentChartInstance) sentimentChartInstance.destroy();
+    sentimentChartInstance = new Chart(ctxSent, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(sentimentData),
+            datasets: [{
+                label: 'User Emotions',
+                data: Object.values(sentimentData),
+                backgroundColor: ['#10b981', '#94a3b8', '#ef4444'],
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false },
+                title: { display: true, text: 'User Sentiment Analysis' }
+            },
+            scales: {
+                y: { beginAtZero: true }
             }
         }
     });
@@ -892,6 +982,8 @@ function appendMessage(text, sender, save = true) {
     } else {
         chatBox.appendChild(div);
     }
+
+    return div;
 }
 
 function showTypingIndicator() {
@@ -972,11 +1064,23 @@ function copyText(textContainer, btn) {
 function formatText(text) {
     // Basic formatting: URLs to links, newlines to <br>
     let safeText = escapeHtml(text);
-    safeText = safeText.replace(/\n/g, '<br>');
-    safeText = safeText.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#0f766e;text-decoration:underline;">$1</a>');
-    // Bold logic (simple **text**)
-    safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    return safeText;
+
+    // Map Link Parsing
+    if (safeText.includes("[Map Link]")) {
+        // Extract the location context from the text (heuristic)
+        // We'll search for "Where is X?" in previous context or just map the keyword "Location"
+        // For simplicity, let's link to SVU Map generally, or use the query
+        safeText = safeText.replace("[Map Link]",
+            `<a href="https://www.google.com/maps/search/?api=1&query=Sri+Venkateswara+University+Tirupati" target="_blank" class="map-link-btn"><i class="fa-solid fa-map-location-dot"></i> View on Map</a>`
+        );
+    }
+
+    return safeText
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
+        .replace(/\*(.*?)\*/g, '<i>$1</i>') // Italic
+    return safeText
+        .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
 }
 
 function escapeHtml(text) {
@@ -1080,25 +1184,77 @@ function speakText(text, element = null, button = null) {
         availableVoices = synth.getVoices();
     }
 
-    console.log(`[TTS] Available voices: ${availableVoices.length}`);
+    const selectedLang = document.getElementById('lang-select')?.value || 'en';
+    let targetLangCode = 'en-US';
+    // Priority keywords for "Sweet/Natural Female/Clear" voices
+    let voiceKeywords = ["google us english", "microsoft zira", "samantha", "victoria", "ava", "female"];
 
-    const preferredVoice = availableVoices.find(v =>
-        (v.name.includes("Zira") ||
-            v.name.includes("Google US English") ||
-            v.name.includes("Female")) &&
-        v.lang.startsWith("en")
-    );
-
-    if (preferredVoice) {
-        console.log(`[TTS] Using voice: ${preferredVoice.name}`);
-        utterance.voice = preferredVoice;
-    } else {
-        console.log("[TTS] No preferred voice found, using default/first English.");
-        const anyEnglish = availableVoices.find(v => v.lang.startsWith("en"));
-        if (anyEnglish) utterance.voice = anyEnglish;
+    if (selectedLang === 'te') {
+        targetLangCode = 'te-IN';
+        // "Shruti" (Microsoft) and "Google Telugu" are the gold standards
+        voiceKeywords = ["shruti", "google telugu", "rani", "vani", "hema", "female"];
+    } else if (selectedLang === 'hi') {
+        targetLangCode = 'hi-IN';
+        // "Swara" (Microsoft) and "Google Hindi" are best
+        voiceKeywords = ["swara", "google hindi", "kalpana", "heera", "female"];
     }
 
-    utterance.lang = 'en-US';
+    console.log(`[TTS] Target Lang: ${targetLangCode}`);
+
+    // Helper to score voices (higher score = better match for 'sweet female')
+    const getVoiceScore = (voice) => {
+        let score = 0;
+        const nameLower = voice.name.toLowerCase();
+
+        if (voice.lang === targetLangCode) score += 20;
+        else if (voice.lang.split('-')[0] === selectedLang) score += 10;
+        else return -1; // Wrong language
+
+        for (const kw of voiceKeywords) {
+            if (nameLower.includes(kw.toLowerCase())) {
+                score += 5; // Keyword match
+                if (kw === "natural") score += 10; // High priority for natural
+                if (kw === "premium") score += 10; // High priority for premium
+            }
+        }
+
+        // Bonus for "Microsoft" online voices which are usually better
+        if (nameLower.includes("microsoft") && nameLower.includes("online")) score += 15;
+
+        return score;
+    };
+
+    // Sort voices by score
+    const bestVoice = availableVoices
+        .map(v => ({ voice: v, score: getVoiceScore(v) }))
+        .filter(item => item.score > 0)
+        .sort((a, b) => b.score - a.score)[0];
+
+    let preferredVoice = bestVoice ? bestVoice.voice : null;
+
+    // Fallback to English preferred if non-English voice not found (better than silence)
+    if (!preferredVoice && selectedLang !== 'en') {
+        console.warn(`[TTS] No voice found for ${selectedLang}, falling back to English.`);
+        preferredVoice = availableVoices.find(v => v.lang.startsWith("en") && (v.name.includes("Female") || v.name.includes("Google")));
+    }
+
+    // Default English Logic if still null or English selected
+    if (!preferredVoice && selectedLang === 'en') {
+        preferredVoice = availableVoices.find(v =>
+            (v.name.includes("Google US English") || v.name.includes("Zira") || v.name.includes("Female")) &&
+            v.lang.startsWith("en")
+        );
+    }
+
+    if (preferredVoice) {
+        console.log(`[TTS] Using voice: ${preferredVoice.name} (${preferredVoice.lang})`);
+        utterance.voice = preferredVoice;
+        utterance.lang = preferredVoice.lang;
+    } else {
+        // Ultimate fallback
+        utterance.lang = targetLangCode;
+    }
+
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
@@ -1202,14 +1358,28 @@ function highlightWordAt(charIndex, spans) {
     const active = currentHighlightedElement.querySelector('.speaking-word');
     if (active) active.classList.remove('speaking-word');
 
-    const targetSpan = spans.find(span => {
+    // Find the span that COVERS the current charIndex
+    // We treat the charIndex as 'start of the current word being spoken'
+    let targetSpan = spans.find(span => {
         const start = parseInt(span.dataset.start);
         const end = parseInt(span.dataset.end);
+        // Standard check: is index inside the word?
         return charIndex >= start && charIndex < end;
     });
 
+    // Fallback: Sometimes browsers report index slightly before the word start (whitespace issue)
+    if (!targetSpan) {
+        targetSpan = spans.find(span => {
+            const start = parseInt(span.dataset.start);
+            // Allow a small tolerance (e.g., 2 chars) for leading punctuation/whitespace drift
+            return Math.abs(start - charIndex) <= 2;
+        });
+    }
+
     if (targetSpan) {
         targetSpan.classList.add('speaking-word');
+        // Auto-scroll to keep it in view
+        targetSpan.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 }
 
@@ -1305,12 +1475,26 @@ function renderFAQs(faqsToRender) {
             ? `<button onclick="deleteFAQ('${item.id}')" style="float:right; color:#ef4444; background:none; border:none; cursor:pointer;" title="Delete"><i class="fa-solid fa-trash"></i></button>`
             : '';
 
+        // Safe parsed HTML using marked.js (assuming it's loaded)
+        // If marked isn't available, fallback to simple escape
+        let answerHtml = '';
+        if (typeof marked !== 'undefined') {
+            try {
+                answerHtml = marked.parse(item.answer);
+            } catch (e) {
+                console.error("Markdown parse error", e);
+                answerHtml = escapeHtml(item.answer);
+            }
+        } else {
+            answerHtml = escapeHtml(item.answer);
+        }
+
         list.innerHTML += `
             <div class="faq-card">
                 ${deleteBtn}
                 <h4>${escapeHtml(item.question)}</h4>
                 <div class="faq-meta" style="font-size: 0.8em; color: #0f766e; margin-bottom: 5px;">${escapeHtml(item.category || 'General')}</div>
-                <p>${escapeHtml(item.answer)}</p>
+                <div class="markdown-body">${answerHtml}</div>
             </div>`;
     });
 }
@@ -1385,6 +1569,453 @@ async function deleteFAQ(id) {
     } catch (e) { console.error(e); }
 }
 
+// --- Ticketing System ---
+let currentTicketContext = { userQuery: "", botResponse: "" };
+
+function openTicketModal(userQuery, botResponse) {
+    currentTicketContext = { userQuery, botResponse };
+    let modal = document.getElementById('ticket-modal');
+
+    // Dynamically Create Modal if not exists
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ticket-modal';
+        modal.className = 'modal';
+        modal.innerHTML = `
+    <div class="modal-content" style="max-width: 500px; padding: 0; border-radius: 20px; overflow: hidden;">
+        <div class="modal-header" style="background: var(--gradient-primary); padding: 20px 24px; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px; color: white;">
+                <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fa-solid fa-ticket"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Raise Support Ticket</h3>
+                    <p style="margin: 0; font-size: 13px; opacity: 0.9;">We'll help you resolve your issue</p>
+                </div>
+            </div>
+            <button onclick="closeTicketModal()" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; opacity: 0.8; transition: opacity 0.2s;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+        
+        <div style="padding: 24px;">
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Subject</label>
+                <div style="position: relative;">
+                    <i class="fa-solid fa-heading" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7;"></i>
+                    <input type="text" id="ticket-subject" placeholder="Brief summary of the issue" 
+                        style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; transition: border-color 0.2s;">
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Description</label>
+                <div style="position: relative;">
+                     <i class="fa-solid fa-align-left" style="position: absolute; left: 14px; top: 14px; color: var(--text-secondary); opacity: 0.7;"></i>
+                    <textarea id="ticket-desc" rows="5" placeholder="Describe your issue in detail..." 
+                        style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; transition: border-color 0.2s; resize: vertical; font-family: inherit; line-height: 1.5;"></textarea>
+                </div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 24px;">
+                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Category</label>
+                <div style="position: relative;">
+                    <i class="fa-solid fa-layer-group" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7; pointer-events: none;"></i>
+                    <select id="ticket-cat" style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; appearance: none; cursor: pointer;">
+                        <option value="General">General Inquiry</option>
+                        <option value="Technical">Technical Issue</option>
+                        <option value="Academic">Academic/Grades</option>
+                        <option value="Facilities">Campus Facilities</option>
+                    </select>
+                    <i class="fa-solid fa-chevron-down" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7; pointer-events: none; font-size: 12px;"></i>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 12px; padding-top: 10px;">
+                 <button class="btn-secondary" onclick="closeTicketModal()" style="flex: 1;">Cancel</button>
+                 <button class="btn-primary" onclick="submitTicket()" style="flex: 2; height: auto; padding: 14px;">
+                    <i class="fa-solid fa-paper-plane" style="margin-right: 8px;"></i> Submit Ticket
+                 </button>
+            </div>
+        </div>
+    </div>`;
+        document.body.appendChild(modal);
+    }
+
+    // Pre-fill with animation/focus
+    const context = `Context (Auto-generated):\nUser asked: "${userQuery || ''}"\nBot replied: "${botResponse ? botResponse.substring(0, 100) + '...' : ''}"\n\nMy Issue:\n`;
+
+    setTimeout(() => {
+        const subjectEl = document.getElementById('ticket-subject');
+        const descEl = document.getElementById('ticket-desc');
+
+        if (subjectEl) subjectEl.value = userQuery ? userQuery.substring(0, 60) + (userQuery.length > 60 ? "..." : "") : "";
+        if (descEl) {
+            descEl.value = context;
+            descEl.focus();
+        }
+    }, 50);
+
+    modal.style.display = 'block';
+}
+
+function closeTicketModal() {
+    const modal = document.getElementById('ticket-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitTicket() {
+    const subject = document.getElementById('ticket-subject').value;
+    const desc = document.getElementById('ticket-desc').value;
+    const cat = document.getElementById('ticket-cat').value;
+
+    if (!subject || !desc) {
+        alert("Please fill all fields.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/tickets`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                subject: subject,
+                description: desc,
+                category: cat
+            })
+        });
+
+        if (res.ok) {
+            alert("Ticket raised successfully! Support team will contact you.");
+            closeTicketModal();
+        } else {
+            alert("Failed to raise ticket.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Error raising ticket.");
+    }
+}
+
+
+// --- Calendar Logic ---
+async function loadCalendar() {
+    const list = document.getElementById('calendar-list');
+    list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
+        <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+        <p style="margin-top: 10px;">Searching for upcoming events...</p>
+    </div>`;
+
+    try {
+        const res = await fetch(`${API_URL}/calendar`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) throw new Error("Sync failed");
+        const events = await res.json();
+        renderCalendar(events);
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
+            <i class="fa-solid fa-calendar-xmark fa-2x" style="color: #ef4444;"></i>
+            <p style="margin-top: 10px;">Failed to load calendar. Please try again later.</p>
+        </div>`;
+    }
+}
+
+function renderCalendar(events) {
+    const list = document.getElementById('calendar-list');
+    if (events.length === 0) {
+        list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
+            <i class="fa-solid fa-calendar-day fa-2x"></i>
+            <p style="margin-top: 10px;">No upcoming events scheduled at this moment.</p>
+        </div>`;
+        return;
+    }
+
+    list.innerHTML = events.map(e => {
+        const dateObj = new Date(e.date);
+        const day = dateObj.getDate();
+        const month = dateObj.toLocaleString('default', { month: 'short' }).toUpperCase();
+
+        let colorClass = 'event-holiday';
+        if (e.type === 'Exam') colorClass = 'event-exam';
+        if (e.type === 'Event') colorClass = 'event-general';
+
+        return `
+            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapeHtml(e.title)}', '${e.date}', '${escapeHtml(e.description || '')}')" style="cursor: pointer;" title="Add to Google Calendar">
+                <div class="calendar-date">
+                    <span class="day">${day}</span>
+                    <span class="month">${month}</span>
+                </div>
+                <div class="calendar-info">
+                    <span class="event-tag">${e.type}</span>
+                    <h4 class="event-title">${e.title}</h4>
+                    <p class="event-desc">${e.description || ''}</p>
+                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
+                         <i class="fa-brands fa-google"></i> <span style="text-decoration: underline;">Add to Calendar</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function addToGoogleCalendar(title, dateStr, desc) {
+    // Parse date (assuming YYYY-MM-DD format from backend)
+    const date = new Date(dateStr);
+
+    // Format YYYYMMDD
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+
+    // Create start and end date (all day event)
+    const start = `${yyyy}${mm}${dd}`;
+    // For all day event, end date is next day
+    const nextDay = new Date(date);
+    nextDay.setDate(date.getDate() + 1);
+    const endYYYY = nextDay.getFullYear();
+    const endMM = String(nextDay.getMonth() + 1).padStart(2, '0');
+    const endDD = String(nextDay.getDate()).padStart(2, '0');
+
+    const end = `${endYYYY}${endMM}${endDD}`;
+
+    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${start}/${end}&details=${encodeURIComponent(desc)}`;
+
+    if (confirm(`Add "${title}" to your Google Calendar?`)) {
+        window.open(url, '_blank');
+    }
+}
+
+// --- Calendar Admin Logic ---
+async function loadCalendarAdmin() {
+    const tbody = document.getElementById('calendar-admin-table-body');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/calendar`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const events = await res.json();
+        // Store globally for toggling
+        window.allCalendarEvents = events;
+        renderCalendarAdminTable(events, 3); // show 3 initially
+    } catch (e) {
+        console.error("Load Calendar Admin Error", e);
+    }
+}
+
+function renderCalendarAdminTable(events, limit = null) {
+    const tbody = document.getElementById('calendar-admin-table-body');
+    const container = tbody.parentElement.parentElement; // table -> div -> div.settings-card
+
+    // Add View More button if not exists
+    let btn = container.querySelector('.btn-view-more');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'btn-secondary btn-view-more';
+        btn.style.width = '100%';
+        btn.style.marginTop = '15px';
+        btn.style.textAlign = 'center';
+        container.appendChild(btn);
+    }
+
+    if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No events posted.</td></tr>';
+        btn.style.display = 'none';
+        return;
+    }
+
+    const showCount = limit ? limit : events.length;
+    const visibleEvents = events.slice(0, showCount);
+
+    tbody.innerHTML = visibleEvents.map(e => `
+        <tr>
+            <td style="padding: 12px;">${e.date}</td>
+            <td style="padding: 12px; font-weight: 500;">${e.title}</td>
+            <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${e.type}</span></td>
+            <td style="padding: 12px; text-align: right;">
+                <button onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Toggle Button Logic
+    if (events.length <= 3) {
+        btn.style.display = 'none';
+    } else {
+        btn.style.display = 'block';
+        if (limit) {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${events.length - 3} more)`;
+            btn.onclick = () => renderCalendarAdminTable(events, null); // Show all
+        } else {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+            btn.onclick = () => renderCalendarAdminTable(events, 3); // Show Less
+        }
+    }
+}
+
+function openCalendarModal() {
+    document.getElementById('calendar-event-modal').style.display = 'flex';
+}
+
+function closeCalendarModal() {
+    document.getElementById('calendar-event-modal').style.display = 'none';
+}
+
+async function saveCalendarEvent() {
+    const title = document.getElementById('event-title').value;
+    const date = document.getElementById('event-date').value;
+    const type = document.getElementById('event-type').value;
+    const desc = document.getElementById('event-desc').value;
+
+    if (!title || !date) {
+        alert("Please provide title and date.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ title, date, type, description: desc })
+        });
+
+        if (res.ok) {
+            closeCalendarModal();
+            loadCalendarAdmin();
+            loadCalendar(); // Update main calendar view if open
+            showStatusPopup("Event posted successfully!");
+        } else {
+            alert("Failed to post event.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Error posting event.");
+    }
+}
+
+async function deleteCalendarEvent(id) {
+    if (!confirm("Remove this event from the academic calendar?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            loadCalendarAdmin();
+            loadCalendar();
+        } else {
+            alert("Failed to delete event.");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function loadAllTickets() {
+    try {
+        const res = await fetch(`${API_URL}/admin/tickets`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const tickets = await res.json();
+        // Store globally
+        window.allTickets = tickets;
+        renderTicketsTable(tickets, 3);
+    } catch (e) {
+        console.error("Load Tickets Error", e);
+    }
+}
+
+function renderTicketsTable(tickets, limit = null) {
+    const tbody = document.getElementById('tickets-table-body');
+    if (!tbody) return;
+    const container = tbody.parentElement.parentElement;
+
+    // Add View More button if not exists
+    let btn = container.querySelector('.btn-view-more');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'btn-secondary btn-view-more';
+        btn.style.width = '100%';
+        btn.style.marginTop = '15px';
+        btn.style.textAlign = 'center';
+        container.appendChild(btn);
+    }
+
+    tbody.innerHTML = '';
+    if (tickets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px;">No support tickets found.</td></tr>';
+        btn.style.display = 'none';
+        return;
+    }
+
+    const showCount = limit ? limit : tickets.length;
+    const visibleTickets = tickets.slice(0, showCount);
+
+    visibleTickets.forEach(t => {
+        const badgeClass = t.status === 'open' ? 'warning' : 'success';
+        tbody.innerHTML += `
+        <tr>
+            <td>#${t.id.substring(t.id.length - 6)}</td>
+            <td>${escapeHtml(t.subject)}</td>
+            <td>${escapeHtml(t.category)}</td>
+            <td>${escapeHtml(t.created_by)}</td>
+            <td><span class="badge ${badgeClass}" style="cursor:pointer;" onclick="toggleTicketStatus('${t.id}', '${t.status}')">${t.status.toUpperCase()}</span></td>
+            <td>
+                <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}', '${escapeHtml(t.description)}', '${escapeHtml(t.resolution || '')}')">
+                    <i class="fa-solid fa-eye"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+
+    // Toggle Button Logic
+    if (tickets.length <= 3) {
+        btn.style.display = 'none';
+    } else {
+        btn.style.display = 'block';
+        if (limit) {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${tickets.length - 3} more)`;
+            btn.onclick = () => renderTicketsTable(tickets, null);
+        } else {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+            btn.onclick = () => renderTicketsTable(tickets, 3);
+        }
+    }
+}
+
+async function toggleTicketStatus(id, currentStatus) {
+    const newStatus = currentStatus === 'open' ? 'closed' : 'open';
+    if (!confirm(`Mark ticket as ${newStatus.toUpperCase()}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/tickets/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ status: newStatus, resolution: "Status updated by Admin" })
+        });
+        if (res.ok) loadAllTickets();
+    } catch (e) { console.error(e); }
+}
+
+function viewTicketDetails(id, desc, resolution) {
+    alert(`Ticket #${id.substring(id.length - 6)}\n\nDescription:\n${desc}\n\nResolution:\n${resolution || "Pending"}`);
+}
+
 // Locations Logic
 const locations = [
     "Sri Venkateswara University, Tirupati",
@@ -1438,14 +2069,14 @@ async function submitDocument() {
     }
 
     progressDiv.style.display = 'block';
-    statusText.textContent = "Uploading and processing...";
+    statusText.textContent = "Uploading and processing (Extracting FAQs)...";
     progressBar.style.width = "50%";
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-        const res = await fetch(`${API_URL}/admin/upload`, {
+        const res = await fetch(`${API_URL}/admin/upload-document`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
             body: formData
@@ -1458,13 +2089,13 @@ async function submitDocument() {
 
         const data = await res.json();
         progressBar.style.width = "100%";
-        statusText.textContent = "Complete! " + data.message;
+        statusText.textContent = `Complete! ${data.message} (${data.faqs_extracted || 0} FAQs found)`;
 
         setTimeout(() => {
             closeUploadModal();
-            alert("Document uploaded and ingested successfully!");
-            // Optionally refresh a document list here
+            showStatusPopup(`Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`);
             loadDocuments();
+            loadFAQs(); // Refresh FAQs too
         }, 1500);
 
     } catch (e) {
@@ -1490,11 +2121,11 @@ async function submitUrl() {
     }
 
     progressDiv.style.display = 'block';
-    statusText.textContent = "Scraping and processing content...";
+    statusText.textContent = "Scraping and processing (Extracting FAQs)...";
     statusText.style.color = "var(--accent-color)";
 
     try {
-        const res = await fetch(`${API_URL}/admin/ingest-url`, {
+        const res = await fetch(`${API_URL}/admin/add-url`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1507,11 +2138,18 @@ async function submitUrl() {
 
         const data = await res.json();
         progressDiv.style.display = 'none';
-        showStatusPopup(`Success: ${data.message}`);
+
+        statusText.textContent = `Success! ${data.faqs_extracted || 0} FAQs extracted.`;
+
         urlInput.value = "";
 
-        loadDocuments();
-        closeUrlModal();
+        setTimeout(() => {
+            closeUrlModal();
+            showStatusPopup(`URL added! ${data.faqs_extracted || 0} FAQs found.`);
+            loadDocuments();
+            loadFAQs();
+        }, 1500);
+
     } catch (e) {
         statusText.textContent = "Error: " + e.message;
         statusText.style.color = "#ef4444";
@@ -1638,15 +2276,47 @@ setInterval(() => {
 }, 3000);
 
 async function clearCache() {
-    if (!confirm("Are you sure you want to clear the system cache?")) return;
-    showStatusPopup("Clearing cache...");
-    setTimeout(() => showStatusPopup("Cache cleared successfully!"), 1000);
+    if (!confirm("Are you sure you want to clear the system cache? This will reset all active chat sessions.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/cache/clear`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("System cache cleared successfully!");
+        } else {
+            alert("Failed to clear cache.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Error clearing cache.");
+    }
 }
 
 async function reindexData() {
-    if (!confirm("Trigger full knowledge re-indexing? This may take a few minutes.")) return;
-    showStatusPopup("Indexing started...");
-    setTimeout(() => showStatusPopup("Knowledge base re-indexed!"), 2000);
+    if (!confirm("Refresh knowledge base connection?\n(This re-initializes the RAG pipeline)")) return;
+
+    showStatusPopup("Refreshing RAG pipeline...");
+
+    try {
+        const res = await fetch(`${API_URL}/admin/reindex`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("Knowledge base connection refreshed!");
+            // Refresh health status to show new state
+            loadSystemHealth();
+        } else {
+            alert("Failed to refresh connection.");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Error refreshing knowledge base.");
+    }
 }
 
 // --- Auth UI Interactions ---
@@ -1736,3 +2406,243 @@ function showStatusPopup(message, duration = 2000) {
         toast.classList.remove('show');
     }, duration);
 }
+
+// --- User Management Logic ---
+
+async function loadUsers() {
+    try {
+        const res = await fetch(`${API_URL}/admin/users`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const users = await res.json();
+        renderUsersTable(users, 3);
+    } catch (e) {
+        console.error("Load Users Error", e);
+    }
+}
+
+function renderUsersTable(users, limit = null) {
+    const tbody = document.getElementById('users-table-body');
+    if (!tbody) return;
+
+    // Safety check for container traversal
+    let container = tbody.parentElement;
+    if (container) container = container.parentElement;
+
+    if (container && !container.classList.contains('settings-card')) {
+        if (container.parentElement && container.parentElement.classList.contains('settings-card')) {
+            container = container.parentElement;
+        }
+    }
+
+    // Add View More button if not exists
+    let btn = null;
+    if (container) {
+        btn = container.querySelector('.btn-view-more-users');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'btn-secondary btn-view-more-users';
+            btn.style.width = '100%';
+            btn.style.marginTop = '15px';
+            btn.style.textAlign = 'center';
+            container.appendChild(btn);
+        }
+    }
+
+    tbody.innerHTML = '';
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No users found.</td></tr>';
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+
+    const showCount = limit ? limit : users.length;
+    const visibleUsers = users.slice(0, showCount);
+
+    visibleUsers.forEach(u => {
+        const initial = u.username.charAt(0).toUpperCase();
+        let roleBadge = 'info';
+        if (u.role === 'admin') roleBadge = 'success'; // Admin = Green
+        if (u.role === 'student') roleBadge = 'warning'; // Student = Orange/Yellow
+
+        const roleLabel = u.role.charAt(0).toUpperCase() + u.role.slice(1);
+        const joinedDate = new Date(u.created_at).toLocaleDateString();
+
+        tbody.innerHTML += `
+        <tr>
+            <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
+                <div style="width: 32px; height: 32px; background: ${u.role === 'admin' ? '#6366f1' : '#10b981'}; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                    ${initial}
+                </div>
+                <div>
+                    <div style="font-weight: 600;">${escapeHtml(u.username)}</div>
+                    <div style="font-size: 11px; color: var(--text-secondary);">ID: ...${u.id.substring(u.id.length - 6)}</div>
+                </div>
+            </td>
+            <td style="padding: 12px;"><span class="badge ${roleBadge}">${roleLabel}</span></td>
+            <td style="padding: 12px; font-size: 13px;">${joinedDate}</td>
+            <td style="padding: 12px; text-align: right;">
+                <button class="icon-btn" onclick="toggleUserRole('${u.id}', '${u.role}')" title="Switch Role">
+                    <i class="fa-solid fa-user-shield"></i>
+                </button>
+                <button class="icon-btn" onclick="deleteUser('${u.id}')" style="color: #ef4444;" title="Delete User">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+
+    if (btn) {
+        if (users.length <= 3) {
+            btn.style.display = 'none';
+        } else {
+            btn.style.display = 'block';
+            if (limit) {
+                btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${users.length - 3} more)`;
+                btn.onclick = () => renderUsersTable(users, null);
+            } else {
+                btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+                btn.onclick = () => renderUsersTable(users, 3);
+            }
+        }
+    }
+}
+
+async function deleteUser(id) {
+    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/users/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            showStatusPopup("User deleted successfully");
+            loadUsers();
+        } else {
+            alert(data.detail || "Failed to delete user");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function toggleUserRole(id, currentRole) {
+    const newRole = currentRole === 'admin' ? 'student' : 'admin';
+    if (!confirm(`Switch this user's role to ${newRole.toUpperCase()}?`)) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/users/${id}/role`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ role: newRole })
+        });
+
+        if (res.ok) {
+            showStatusPopup(`User is now ${newRole}`);
+            loadUsers();
+        } else {
+            alert("Failed to update role");
+        }
+    } catch (e) { console.error(e); }
+}
+
+// --- System Health and LLM Config Logic ---
+
+async function loadSystemHealth() {
+    try {
+        const start = Date.now();
+        const res = await fetch(`${API_URL}/admin/system-health`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        const latency = Date.now() - start;
+        const data = await res.json();
+
+        // Map to "System Health & Governance" card IDs
+
+        // 1. API Status (Latency) -> #health-api
+        const apiBadge = document.getElementById('health-api');
+        if (apiBadge) {
+            apiBadge.textContent = `${latency}ms`;
+            apiBadge.className = `badge ${latency < 200 ? 'success' : 'warning'}`;
+        }
+
+        // 2. Vector DB -> #health-vector
+        const vectorStatus = data.vector_db_status || 'unknown';
+        const vectorBadge = document.getElementById('health-vector');
+        if (vectorBadge) {
+            vectorBadge.textContent = vectorStatus === 'active' ? 'CONNECTED' : 'OFFLINE';
+            vectorBadge.className = `badge ${vectorStatus === 'active' ? 'success' : 'error'}`;
+        }
+
+        // 3. MongoDB -> #health-mongo
+        const mongoStatus = data.mongodb_status || 'unknown';
+        const mongoBadge = document.getElementById('health-mongo');
+        if (mongoBadge) {
+            mongoBadge.textContent = mongoStatus.toUpperCase();
+            mongoBadge.className = `badge ${mongoStatus === 'connected' ? 'success' : 'error'}`;
+        }
+
+        // 4. LLM Service -> #health-llm
+        const llmBadge = document.getElementById('health-llm');
+        if (llmBadge) {
+            llmBadge.textContent = data.llm_service.toUpperCase();
+            llmBadge.className = `badge ${data.llm_service === 'online' ? 'success' : 'error'}`;
+        }
+
+    } catch (e) {
+        console.error("Health Check Error", e);
+    }
+}
+
+async function loadLLMConfig() {
+    try {
+        const res = await fetch(`${API_URL}/admin/llm-config`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const modelSelect = document.getElementById('llm-model-select');
+        const tempRange = document.getElementById('llm-temp-range');
+        const tempDisplay = document.getElementById('llm-temp-display');
+
+        if (modelSelect) modelSelect.value = data.model;
+        if (tempRange) tempRange.value = data.temperature * 100;
+        if (tempDisplay) tempDisplay.textContent = data.temperature;
+
+    } catch (e) {
+        console.error("LLM Config Load Error", e);
+    }
+}
+
+async function saveLLMConfig() {
+    const model = document.getElementById('llm-model-select').value;
+    const tempVal = document.getElementById('llm-temp-range').value;
+    const temperature = parseFloat(tempVal) / 100;
+
+    showStatusPopup("Applying new configuration...");
+
+    try {
+        const res = await fetch(`${API_URL}/admin/llm-config`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ model, temperature })
+        });
+
+        if (res.ok) {
+            showStatusPopup("LLM Configuration Updated!");
+        } else {
+            alert("Failed to update config");
+        }
+    } catch (e) { console.error(e); }
+}
+
+

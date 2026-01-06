@@ -5,3 +5,4 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str
     incognito: bool = False
+    language: Optional[str] = "en"

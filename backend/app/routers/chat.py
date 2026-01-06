@@ -20,11 +20,21 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
             session_id=request.session_id,
             user_role=current_user.role,
             incognito=request.incognito,
-            current_time=current_time_str
+            current_time=current_time_str,
+            language=request.language
         )
         
         # Analytics Logging
         if not request.incognito and database.analytics_db is not None:
+             # Simple sentiment heuristic
+             pos_words = ['thank', 'good', 'great', 'wow', 'help', 'awesome', 'best']
+             neg_words = ['bad', 'wrong', 'error', 'fail', 'stupid', 'hate', 'useless', 'no']
+             
+             sentiment = "Neutral"
+             msg_lower = request.message.lower()
+             if any(w in msg_lower for w in neg_words): sentiment = "Negative"
+             elif any(w in msg_lower for w in pos_words): sentiment = "Positive"
+
              database.analytics_db.insert_one({
                 "timestamp": datetime.utcnow(),
                 "role": current_user.role,
@@ -32,7 +42,8 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
                 "topic": "general",
                 "question": request.message,
                 "response": response_text,
-                "length": len(request.message)
+                "length": len(request.message),
+                "sentiment": sentiment
             })
              
         return {"status": "success", "response": response_text}

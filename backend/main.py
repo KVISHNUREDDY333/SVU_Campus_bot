@@ -18,7 +18,7 @@ sys.path.append(project_root)
 from backend.app.core.config import Config
 from backend.app.core.database import get_db_client, close_db_client
 from backend.app.services.rag_service import setup_rag_chain
-from backend.app.routers import auth, chat, admin, documents
+from backend.app.routers import auth, chat, admin, documents, tickets, calendar
 from backend.app.core.security import get_password_hash
 from backend.app.core import database
 from datetime import datetime
@@ -80,6 +80,8 @@ app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(documents.router)
+app.include_router(tickets.router)
+app.include_router(calendar.router)
 
 # Static Files (Frontend) - Use Absolute Path
 static_dir = os.path.join(project_root, "frontend", "static")
