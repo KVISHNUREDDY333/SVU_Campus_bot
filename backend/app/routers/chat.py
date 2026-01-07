@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ..models.chat import ChatRequest
+from ..models.chat import ChatRequest, FeedbackRequest
 from ..models.user import User
 from ..services.rag_service import generate_response
 from .auth import get_current_user
@@ -7,10 +7,10 @@ from ..core import database
 import logging
 from datetime import datetime
 
-router = APIRouter()
+router = APIRouter(prefix="/chat", tags=["Chat"])
 logger = logging.getLogger("uvicorn")
 
-@router.post("/chat")
+@router.post("")
 async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_current_user)):
     try:
         current_time_str = datetime.now().strftime("%A, %b %d, %Y at %I:%M %p")
@@ -49,4 +49,26 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
         return {"status": "success", "response": response_text}
     except Exception as e:
         logger.error(f"Chat Error: {e}")
-        return {"status": "error", "error": "Processing error"}
+        return {"status": "error", "error": f"Processing error: {str(e)}"}
+
+@router.post("/feedback")
+async def chat_feedback(req: FeedbackRequest, current_user: User = Depends(get_current_user)):
+    try:
+        feedback_data = {
+            "timestamp": datetime.utcnow(),
+            "username": current_user.username,
+            "user_id": str(current_user.username),
+            "role": current_user.role,
+            "message": req.message,
+            "response": req.response,
+            "rating": req.rating,
+            "comment": req.comment
+        }
+        
+        if database.analytics_db is not None:
+             database.analytics_db.insert_one(feedback_data)
+             
+        return {"status": "success", "message": "Feedback received"}
+    except Exception as e:
+        logger.error(f"Feedback Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save feedback")

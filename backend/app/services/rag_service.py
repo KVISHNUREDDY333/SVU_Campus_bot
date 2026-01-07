@@ -7,6 +7,7 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -27,12 +28,36 @@ mock_academic_data = {}
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     if session_id not in store:
-        store[session_id] = ChatMessageHistory()
-    return store[session_id]
+        store[session_id] = {
+            "history": ChatMessageHistory(),
+            "entities": {}
+        }
+    return store[session_id]["history"]
+
+def get_session_entities(session_id: str) -> dict:
+    if session_id not in store:
+        get_session_history(session_id)
+    return store[session_id].get("entities", {})
+
+def update_entities(session_id: str, message: str):
+    """Simple entity extraction to improve conversational intelligence"""
+    entities = get_session_entities(session_id)
+    msg_lower = message.lower()
+    
+    # Campus specific entity extraction
+    if "it lab" in msg_lower: entities["last_location"] = "IT Lab"
+    if "cse" in msg_lower or "computer science" in msg_lower: entities["department"] = "CSE"
+    if "eee" in msg_lower: entities["department"] = "EEE"
+    if "admission" in msg_lower: entities["topic"] = "Admissions"
+    if "exam" in msg_lower or "results" in msg_lower: entities["topic"] = "Academics"
+    if "canteen" in msg_lower: entities["last_location"] = "Campus Canteen"
+    if "hostel" in msg_lower: entities["last_location"] = "Student Hostel"
+    
+    store[session_id]["entities"] = entities
 
 # State for dynamic config
 CURRENT_MODEL_NAME = "llama-3.3-70b-versatile"
-CURRENT_TEMPERATURE = 0.7
+CURRENT_TEMPERATURE = 0.3  # Reduced for higher precision as requested
 
 def update_llm_config(model_name: str, temperature: float):
     global llm, CURRENT_MODEL_NAME, CURRENT_TEMPERATURE
@@ -42,7 +67,7 @@ def update_llm_config(model_name: str, temperature: float):
     # Re-initialize LLM
     try:
         logger.info(f"Updating LLM to {model_name} with temp {temperature}")
-        llm = ChatGroq(model=model_name, api_key=Config.GROQ_API_KEY, temperature=temperature)
+        llm = ChatGroq(model=model_name, groq_api_key=Config.GROQ_API_KEY, temperature=temperature)
         
         # We need to rebuild the chains only, but re-running full setup is safer for now to ensure consistency
         setup_rag_chain() 
@@ -53,15 +78,18 @@ def update_llm_config(model_name: str, temperature: float):
 
 def setup_rag_chain():
     global vector_db, llm, retrieval_chain, CURRENT_MODEL_NAME, CURRENT_TEMPERATURE
-    if not database.mongo_client:
-        logger.error("MongoDB client not initialized. Cannot setup RAG.")
-        return
-
     try:
-        logger.info("Initializing Embeddings...")
+        # Init LLM with current config FIRST (so it works even if DB is delayed)
+        llm = ChatGroq(model=CURRENT_MODEL_NAME, groq_api_key=Config.GROQ_API_KEY, temperature=CURRENT_TEMPERATURE)
+        
+        if not database.mongo_client:
+            logger.warning("MongoDB client not initialized yet. Skipping Vector DB setup.")
+            return
+
+        logger.info("Initializing Embeddings and Vector DB...")
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         
-        # Initialize Vector DB if not exists (or always to be safe)
+        # Initialize Vector DB if not exists
         if not vector_db:
              vector_db = MongoDBAtlasVectorSearch(
                 collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
@@ -69,9 +97,6 @@ def setup_rag_chain():
                 index_name="vector_index",
                 relevance_score_fn="cosine",
             )
-        
-        # Init LLM with current config
-        llm = ChatGroq(model=CURRENT_MODEL_NAME, api_key=Config.GROQ_API_KEY, temperature=CURRENT_TEMPERATURE)
         
         retriever = vector_db.as_retriever(search_kwargs={"k": 3})
         
@@ -92,36 +117,47 @@ def setup_rag_chain():
             ]
         )
         
-        history_aware_retriever = (
-            {
-                    "chat_history": lambda x: x["chat_history"], 
-                    "input": lambda x: x["input"]
+        def get_dynamic_retriever(user_username: str):
+            # Filtering: Include public docs + docs belonging to this specific user
+            pre_filter = {
+                "$or": [
+                    {"user_id": {"$exists": False}},  # Legacy/Admin docs
+                    {"user_id": "public"},           # Explicitly public docs
+                    {"user_id": user_username}       # User's own lecture notes
+                ]
             }
-            | contextualize_q_prompt 
-            | llm 
-            | StrOutputParser() 
-            | retriever
+            return vector_db.as_retriever(search_kwargs={"k": 8, "pre_filter": pre_filter})
+
+        history_aware_retriever = (
+            RunnablePassthrough.assign(
+                rephrased_query=contextualize_q_prompt | llm | StrOutputParser()
+            )
+            | (lambda x: get_dynamic_retriever(x.get("user_username", "guest")).get_relevant_documents(x["rephrased_query"]))
         )
         
-        qa_system_prompt = """You are an intelligent campus assistant for SV University. 
+        qa_system_prompt = """You are the Senior Intelligent Campus Assistant for Sri Venkateswara University (SVU). 
+        Your goal is to provide highly accurate, professional, and comprehensive information to students, faculty, and guests.
+
+        CRITICAL CONTEXT:
+        - Current Time: {current_time}
+        - Known Conversation Entities: {entities}
+        - User Personal Info: {user_context}
         
-        Current Time: {current_time}
+        Use the following pieces of retrieved context to answer the question. 
         
-        Personal Context (User Specific Info):
-        {user_context}
-        
-        Use the following pieces of retrieved context to answer the question.
-        
-        **CRITICAL INSTRUCTIONS**:
-        1. **Language Detection**: If the user asks in **Telugu**, reply in **Telugu**. If in **Hindi**, reply in **Hindi**. Otherwise, English.
-        2. **Maps**: If the user asks for a location (e.g., "Where is the Library?"), provide a clear description and append "[Map Link]" (frontend will handle this).
-        3. **Time**: Use {current_time} for time-sensitive queries.
-        4. **Unknowns**: If you don't know, say "I don't know, but you can raise a ticket for this." politely in the user's language.
-        
+        **CRITICAL INSTRUCTIONS FOR ACCURACY & ELABORATION**:
+        1. **Depth & Detail**: Do NOT give short or generic answers. If the information is available in the context, be elaborative. Explain the 'Why' and 'How'.
+        2. **Formatting**: Use Markdown to make your response visually appealing and easy to read.
+           - Use ### Headers for sections.
+           - Use **Bold** for emphasis.
+           - Use Bullet points or Numbered lists for steps/features.
+           - Use Tables (| Col1 | Col2 |) for data comparisons or schedules.
+        3. **Language Detection**: If the user asks in **Telugu**, reply in **Telugu**. If in **Hindi**, reply in **Hindi**. Otherwise, English. Ensure the tone remains academic yet helpful.
+        4. **Maps & Navigation**: For locations, give descriptive directions (e.g., "Located near the Administration Block") and append "[Map Link]" for the system to render.
+        5. **Context Adherence**: Only answer based on the provided context. If the answer is not there, politely state you don't have that specific data yet and suggest they "Raise a Support Ticket".
+        6. **Proactive Assistance**: If a student's personal context (Grades/Attendance) is relevant to the query, reference it to provide a personalized experience.
         
         **Language Instruction**: {language_instruction}
-        
-        Keep answers concise, helpful, and friendly.
         
         Context: {context}"""
         
@@ -143,7 +179,9 @@ def setup_rag_chain():
                 "input": lambda x: x["input"],
                 "user_context": lambda x: x.get("user_context", "No personal data available."),
                 "current_time": lambda x: x.get("current_time", "Unknown Time"),
-                "language_instruction": lambda x: x.get("language_instruction", "Reply in English")
+                "entities": lambda x: x.get("entities", "None"),
+                "language_instruction": lambda x: x.get("language_instruction", "Reply in English"),
+                "user_username": lambda x: x.get("user_username", "guest")
             }
             | qa_prompt
             | llm
@@ -184,12 +222,20 @@ async def generate_response(message: str, session_id: str, user_role: str, incog
         lang_instruction = "Reply in English."
 
     try:
+        # Get actual username for filtering
+        user_username = session_id if not incognito else "guest"
+        # Entity tracking
+        update_entities(session_id, message)
+        entities_str = str(get_session_entities(session_id))
+
         response_text = await retrieval_chain.ainvoke(
             {
                 "input": message, 
                 "user_context": personal_context_str, 
                 "current_time": current_time,
-                "language_instruction": lang_instruction
+                "entities": entities_str,
+                "language_instruction": lang_instruction,
+                "user_username": user_username
             },
             config={"configurable": {"session_id": session_id if not incognito else "temp_session"}}
         )
@@ -217,7 +263,7 @@ async def ingest_url(url: str):
         full_text = "\n\n".join([d.page_content for d in docs])
 
         # Split text
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
         splits = text_splitter.split_documents(docs)
         
         # Add to Vector DB
@@ -229,7 +275,7 @@ async def ingest_url(url: str):
         logger.error(f"URL Ingestion Error: {e}")
         raise e
 
-async def ingest_pdf(file_path: str):
+async def ingest_pdf(file_path: str, user_id: str = "public"):
     """
     Parses a PDF, splits it, and stores vectors.
     Returns tuple: (num_chunks, full_text_content)
@@ -240,14 +286,18 @@ async def ingest_pdf(file_path: str):
              raise Exception("Vector DB not initialized")
 
     try:
-        logger.info(f"Ingesting PDF: {file_path}")
+        logger.info(f"Ingesting PDF: {file_path} for user: {user_id}")
         loader = PyPDFLoader(file_path)
         pages = loader.load()
+        
+        # Add user_id to metadata for each page
+        for page in pages:
+            page.metadata["user_id"] = user_id
         
         full_text = "\n\n".join([d.page_content for d in pages])
         
         # Split text
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
         splits = text_splitter.split_documents(pages)
         
         # Add to Vector DB
@@ -307,7 +357,7 @@ async def extract_faqs_from_text(text: str):
        - "answer": A detailed answer. 
          * **CRITICAL**: If the answer involves data, lists, or steps, format it using **Markdown**.
          * Use Markdown tables, bullet points, and bold text where appropriate to represent the data structure faithfully (e.g., Use `| Col1 | Col2 |` for tables).
-       - "category": One of "Academic", "Admissions", "Campus Life", "General", "Examinations", "Technical", "Placements".
+       - "category": One of "Academic", "Admissions", "Administration", "Events", "Colleges", "Departments", "Hostels", "Sports", "About SVU", "Campus Life", "General", "Examinations", "Technical", "Placements".
     
     **Text Content**:
     {text}

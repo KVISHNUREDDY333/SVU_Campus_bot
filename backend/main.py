@@ -18,7 +18,7 @@ sys.path.append(project_root)
 from backend.app.core.config import Config
 from backend.app.core.database import get_db_client, close_db_client
 from backend.app.services.rag_service import setup_rag_chain
-from backend.app.routers import auth, chat, admin, documents, tickets, calendar
+from backend.app.routers import auth, chat, admin, documents, tickets, calendar, study_buddy, career
 from backend.app.core.security import get_password_hash
 from backend.app.core import database
 from datetime import datetime
@@ -50,6 +50,27 @@ async def seed_admin():
     except Exception as e:
         logger.error(f"Failed to seed admin: {e}")
 
+async def seed_data():
+    try:
+        if database.placement_records_db.count_documents({}) == 0:
+            database.placement_records_db.insert_many([
+                {"company_name": "Google", "package": 45.0, "year": 2024, "department": "CSE/IT"},
+                {"company_name": "Microsoft", "package": 32.5, "year": 2024, "department": "CSE"},
+                {"company_name": "Accenture", "package": 6.5, "year": 2024, "department": "All Branches"},
+                {"company_name": "TCS", "package": 4.5, "year": 2024, "department": "All Branches"}
+            ])
+            logger.info("Seeded sample placement records")
+        
+        if database.exam_dates_db.count_documents({}) == 0:
+            from datetime import timedelta
+            database.exam_dates_db.insert_many([
+                {"subject": "Data Structures & Algorithms", "date": datetime.utcnow() + timedelta(days=15), "department": "Common"},
+                {"subject": "Database Management Systems", "date": datetime.utcnow() + timedelta(days=22), "department": "Common"}
+            ])
+            logger.info("Seeded sample exam dates")
+    except Exception as e:
+        logger.error(f"Failed to seed data: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -57,6 +78,7 @@ async def lifespan(app: FastAPI):
     get_db_client()
     setup_rag_chain()
     await seed_admin()
+    await seed_data()
     yield
     # Shutdown
     logger.info("Shutting Down Application Components...")
@@ -82,6 +104,8 @@ app.include_router(admin.router)
 app.include_router(documents.router)
 app.include_router(tickets.router)
 app.include_router(calendar.router)
+app.include_router(study_buddy.router)
+app.include_router(career.router)
 
 # Static Files (Frontend) - Use Absolute Path
 static_dir = os.path.join(project_root, "frontend", "static")

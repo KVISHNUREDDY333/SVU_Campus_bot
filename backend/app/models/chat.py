@@ -6,3 +6,9 @@ class ChatRequest(BaseModel):
     session_id: str
     incognito: bool = False
     language: Optional[str] = "en"
+
+class FeedbackRequest(BaseModel):
+    message: str
+    response: str
+    rating: int # 1 for up, -1 for down
+    comment: Optional[str] = None

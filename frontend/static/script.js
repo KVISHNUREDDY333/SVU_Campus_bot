@@ -22,8 +22,11 @@ function toggleTheme() {
 
 function updateThemeUI(isDark) {
     const icon = document.getElementById('theme-icon');
+    const headerIcon = document.getElementById('header-theme-icon');
     const text = document.getElementById('theme-text');
+
     if (icon) icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+    if (headerIcon) headerIcon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
     if (text) text.textContent = isDark ? 'Light Mode' : 'Dark Mode';
 }
 
@@ -391,8 +394,8 @@ if (incognitoToggle) {
     });
 }
 
-// Polling for Notifications
-setInterval(checkNotifications, 10000);
+// Polling for Notifications (Every 60 seconds to reduce server load)
+setInterval(checkNotifications, 60000);
 
 
 function populateSidebarProfile() {
@@ -454,15 +457,25 @@ async function checkNotifications() {
         if (!res.ok) return;
 
         const notifications = await res.json();
-        // Simple logic: if new notification ID is greater than last seen, show toast
-        const lastSeenId = parseInt(localStorage.getItem('last_notification_id') || '0');
 
-        notifications.forEach(notif => {
+        // If no lastSeenId exists, set it to the latest notification ID without showing toasts
+        if (!localStorage.getItem('last_notification_id')) {
+            const maxId = notifications.reduce((max, n) => Math.max(max, n.id), 0);
+            localStorage.setItem('last_notification_id', maxId.toString());
+            return;
+        }
+
+        const lastSeenId = parseInt(localStorage.getItem('last_notification_id') || '0');
+        let newLastSeenId = lastSeenId;
+
+        // Sort by timestamp or ID ascending to show in order
+        notifications.sort((a, b) => a.id - b.id).forEach(notif => {
             if (notif.id > lastSeenId) {
                 showToast(notif.title, notif.message);
-                localStorage.setItem('last_notification_id', notif.id);
+                if (notif.id > newLastSeenId) newLastSeenId = notif.id;
             }
         });
+        localStorage.setItem('last_notification_id', newLastSeenId.toString());
     } catch (e) {
         // console.error("Notification Poll Error", e);
     }
@@ -537,7 +550,7 @@ function showSection(section) {
         return;
     }
 
-    const sections = ['chat', 'admin', 'dashboard', 'calendar'];
+    const sections = ['chat', 'admin', 'dashboard', 'calendar', 'study', 'career'];
 
     sections.forEach(s => {
         const el = document.getElementById(`${s}-section`);
@@ -567,9 +580,19 @@ function showSection(section) {
         loadUsers();
         loadSystemHealth();
         loadLLMConfig();
+        loadSuggestedFAQs();
     }
     if (section === 'calendar') {
         loadCalendar();
+    }
+    if (section === 'study') {
+        loadStudyBuddy();
+    }
+    if (section === 'career') {
+        loadCareerCenter();
+    }
+    if (section === 'chat') {
+        // Countdown widget removed
     }
 }
 
@@ -946,8 +969,34 @@ function appendMessage(text, sender, save = true) {
         speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
         speakBtn.onclick = () => speakText(text, textSpan, speakBtn);
 
+        // Thumbs Up
+        const upBtn = document.createElement('button');
+        upBtn.className = 'speech-btn feedback-up';
+        upBtn.title = "Good Response";
+        upBtn.innerHTML = '<i class="fa-regular fa-thumbs-up"></i>';
+
+        // Thumbs Down
+        const downBtn = document.createElement('button');
+        downBtn.className = 'speech-btn feedback-down';
+        downBtn.title = "Poor Response";
+        downBtn.innerHTML = '<i class="fa-regular fa-thumbs-down"></i>';
+
+        // Find the user query that triggered this bot response
+        let triggeredQuery = "Unknown context";
+        for (let i = chatHistory.length - 2; i >= 0; i--) {
+            if (chatHistory[i].sender === 'user') {
+                triggeredQuery = chatHistory[i].text;
+                break;
+            }
+        }
+
+        upBtn.onclick = () => sendFeedback(triggeredQuery, text, 1, upBtn);
+        downBtn.onclick = () => sendFeedback(triggeredQuery, text, -1, downBtn);
+
         actionsDiv.appendChild(copyBtn);
         actionsDiv.appendChild(speakBtn);
+        actionsDiv.appendChild(upBtn);
+        actionsDiv.appendChild(downBtn);
 
         bubble.appendChild(textSpan);
         contentWrapper.appendChild(bubble);
@@ -984,6 +1033,60 @@ function appendMessage(text, sender, save = true) {
     }
 
     return div;
+}
+
+async function sendFeedback(userQuery, botResponse, rating, btn) {
+    // Visual feedback
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`${API_URL}/chat/feedback`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                message: userQuery,
+                response: botResponse,
+                rating: rating
+            })
+        });
+
+        if (res.ok) {
+            // Use solid icons for the selected rating
+            if (rating === 1) {
+                btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';
+                btn.style.color = '#10b981';
+            } else {
+                btn.innerHTML = '<i class="fa-solid fa-thumbs-down"></i>';
+                btn.style.color = '#ef4444';
+            }
+
+            // Disable and dim the group
+            const parent = btn.parentElement;
+            parent.querySelectorAll('.feedback-up, .feedback-down').forEach(b => {
+                b.disabled = true;
+                b.style.pointerEvents = 'none';
+                if (b !== btn) {
+                    b.style.opacity = '0.3';
+                    b.style.filter = 'grayscale(1)';
+                }
+            });
+
+            showToast(rating === 1 ? "Thanks for reflecting! 👍" : "Feedback noted. We'll improve! 📝", "info");
+        } else {
+            const errData = await res.json();
+            throw new Error(errData.detail || "Feedback failed");
+        }
+    } catch (e) {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+        console.error("Feedback error:", e);
+        showToast(`Feedback Error: ${e.message}`, "error");
+    }
 }
 
 function showTypingIndicator() {
@@ -1517,8 +1620,217 @@ if (adminSearchInput) {
 }
 
 const modal = document.getElementById("faq-modal");
-function openModal() { if (modal) modal.style.display = 'block'; }
-function closeModal() { if (modal) modal.style.display = 'none'; }
+function openModal() {
+    const modal = document.getElementById('faq-modal');
+    if (modal) {
+        // Reset to default (Admin mode)
+        const header = modal.querySelector('.modal-header h3');
+        const subTitle = modal.querySelector('.modal-header p');
+        const submitBtnText = modal.querySelector('#faq-submit-btn span');
+        const submitBtnIcon = modal.querySelector('#faq-submit-btn i');
+
+        if (header) header.textContent = "Admin: Publish FAQ";
+        if (subTitle) subTitle.textContent = "Directly publish new information to the database.";
+        if (submitBtnText) submitBtnText.textContent = "Publish FAQ";
+        if (submitBtnIcon) submitBtnIcon.className = "fa-solid fa-cloud-arrow-up";
+
+        const submitBtn = document.getElementById('faq-submit-btn');
+        if (submitBtn) submitBtn.onclick = saveFAQ;
+
+        modal.classList.add('active');
+    }
+}
+function closeModal() {
+    const modal = document.getElementById('faq-modal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+function openSuggestModal() {
+    if (!ACCESS_TOKEN) {
+        checkAuth(); // Show login overlay if not logged in
+        return;
+    }
+    const modal = document.getElementById('faq-modal');
+    if (!modal) return;
+
+    // Set UI for suggestion mode
+    const header = modal.querySelector('.modal-header h3');
+    const subTitle = modal.querySelector('.modal-header p');
+    const submitBtnText = modal.querySelector('#faq-submit-btn span');
+    const submitBtnIcon = modal.querySelector('#faq-submit-btn i');
+
+    if (header) header.textContent = "Suggest an FAQ";
+    if (subTitle) subTitle.textContent = "Help improve the campus assistant's knowledge.";
+    if (submitBtnText) submitBtnText.textContent = "Submit Suggestion";
+    if (submitBtnIcon) submitBtnIcon.className = "fa-solid fa-paper-plane";
+
+    const submitBtn = document.getElementById('faq-submit-btn');
+    if (submitBtn) submitBtn.onclick = submitFAQSuggestion;
+
+    modal.classList.add('active');
+}
+
+async function submitFAQSuggestion() {
+    const question = document.getElementById('faq-question').value;
+    const answer = document.getElementById('faq-answer').value;
+    const category = document.getElementById('faq-category').value;
+    const suggested_by = localStorage.getItem('username') || "Anonymous";
+
+    if (!question || !answer) {
+        alert("Please fill all fields.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/faqs/suggest`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question, answer, category, suggested_by })
+        });
+
+        if (res.ok) {
+            closeModal();
+            showStatusPopup("Thank you! Your FAQ suggestion has been submitted for review.");
+            // Clear form
+            document.getElementById('faq-question').value = '';
+            document.getElementById('faq-answer').value = '';
+        } else {
+            alert("Failed to submit suggestion.");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function loadSuggestedFAQs() {
+    if (USER_ROLE !== 'admin') return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/suggested-faqs`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+
+        const suggestions = await res.json();
+        window.allSuggestions = suggestions; // Store for lookup
+
+        const tbody = document.getElementById('suggested-faqs-table-body');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+        if (suggestions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No suggestions pending.</td></tr>';
+            return;
+        }
+
+        suggestions.forEach(s => {
+            const dateStr = new Date(s.timestamp).toLocaleDateString();
+            const initial = s.suggested_by.charAt(0).toUpperCase();
+
+            tbody.innerHTML += `
+            <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle; cursor: pointer;" 
+                onclick="openReviewModal('${s.id}')"
+                class="review-row">
+                <td style="padding: 16px;">
+                    <div class="suggested-faq-content">
+                        <div class="suggested-faq-question">${escapeHtml(s.question)}</div>
+                        <div class="suggested-faq-answer">${escapeHtml(s.answer)}</div>
+                        <div class="suggested-faq-meta">
+                            <span class="badge success" style="font-size: 9px; padding: 2px 6px;">${escapeHtml(s.category || 'General')}</span>
+                        </div>
+                    </div>
+                </td>
+                <td style="padding: 16px;">
+                    <div class="contributor-item">
+                        <div class="contributor-avatar">${initial}</div>
+                        <div class="contributor-info">
+                            <div class="contributor-name">${escapeHtml(s.suggested_by)}</div>
+                            <div class="contributor-date">${dateStr}</div>
+                        </div>
+                    </div>
+                </td>
+                <td style="padding: 16px; text-align: right;">
+                    <div class="action-buttons">
+                        <button class="btn-approve" onclick="event.stopPropagation(); approveSuggestion('${s.id}')">
+                            <i class="fa-solid fa-check"></i> Approve
+                        </button>
+                        <button class="btn-reject" onclick="event.stopPropagation(); rejectSuggestion('${s.id}')">
+                            Reject
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        });
+    } catch (e) { console.error("Load Suggestions Error", e); }
+}
+
+function openReviewModal(id) {
+    if (!window.allSuggestions) return;
+    const s = window.allSuggestions.find(item => item.id === id);
+    if (!s) return;
+
+    const modal = document.getElementById('review-suggestion-modal');
+    if (!modal) return;
+
+    // Fill content
+    document.getElementById('review-contributor').textContent = s.suggested_by;
+    document.getElementById('review-avatar').textContent = s.suggested_by.charAt(0).toUpperCase();
+    document.getElementById('review-date').textContent = new Date(s.timestamp).toLocaleDateString();
+    document.getElementById('review-question').textContent = s.question;
+    document.getElementById('review-answer').textContent = s.answer;
+
+    // Set actions
+    document.getElementById('review-approve-btn').onclick = () => approveSuggestion(id, true);
+    document.getElementById('review-reject-btn').onclick = () => rejectSuggestion(id, true);
+
+    modal.classList.add('active');
+}
+
+function closeReviewModal() {
+    const modal = document.getElementById('review-suggestion-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function approveSuggestion(id, fromModal = false) {
+    if (!confirm("Approve this FAQ and publish it?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/suggested-faqs/${id}/approve`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("FAQ approved and published!");
+            if (fromModal) closeReviewModal();
+            loadSuggestedFAQs();
+            loadFAQs(); // Refresh main FAQ list if visible
+        } else {
+            alert("Failed to approve suggestion.");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function rejectSuggestion(id, fromModal = false) {
+    if (!confirm("Are you sure you want to reject and delete this suggestion?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/suggested-faqs/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("Suggestion rejected.");
+            if (fromModal) closeReviewModal();
+            loadSuggestedFAQs();
+        } else {
+            alert("Failed to reject suggestion.");
+        }
+    } catch (e) { console.error(e); }
+}
 
 async function saveFAQ() {
     const question = document.getElementById('faq-question').value;
@@ -1656,12 +1968,14 @@ function openTicketModal(userQuery, botResponse) {
         }
     }, 50);
 
-    modal.style.display = 'block';
+    modal.classList.add('active');
 }
 
 function closeTicketModal() {
     const modal = document.getElementById('ticket-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.classList.remove('active');
+    }
 }
 
 async function submitTicket() {
@@ -1862,11 +2176,11 @@ function renderCalendarAdminTable(events, limit = null) {
 }
 
 function openCalendarModal() {
-    document.getElementById('calendar-event-modal').style.display = 'flex';
+    document.getElementById('calendar-event-modal').classList.add('active');
 }
 
 function closeCalendarModal() {
-    document.getElementById('calendar-event-modal').style.display = 'none';
+    document.getElementById('calendar-event-modal').classList.remove('active');
 }
 
 async function saveCalendarEvent() {
@@ -2046,14 +2360,28 @@ const locationsListEl = document.getElementById('locations-list');
 
 // --- Document Upload Logic ---
 
-function openUploadModal() {
-    document.getElementById('upload-modal').style.display = 'flex';
+let currentUploadTarget = 'admin'; // 'admin' or 'study'
+
+function openUploadModal(target = 'admin') {
+    currentUploadTarget = target;
+    const modal = document.getElementById('upload-modal');
+    if (!modal) return;
+
+    // Update header based on target
+    const header = modal.querySelector('.modal-header h3');
+    if (header) {
+        header.textContent = target === 'study' ? 'Upload Lecture Notes' : 'Upload Admin Document';
+    }
+
+    modal.classList.add('active');
     document.getElementById('upload-file').value = ""; // Reset
+    const label = document.getElementById('file-label-text');
+    if (label) label.textContent = "Click to upload PDF";
     document.getElementById('upload-progress').style.display = 'none';
 }
 
 function closeUploadModal() {
-    document.getElementById('upload-modal').style.display = 'none';
+    document.getElementById('upload-modal').classList.remove('active');
 }
 
 async function submitDocument() {
@@ -2069,14 +2397,15 @@ async function submitDocument() {
     }
 
     progressDiv.style.display = 'block';
-    statusText.textContent = "Uploading and processing (Extracting FAQs)...";
+    statusText.textContent = currentUploadTarget === 'study' ? "Uploading notes..." : "Uploading and processing (Extracting FAQs)...";
     progressBar.style.width = "50%";
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-        const res = await fetch(`${API_URL}/admin/upload-document`, {
+        const endpoint = currentUploadTarget === 'study' ? `${API_URL}/study-buddy/upload` : `${API_URL}/admin/upload-document`;
+        const res = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` },
             body: formData
@@ -2089,13 +2418,17 @@ async function submitDocument() {
 
         const data = await res.json();
         progressBar.style.width = "100%";
-        statusText.textContent = `Complete! ${data.message} (${data.faqs_extracted || 0} FAQs found)`;
+        statusText.textContent = "Upload Complete!";
 
         setTimeout(() => {
             closeUploadModal();
-            showStatusPopup(`Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`);
-            loadDocuments();
-            loadFAQs(); // Refresh FAQs too
+            showStatusPopup(currentUploadTarget === 'study' ? "Notes uploaded successfully!" : `Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`);
+            if (currentUploadTarget === 'study') {
+                loadStudyBuddy();
+            } else {
+                loadDocuments();
+                loadFAQs();
+            }
         }, 1500);
 
     } catch (e) {
@@ -2106,8 +2439,8 @@ async function submitDocument() {
 
 // URL Ingestion
 const urlModal = document.getElementById('url-modal');
-function openUrlModal() { if (urlModal) urlModal.style.display = 'flex'; }
-function closeUrlModal() { if (urlModal) urlModal.style.display = 'none'; }
+function openUrlModal() { if (urlModal) urlModal.classList.add('active'); }
+function closeUrlModal() { if (urlModal) urlModal.classList.remove('active'); }
 
 async function submitUrl() {
     const urlInput = document.getElementById('url-input');
@@ -2194,10 +2527,10 @@ function openLocations() {
             locationsListEl.appendChild(a);
         });
     }
-    if (locationsModal) locationsModal.style.display = 'flex';
+    if (locationsModal) locationsModal.classList.add('active');
 }
 
-function closeLocations() { if (locationsModal) locationsModal.style.display = 'none'; }
+function closeLocations() { if (locationsModal) locationsModal.classList.remove('active'); }
 
 function openLocationMap(name) {
     const query = `${name}, Sri Venkateswara University, Tirupati, Andhra Pradesh`;
@@ -2644,5 +2977,156 @@ async function saveLLMConfig() {
         }
     } catch (e) { console.error(e); }
 }
+
+// --- Study Buddy Feature ---
+async function loadStudyBuddy() {
+    const listEl = document.getElementById('study-materials-list');
+    if (!listEl) return;
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/materials`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const materials = await res.json();
+
+        if (materials.length === 0) {
+            listEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes uploaded yet. Start by uploading a PDF!</p>';
+            return;
+        }
+
+        listEl.innerHTML = '';
+        materials.forEach(m => {
+            const date = new Date(m.upload_date).toLocaleDateString();
+            listEl.innerHTML += `
+            <div class="study-material-item" onclick="summarizeMaterial('${m.id}')">
+                <div class="material-icon"><i class="fa-solid fa-file-pdf"></i></div>
+                <div class="material-details">
+                    <span class="material-name">${escapeHtml(m.filename)}</span>
+                    <span class="material-meta">Uploaded on ${date}</span>
+                </div>
+                <div class="action-btn"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+            </div>`;
+        });
+    } catch (e) { console.error("Load Study Error", e); }
+}
+
+async function summarizeMaterial(id) {
+    const summaryEl = document.getElementById('material-summary-content');
+    summaryEl.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing content...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/summarize/${id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Summary extraction failed");
+        }
+
+        const data = await res.json();
+        summaryEl.innerHTML = `<div class="markdown-body">${marked.parse(data.summary)}</div>`;
+    } catch (e) {
+        summaryEl.innerHTML = `<p style="color: #ef4444;">Failed to generate summary: ${e.message}</p>`;
+        console.error(e);
+    }
+}
+
+// --- Career Center Feature ---
+async function loadCareerCenter() {
+    // Placements feature removed - focusing on Resume Checker
+}
+
+async function checkResume() {
+    const textInput = document.getElementById('resume-text-input');
+    const text = textInput ? textInput.value.trim() : "";
+    const feedbackEl = document.getElementById('resume-feedback');
+
+    if (!text) {
+        alert("Please paste your resume text first.");
+        return;
+    }
+
+    feedbackEl.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing resume...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/career/check-resume`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ resume_text: text })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Server error");
+        }
+
+        const data = await res.json();
+        feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.analysis)}</div>`;
+    } catch (e) {
+        feedbackEl.innerHTML = `<p style="color: #ef4444;">Analysis failed: ${e.message}</p>`;
+        console.error(e);
+    }
+}
+
+// --- Exam Countdown ---
+
+async function adminAddPlacement() {
+    const company = document.getElementById('admin-place-company').value;
+    const pkg = document.getElementById('admin-place-pkg').value;
+    if (!company || !pkg) return alert("Fill all fields");
+
+    try {
+        const res = await fetch(`${API_URL}/career/add-placement`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                company_name: company,
+                package: parseFloat(pkg),
+                year: new Date().getFullYear(),
+                department: "All Branches"
+            })
+        });
+        if (res.ok) {
+            showStatusPopup("Placement record added!");
+            document.getElementById('admin-place-company').value = '';
+            document.getElementById('admin-place-pkg').value = '';
+            loadCareerCenter();
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function adminAddExam() {
+    const subject = document.getElementById('admin-exam-subject').value;
+    const date = document.getElementById('admin-exam-date').value;
+    if (!subject || !date) return alert("Fill all fields");
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/add-exam`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ subject, date, department: "Common" })
+        });
+        if (res.ok) {
+            showStatusPopup("Exam date added!");
+            document.getElementById('admin-exam-subject').value = '';
+            document.getElementById('admin-exam-date').value = '';
+            loadCareerCenter(); // Refresh career center instead if needed, or nothing
+        }
+    } catch (e) { console.error(e); }
+}
+
+
 
 

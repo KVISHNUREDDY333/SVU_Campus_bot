@@ -626,6 +626,16 @@ body.dark-mode .speech-btn:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.feedback-up:hover {
+    color: #10b981 !important;
+    background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.feedback-down:hover {
+    color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.1) !important;
+}
+
 /* TTS Speaking Highlight - Amber Yellow */
 .speaking-word {
     background-color: #fef3c7 !important;
@@ -1007,10 +1017,29 @@ body.dark-mode .send-btn:hover {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    /* Default hidden */
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(5px);
+    padding: 20px;
+}
+
+.modal.active {
+    display: flex !important;
+    animation: modalBgFade 0.3s ease;
+}
+
+@keyframes modalBgFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 /* University Locations Modal - Specific Upgrade */
@@ -1020,9 +1049,14 @@ body.dark-mode .send-btn:hover {
     background: rgba(15, 23, 42, 0.4);
     backdrop-filter: blur(8px);
     z-index: 10002;
-    display: flex;
+    display: none;
+    /* Changed: default hidden */
     align-items: center;
     justify-content: center;
+}
+
+.locations-modal.active {
+    display: flex;
     animation: modalPop 0.3s ease-out;
 }
 
@@ -2423,10 +2457,324 @@ body.dark-mode .toast-notification {
     position: relative;
 }
 
-body.dark-mode .speaking-word {
-    background-color: #f59e0b !important;
-    /* Amber 500 - Bright */
-    color: #000000 !important;
-    /* Pure Black for max legibility */
-    box-shadow: 0 0 15px rgba(245, 158, 11, 0.7);
+/* Suggest FAQ Nav & Badges */
+.suggest-faq-nav {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.suggest-faq-nav:hover {
+    background: rgba(13, 148, 136, 0.08) !important;
+    transform: translateX(8px) !important;
+}
+
+.nav-badge {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #f59e0b;
+    color: white;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
+    animation: pulseBadge 2s infinite;
+}
+
+@keyframes pulseBadge {
+    0% {
+        transform: translateY(-50%) scale(1);
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
+    }
+
+    50% {
+        transform: translateY(-50%) scale(1.1);
+        box-shadow: 0 4px 20px rgba(245, 158, 11, 0.6);
+    }
+
+    100% {
+        transform: translateY(-50%) scale(1);
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.4);
+    }
+}
+
+/* Suggested FAQs Content Styling */
+.suggested-faq-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.suggested-faq-question {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.suggested-faq-answer {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.5;
+}
+
+.suggested-faq-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.contributor-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.contributor-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.contributor-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.contributor-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.contributor-date {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.btn-approve {
+    background: #10b981;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-approve:hover {
+    background: #059669;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-reject {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-reject:hover {
+    background: #ef4444;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Countdown Widget */
+.countdown-widget {
+    background: var(--glass-bg);
+    border: 1px solid var(--accent-color);
+    padding: 16px 24px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 25px rgba(13, 148, 136, 0.1);
+    animation: fadeInDown 0.6s ease;
+}
+
+.countdown-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--accent-color);
+    color: white;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.countdown-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.countdown-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--accent-color);
+    letter-spacing: 0.5px;
+}
+
+.countdown-timer {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text-primary);
+    font-family: 'Fira Code', monospace;
+}
+
+.exam-subject {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Study & Career Items */
+.study-material-item,
+.placement-record-item {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid var(--border-color);
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.2s;
+}
+
+body.dark-mode .study-material-item,
+body.dark-mode .placement-record-item {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.study-material-item:hover,
+.placement-record-item:hover {
+    border-color: var(--accent-color);
+    transform: translateX(5px);
+    background: white;
+}
+
+body.dark-mode .study-material-item:hover,
+body.dark-mode .placement-record-item:hover {
+    background: #1e293b;
+}
+
+.material-icon,
+.placement-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(13, 148, 136, 0.1);
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    margin-right: 15px;
+}
+
+.material-details,
+.placement-details {
+    flex: 1;
+}
+
+.material-name,
+.placement-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+}
+
+.material-meta,
+.placement-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.review-row:hover {
+    background: rgba(13, 148, 136, 0.03);
+}
+
+/* AI Analysis Formatting */
+.markdown-body {
+    line-height: 1.6;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.markdown-body h3 {
+    color: var(--accent-color);
+    margin: 15px 0 10px 0;
+    font-size: 16px;
+    font-family: 'Outfit', sans-serif;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+    padding-left: 20px;
+    margin-bottom: 12px;
+}
+
+.markdown-body li {
+    margin-bottom: 6px;
+}
+
+.markdown-body strong {
+    color: var(--accent-color);
+}
+
+.markdown-body blockquote {
+    border-left: 4px solid var(--accent-color);
+    background: rgba(13, 148, 136, 0.05);
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 0 8px 8px 0;
+}
+
+#resume-feedback {
+    margin-top: 20px;
+    padding: 20px;
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    max-height: 400px;
+    overflow-y: auto;
 }

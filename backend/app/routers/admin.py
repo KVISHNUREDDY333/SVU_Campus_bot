@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List
 from ..models.user import User
-from ..models.faq import FAQModel, FAQResponse, Notification
+from ..models.faq import FAQModel, FAQResponse, Notification, SuggestedFAQModel, SuggestedFAQResponse
 from .auth import get_current_user
 from ..core import database, config
 from bson.objectid import ObjectId
@@ -35,6 +35,15 @@ class NotificationCreate(pydantic.BaseModel):
 class LLMConfigUpdate(pydantic.BaseModel):
     model: str
     temperature: float
+
+# --- Helper for Notifications ---
+async def _add_notification(title: str, message: str):
+    if database.notifications_db is not None:
+        database.notifications_db.insert_one({
+            "title": title,
+            "message": message,
+            "timestamp": datetime.utcnow()
+        })
 
 @router.get("/notifications", response_model=List[Notification])
 async def get_notifications(current_user: User = Depends(get_current_user)):
@@ -113,6 +122,9 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
         await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq["id"], "category": faq.category})
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
+    
+    # Send Notification
+    await _add_notification("New FAQ Added", f"Admin added a new FAQ: {faq.question[:50]}...")
         
     return new_faq
 
@@ -128,6 +140,98 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)
         return {"status": "success", "message": "FAQ deleted"}
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid ID format")
+
+# --- Suggested FAQs Endpoints ---
+
+@router.post("/faqs/suggest")
+async def suggest_faq(faq: SuggestedFAQModel):
+    if database.suggested_faqs_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    new_suggestion = {
+        "question": faq.question,
+        "answer": faq.answer,
+        "category": faq.category,
+        "suggested_by": faq.suggested_by,
+        "timestamp": datetime.utcnow()
+    }
+    
+    database.suggested_faqs_db.insert_one(new_suggestion)
+    return {"status": "success", "message": "FAQ suggestion submitted for review"}
+
+@router.get("/admin/suggested-faqs", response_model=List[SuggestedFAQResponse])
+async def get_suggested_faqs(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.suggested_faqs_db is None:
+        return []
+    
+    suggestions = list(database.suggested_faqs_db.find().sort("timestamp", -1))
+    results = []
+    for s in suggestions:
+        results.append(SuggestedFAQResponse(
+            id=str(s["_id"]),
+            question=s["question"],
+            answer=s["answer"],
+            suggested_by=s.get("suggested_by", "Unknown"),
+            timestamp=s.get("timestamp", datetime.utcnow())
+        ))
+    return results
+
+@router.post("/admin/suggested-faqs/{suggestion_id}/approve")
+async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.suggested_faqs_db is None or database.faqs_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    
+    # Create the FAQ in the main collection under "User added faqs"
+    new_faq = {
+        "question": suggestion["question"],
+        "answer": suggestion["answer"],
+        "category": "User added faqs",
+        "created_at": datetime.utcnow(),
+        "suggested_by": suggestion.get("suggested_by")
+    }
+    
+    result = database.faqs_db.insert_one(new_faq)
+    new_faq_id = str(result.inserted_id)
+
+    # Send Notification
+    await _add_notification("Suggestion Approved", f"A user suggestion was approved: {new_faq['question'][:50]}...")
+    
+    # Sync with Vector DB for RAG
+    try:
+        from ..services.rag_service import ingest_text
+        faq_text = f"Question: {new_faq['question']}\nAnswer: {new_faq['answer']}\nCategory: {new_faq['category']}"
+        await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq_id, "category": new_faq["category"]})
+    except Exception as e:
+        print(f"Failed to ingest FAQ into vector DB: {e}")
+    
+    # Delete the suggestion
+    database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
+    
+    return {"status": "success", "message": "FAQ approved and published"}
+
+@router.delete("/admin/suggested-faqs/{suggestion_id}")
+async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.suggested_faqs_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    result = database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+    
+    return {"status": "success", "message": "FAQ suggestion rejected"}
 
 from ..services.rag_service import ingest_pdf, ingest_url, extract_faqs_from_text
 
@@ -150,7 +254,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        num_chunks, full_text = await ingest_pdf(file_path)
+        num_chunks, full_text = await ingest_pdf(file_path, user_id="public")
         
         # Extract FAQs
         extracted_faqs = []
@@ -182,6 +286,9 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
         
+        # Send Notification
+        await _add_notification("New Document Uploaded", f"Admin uploaded a new PDF: {file.filename}")
+
         return {
             "status": "success", 
             "message": f"Ingested {num_chunks} chunks from {file.filename}",
@@ -229,6 +336,9 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
              
+        # Send Notification
+        await _add_notification("New Knowledge Source", f"Admin added a new URL to knowledge base.")
+
         return {
             "status": "success", 
             "message": f"Ingested {num_chunks} chunks from URL",

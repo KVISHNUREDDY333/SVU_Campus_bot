@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CampusConnect AI</title>
-    <link rel="stylesheet" href="/static/style.css?v=5">
+    <link rel="stylesheet" href="/static/style.css?v=8">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link
@@ -63,9 +63,11 @@
                         Calendar</li>
                     <li id="nav-location" onclick="openLocations()"><i class="fa-solid fa-location-dot"></i> Locations
                     </li>
+                    <li id="nav-study" onclick="showSection('study')"><i class="fa-solid fa-book-open-reader"></i> Study
+                        Buddy</li>
+                    <li id="nav-career" onclick="showSection('career')"><i class="fa-solid fa-briefcase"></i> Career
+                        Center</li>
 
-                    <li id="nav-theme" onclick="toggleTheme()"><i class="fa-solid fa-moon" id="theme-icon"></i> <span
-                            id="theme-text">Dark Mode</span></li>
                     <li id="nav-logout" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Logout</li>
                 </ul>
             </nav>
@@ -114,6 +116,10 @@
                             </label>
                         </div>
 
+                        <i class="fa-solid fa-moon" id="header-theme-icon" title="Toggle Theme" onclick="toggleTheme()"
+                            style="cursor: pointer; font-size: 18px;"></i>
+                        <i class="fa-solid fa-lightbulb" title="Suggest FAQ" onclick="openSuggestModal()"
+                            style="cursor: pointer; font-size: 18px;"></i>
                         <i class="fa-solid fa-plus" title="New Chat" onclick="clearChat()"
                             style="cursor: pointer; font-size: 18px;"></i>
                         <i class="fa-solid fa-rotate-right" title="Refresh" onclick="window.location.reload()"
@@ -449,7 +455,48 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Suggested FAQs Section -->
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon"
+                                style="background: linear-gradient(135deg, #fbbf24, #d97706); box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);">
+                                <i class="fa-solid fa-lightbulb"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <h4>Community Contributions</h4>
+                                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">Review and
+                                    approve user-suggested FAQs</p>
+                            </div>
+                            <button class="btn-primary" onclick="loadSuggestedFAQs()"
+                                style="font-size: 12px; padding: 8px 16px;">
+                                <i class="fa-solid fa-rotate"></i> Refresh
+                            </button>
+                        </div>
+                        <div class="documents-list-container">
+                            <table class="documents-table">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">Suggested Content</th>
+                                        <th style="text-align: left;">Contributor</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="suggested-faqs-table-body">
+                                    <tr>
+                                        <td colspan="3"
+                                            style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                                            <i class="fa-solid fa-check-circle"
+                                                style="font-size: 24px; display: block; margin-bottom: 12px; color: #10b981; opacity: 0.5;"></i>
+                                            No pending suggestions. All caught up!
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
+
             </section>
 
             <!-- Dashboard Section -->
@@ -533,44 +580,212 @@
                     <!-- Calendar events will be loaded here -->
                 </div>
             </section>
+
+            <!-- Study Buddy Section -->
+            <section id="study-section" class="content-section" style="display: none;">
+                <div class="header">
+                    <h3>Study Buddy AI</h3>
+                </div>
+                <div class="study-container"
+                    style="padding: 24px; display: grid; grid-template-columns: 1fr 350px; gap: 24px;">
+                    <div class="study-main">
+                        <div class="settings-card">
+                            <div class="card-header">
+                                <div class="card-icon" style="background: var(--gradient-primary);"><i
+                                        class="fa-solid fa-book-open"></i></div>
+                                <h4>My Lecture Notes</h4>
+                                <button class="btn-primary" onclick="openUploadModal('study')"
+                                    style="margin-left: auto;">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload Notes
+                                </button>
+                            </div>
+                            <div id="study-materials-list" style="margin-top: 20px;">
+                                <p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes
+                                    uploaded yet. Start by uploading a PDF!</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="study-sidebar">
+                        <div class="settings-card">
+                            <div class="card-header">
+                                <div class="card-icon" style="background: #f59e0b;"><i
+                                        class="fa-solid fa-wand-magic-sparkles"></i></div>
+                                <h4>AI Summary</h4>
+                            </div>
+                            <div id="material-summary-content"
+                                style="font-size: 14px; color: var(--text-primary); line-height: 1.6; min-height: 200px;">
+                                Select a document to generate a smart AI summary.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Career Center Section -->
+            <section id="career-section" class="content-section" style="display: none;">
+                <div class="header">
+                    <h3>Career & Placement Hub</h3>
+                </div>
+                <div class="career-container" style="padding: 24px; max-width: 900px; margin: 0 auto;">
+                    <div class="settings-card">
+                        <div class="card-header">
+                            <div class="card-icon" style="background: #6366f1;"><i class="fa-solid fa-file-invoice"></i>
+                            </div>
+                            <h4>AI Resume Checker</h4>
+                        </div>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin: 10px 0;">Paste your resume
+                            text below for instant feedback based on SVU guidelines and industry standards.</p>
+                        <textarea id="resume-text-input" rows="12" placeholder="Paste resume content here..."
+                            style="width: 100%; padding: 15px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); margin-bottom: 15px;"></textarea>
+                        <button class="btn-primary" onclick="checkResume()" style="width: 100%;">
+                            <i class="fa-solid fa-microscope"></i> Analyze Resume
+                        </button>
+                        <div id="resume-feedback"
+                            style="margin-top: 20px; font-size: 14px; line-height: 1.6; color: var(--text-primary);">
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
         </main>
     </div>
 
-    <!-- Information Modal -->
+    <!-- Information Modal (Enhanced User/Admin Shared) -->
     <div id="faq-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Share Information</h3>
+        <div class="modal-content premium-modal" style="max-width: 600px;">
+            <div class="modal-header"
+                style="background: var(--gradient-primary); padding: 25px 30px; border-bottom: none;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div
+                        style="width: 45px; height: 45px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                        <i class="fa-solid fa-lightbulb"></i>
+                    </div>
+                    <div>
+                        <h3 style="color: white; margin: 0; font-size: 20px; font-weight: 700;">Suggest Information</h3>
+                        <p style="color: rgba(255,255,255,0.8); margin: 5px 0 0 0; font-size: 13px;">Help improve the
+                            campus assistant's knowledge.</p>
+                    </div>
+                </div>
             </div>
 
-            <input type="hidden" id="edit-id">
+            <div class="modal-body" style="padding: 30px;">
+                <input type="hidden" id="edit-id">
 
-            <div class="form-group">
-                <label>Title / Question</label>
-                <input type="text" id="faq-question" placeholder="e.g., New Scholarship Available">
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label
+                        style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">
+                        <i class="fa-solid fa-heading" style="color: var(--accent-color);"></i> Title / Question
+                    </label>
+                    <input type="text" id="faq-question" class="search-input"
+                        placeholder="e.g., What are the library timings?" style="padding: 15px; border-radius: 12px;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label
+                        style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">
+                        <i class="fa-solid fa-tags" style="color: var(--accent-color);"></i> Select Category
+                    </label>
+                    <select id="faq-category" class="custom-select" style="padding: 15px; border-radius: 12px;">
+                        <option value="General">General Campus Info</option>
+                        <option value="Academic">Academics & Exams</option>
+                        <option value="Admissions">Admissions & Eligibility</option>
+                        <option value="Facilities">Campus Facilities</option>
+                        <option value="Hostels">Hostels & Accommodation</option>
+                        <option value="Placements">Placements & Career</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label
+                        style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px;">
+                        <i class="fa-solid fa-align-left" style="color: var(--accent-color);"></i> Information /
+                        Detailed Answer
+                    </label>
+                    <textarea id="faq-answer" class="search-input" rows="5"
+                        placeholder="Provide clear and accurate details here..."
+                        style="padding: 15px; border-radius: 12px; resize: vertical; min-height: 120px;"></textarea>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Category</label>
-                <select id="faq-category"
-                    style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb;">
-                    <option value="General">General</option>
-                    <option value="Academic">Academic</option>
-                    <option value="Admissions">Admissions</option>
-                    <option value="Facilities">Facilities</option>
-                    <option value="Hostels">Hostels</option>
-                    <option value="Placements">Placements</option>
-                </select>
+            <div class="modal-footer"
+                style="padding: 20px 30px; background: rgba(0,0,0,0.02); border-top: 1px solid var(--border-color);">
+                <button class="btn-ghost" onclick="closeModal()" style="padding: 12px 24px;">Cancel</button>
+                <button class="btn-submit" id="faq-submit-btn" onclick="saveFAQ()"
+                    style="padding: 12px 28px; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 700;">
+                    <i class="fa-solid fa-paper-plane"></i> <span>Submit</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Suggestion Modal -->
+    <div id="review-suggestion-modal" class="modal">
+        <div class="modal-content premium-modal" style="max-width: 600px;">
+            <div class="modal-header"
+                style="background: linear-gradient(135deg, #fbbf24, #d97706); padding: 25px 30px; border-bottom: none;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div
+                        style="width: 45px; height: 45px; background: rgba(255,255,255,0.2); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-size: 20px;">
+                        <i class="fa-solid fa-file-signature"></i>
+                    </div>
+                    <div>
+                        <h3 style="color: white; margin: 0; font-size: 20px; font-weight: 700;">Review FAQ Suggestion
+                        </h3>
+                        <p style="color: rgba(255,255,255,0.8); margin: 5px 0 0 0; font-size: 13px;">Proposed
+                            contribution from the community</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Information / Answer</label>
-                <textarea id="faq-answer" rows="5" placeholder="Provide all the details here."></textarea>
+            <div class="modal-body" style="padding: 30px;">
+                <div
+                    style="background: var(--glass-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border-color); margin-bottom: 24px;">
+                    <div class="contributor-item">
+                        <div id="review-avatar" class="contributor-avatar"
+                            style="width: 40px; height: 40px; font-size: 16px;">V</div>
+                        <div class="contributor-info">
+                            <div
+                                style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">
+                                Suggested By</div>
+                            <div id="review-contributor" class="contributor-name" style="font-size: 15px;">Vishnu Reddy
+                            </div>
+                        </div>
+                        <div id="review-date" style="margin-left: auto; font-size: 12px; color: var(--text-secondary);">
+                            2024-01-06</div>
+                    </div>
+                </div>
+
+                <div class="review-field" style="margin-bottom: 24px;">
+                    <label
+                        style="display: block; font-size: 12px; font-weight: 800; color: var(--accent-color); text-transform: uppercase; margin-bottom: 8px;">Proposed
+                        Question</label>
+                    <div id="review-question"
+                        style="font-size: 16px; font-weight: 600; color: var(--text-primary); line-height: 1.4; padding: 12px; background: rgba(0,0,0,0.02); border-radius: 10px;">
+                    </div>
+                </div>
+
+                <div class="review-field">
+                    <label
+                        style="display: block; font-size: 12px; font-weight: 800; color: var(--accent-color); text-transform: uppercase; margin-bottom: 8px;">Proposed
+                        Answer / Content</label>
+                    <div id="review-answer"
+                        style="font-size: 14px; color: var(--text-secondary); line-height: 1.6; padding: 15px; background: rgba(0,0,0,0.02); border-radius: 10px; max-height: 200px; overflow-y: auto;">
+                    </div>
+                </div>
             </div>
 
-            <div class="modal-actions">
-                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-                <button class="btn-submit" onclick="saveFAQ()">Submit</button>
+            <div class="modal-footer"
+                style="padding: 20px 30px; background: rgba(0,0,0,0.02); border-top: 1px solid var(--border-color); display: flex; gap: 12px;">
+                <button class="btn-ghost" onclick="closeReviewModal()" style="margin-right: auto;">Close</button>
+                <button class="btn-reject" id="review-reject-btn"
+                    style="padding: 12px 24px; border-radius: 12px; font-weight: 700;">
+                    <i class="fa-solid fa-trash-can"></i> Reject
+                </button>
+                <button class="btn-approve" id="review-approve-btn"
+                    style="padding: 12px 28px; border-radius: 12px; font-weight: 700; background: #10b981; color: white;">
+                    <i class="fa-solid fa-check-double"></i> Approve & Publish
+                </button>
             </div>
         </div>
     </div>
@@ -650,7 +865,7 @@
     </div>
 
     <!-- Locations Modal -->
-    <div id="locations-modal" class="locations-modal" style="display:none;">
+    <div id="locations-modal" class="locations-modal">
         <div class="locations-card">
             <button class="locations-close" onclick="closeLocations()"><i class="fa-solid fa-xmark"></i></button>
             <h2 class="locations-title">University Locations</h2>
@@ -812,7 +1027,7 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=3"></script>
+    <script src="/static/script.js?v=7"></script>
 </body>
 
 </html>
