@@ -13,7 +13,7 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 import pydantic
 
-UPLOAD_DIR = "backend/uploads"
+UPLOAD_DIR = "uploads/documents"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/admin/upload")

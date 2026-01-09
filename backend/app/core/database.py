@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 import logging
+import certifi
 from .config import Config
 
 logger = logging.getLogger("uvicorn")
@@ -22,7 +23,7 @@ def get_db_client():
     global mongo_client, users_db, otps_db, faqs_db, documents_db, analytics_db, notifications_db, tickets_db, calendar_db, suggested_faqs_db, study_materials_db, placement_records_db, exam_dates_db
     if Config.MONGODB_URI:
         try:
-            mongo_client = MongoClient(Config.MONGODB_URI)
+            mongo_client = MongoClient(Config.MONGODB_URI, tlsCAFile=certifi.where())
             db = mongo_client[Config.DB_NAME]
             users_db = db["users"]
             otps_db = db["otps"]
