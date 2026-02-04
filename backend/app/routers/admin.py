@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List
 from ..models.user import User
 from ..models.faq import FAQModel, FAQResponse, Notification, SuggestedFAQModel, SuggestedFAQResponse
-from .auth import get_current_user
+from .auth import get_current_user, get_password_hash
+
 from ..core import database, config
 from bson.objectid import ObjectId
 from datetime import datetime
@@ -16,7 +17,7 @@ import pydantic
 router = APIRouter()
 
 # --- Valid Models List ---
-VALID_MODELS = ["llama-3.3-70b-versatile", "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768"]
+VALID_MODELS = ["llama-3.3-70b-versatile"]
 
 # Response Model for User Admin View
 class UserAdminResponse(pydantic.BaseModel):
@@ -26,23 +27,29 @@ class UserAdminResponse(pydantic.BaseModel):
     created_at: datetime
     status: str = "active"
 
+class UserCreate(pydantic.BaseModel):
+    username: str
+    password: str
+    role: str = "student"
+
+
 # Request Model for creating a notification
 class NotificationCreate(pydantic.BaseModel):
     title: str
     message: str
 
 # Request Model for LLM Config
-class LLMConfigUpdate(pydantic.BaseModel):
-    model: str
-    temperature: float
+
 
 # --- Helper for Notifications ---
-async def _add_notification(title: str, message: str):
+async def _add_notification(title: str, message: str, recipient_username: str = None, recipient_role: str = None):
     if database.notifications_db is not None:
         database.notifications_db.insert_one({
             "title": title,
             "message": message,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.utcnow(),
+            "recipient_username": recipient_username,
+            "recipient_role": recipient_role
         })
 
 @router.get("/notifications", response_model=List[Notification])
@@ -50,8 +57,15 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
     if database.notifications_db is None:
         return []
     
-    # Fetch latest 10 notifications
-    cursor = database.notifications_db.find().sort("timestamp", -1).limit(10)
+    # Fetch latest 10 notifications for user, role, or global
+    query = {
+        "$or": [
+            {"recipient_username": current_user.username}, 
+            {"recipient_role": current_user.role},
+            {"recipient_username": None, "recipient_role": None}
+        ]
+    }
+    cursor = database.notifications_db.find(query).sort("timestamp", -1).limit(10)
     results = []
     
     for n in cursor:
@@ -59,7 +73,9 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
             id=int(str(n["_id"])[-6:], 16), 
             title=n.get("title", ""),
             message=n.get("message", ""),
-            timestamp=n.get("timestamp", datetime.utcnow())
+            timestamp=n.get("timestamp", datetime.utcnow()),
+            recipient_username=n.get("recipient_username"),
+            recipient_role=n.get("recipient_role")
         ))
     return results
 
@@ -203,8 +219,13 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
     result = database.faqs_db.insert_one(new_faq)
     new_faq_id = str(result.inserted_id)
 
-    # Send Notification
-    await _add_notification("Suggestion Approved", f"A user suggestion was approved: {new_faq['question'][:50]}...")
+    # Send Notification to the specific user
+    if suggestion.get("suggested_by"):
+        await _add_notification(
+            "Suggestion Approved", 
+            f"Your FAQ suggestion was approved: {new_faq['question'][:50]}...",
+            recipient_username=suggestion.get("suggested_by")
+        )
     
     # Sync with Vector DB for RAG
     try:
@@ -224,16 +245,23 @@ async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    if database.suggested_faqs_db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    result = database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
-    if result.deleted_count == 0:
+    suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
+    if not suggestion:
         raise HTTPException(status_code=404, detail="Suggestion not found")
+
+    # Send Notification to user (Reject)
+    if suggestion.get("suggested_by"):
+        await _add_notification(
+            "Suggestion Rejected", 
+            f"Your FAQ suggestion was declined by the admin.",
+            recipient_username=suggestion.get("suggested_by")
+        )
+
+    database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
     
     return {"status": "success", "message": "FAQ suggestion rejected"}
 
-from ..services.rag_service import ingest_pdf, ingest_url, extract_faqs_from_text
+from ..services.rag_service import ingest_pdf, ingest_url, extract_faqs_from_text, ingest_faq, validate_faq_with_web
 
 class AddUrlRequest(pydantic.BaseModel):
     url: str
@@ -261,6 +289,12 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         try:
             extracted_faqs = await extract_faqs_from_text(full_text)
             for faq in extracted_faqs:
+                # Validation Step
+                is_valid = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
+                if not is_valid:
+                     print(f"Skipping invalid FAQ: {faq.get('question')}")
+                     continue
+
                 new_faq = {
                     "question": faq.get("question"),
                     "answer": faq.get("answer"),
@@ -269,10 +303,22 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
                     "source": file.filename,
                     "auto_generated": True
                 }
+                
+                # Insert into MongoDB
                 if database.faqs_db is not None:
-                     database.faqs_db.insert_one(new_faq)
+                     res = database.faqs_db.insert_one(new_faq)
+                     new_faq_id = str(res.inserted_id)
+                     
+                     # Sync with Vector DB for RAG
+                     await ingest_faq(
+                         question=new_faq["question"], 
+                         answer=new_faq["answer"], 
+                         source=file.filename, 
+                         faq_id=new_faq_id
+                     )
+
         except Exception as e:
-            print(f"Error extracting FAQs: {e}")
+            print(f"Error extracting/indexing FAQs: {e}")
 
         doc_record = {
              "filename": file.filename,
@@ -286,8 +332,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
         
-        # Send Notification
-        await _add_notification("New Document Uploaded", f"Admin uploaded a new PDF: {file.filename}")
+        # Noise reduction: notification removed as per user request
 
         return {
             "status": "success", 
@@ -311,6 +356,12 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         try:
              extracted_faqs = await extract_faqs_from_text(full_text)
              for faq in extracted_faqs:
+                # Validation Step
+                is_valid = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
+                if not is_valid:
+                     print(f"Skipping invalid FAQ: {faq.get('question')}")
+                     continue
+
                 new_faq = {
                     "question": faq.get("question"),
                     "answer": faq.get("answer"),
@@ -319,10 +370,22 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
                     "source": req.url,
                     "auto_generated": True
                 }
+                
+                # Insert into MongoDB
                 if database.faqs_db is not None:
-                     database.faqs_db.insert_one(new_faq)
+                     res = database.faqs_db.insert_one(new_faq)
+                     new_faq_id = str(res.inserted_id)
+                     
+                     # Sync with Vector DB for RAG
+                     await ingest_faq(
+                         question=new_faq["question"], 
+                         answer=new_faq["answer"], 
+                         source=req.url, 
+                         faq_id=new_faq_id
+                     )
+                     
         except Exception as e:
-            print(f"Error extracting FAQs from URL: {e}")
+            print(f"Error extracting/indexing FAQs from URL: {e}")
             
         doc_record = {
              "filename": req.url,
@@ -336,8 +399,7 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
              
-        # Send Notification
-        await _add_notification("New Knowledge Source", f"Admin added a new URL to knowledge base.")
+        # Noise reduction: notification removed as per user request
 
         return {
             "status": "success", 
@@ -367,10 +429,8 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
         "Negative": database.analytics_db.count_documents({"sentiment": "Negative"})
     }
     
-    if sum(sentiment_data.values()) == 0:
-        sentiment_data = {"Positive": 15, "Neutral": 10, "Negative": 5}
-
     return {
+
         "total_queries": total_queries,
         "active_users": active_users,
         "role_distribution": role_dist,
@@ -395,30 +455,7 @@ async def get_system_health(current_user: User = Depends(get_current_user)):
         "last_reindexed": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-# --- LLM Config Endpoints ---
 
-@router.get("/admin/llm-config")
-async def get_llm_config(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
-    from ..services import rag_service
-    return {
-        "model": rag_service.CURRENT_MODEL_NAME,
-        "temperature": rag_service.CURRENT_TEMPERATURE
-    }
-
-@router.post("/admin/llm-config")
-async def update_llm_config(config: LLMConfigUpdate, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    from ..services import rag_service
-    success = rag_service.update_llm_config(config.model, config.temperature)
-    
-    if success:
-        return {"status": "success", "message": f"Updated LLM to {config.model}"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to update LLM configuration")
 
 # --- User Management Endpoints ---
 
@@ -434,9 +471,31 @@ async def get_all_users(current_user: User = Depends(get_current_user)):
             id=str(u["_id"]),
             username=u["username"],
             role=u.get("role", "student"),
-            created_at=u.get("created_at", datetime.utcnow())
+            created_at=u.get("created_at", datetime.utcnow()),
+            status=u.get("status", "active")
         ))
     return users
+
+@router.post("/admin/users", status_code=201)
+async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Check if user exists
+    if database.users_db.find_one({"username": user_data.username}):
+        raise HTTPException(status_code=400, detail="User already exists")
+    
+    new_user = {
+        "username": user_data.username,
+        "hashed_password": get_password_hash(user_data.password),
+        "role": user_data.role,
+        "created_at": datetime.utcnow(),
+        "status": "active"
+    }
+    
+    database.users_db.insert_one(new_user)
+    return {"status": "success", "message": f"User {user_data.username} created"}
+
 
 @router.put("/admin/users/{user_id}/role")
 async def update_user_role(user_id: str, role_data: dict = Body(...), current_user: User = Depends(get_current_user)):
@@ -492,3 +551,40 @@ async def reindex_knowledge_base(current_user: User = Depends(get_current_user))
         return {"status": "success", "message": "Knowledge base connection refreshed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/documents")
+async def list_documents(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.documents_db is None:
+        return []
+        
+    docs = []
+    cursor = database.documents_db.find().sort("uploaded_at", -1)
+    for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        docs.append(doc)
+    return docs
+
+@router.delete("/admin/documents/{doc_id}")
+async def delete_document(doc_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    try:
+        if database.documents_db is None:
+             raise HTTPException(status_code=503, detail="Database not available")
+
+        result = database.documents_db.delete_one({"_id": ObjectId(doc_id)})
+        if result.deleted_count == 0:
+             raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Optional: Delete actual file from disk if path logic was consistent
+        # For now, we only delete the record as per previous logic
+        
+        return {"status": "success", "message": "Document deleted"}
+    except Exception as e:
+        print(f"Delete Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
+

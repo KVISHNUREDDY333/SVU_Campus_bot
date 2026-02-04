@@ -8,20 +8,9 @@ from bson import ObjectId
 
 router = APIRouter(prefix="/career", tags=["Career Center"])
 
-@router.get("/placements")
-async def get_placements():
-    records = list(database.placement_records_db.find().sort("year", -1))
-    for r in records:
-        r["id"] = str(r["_id"])
-        del r["_id"]
-    return records
 
-@router.post("/add-placement")
-async def add_placement(record: dict, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin required")
-    database.placement_records_db.insert_one(record)
-    return {"status": "success"}
+
+
 
 from ..models.academic import ResumeAnalysisRequest
 

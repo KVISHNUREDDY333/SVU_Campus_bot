@@ -138,15 +138,24 @@ async def forgot_password(request: ForgotPasswordRequest):
 
 @router.post("/verify-otp-reset")
 async def verify_otp_reset(request: VerifyOTPRequest):
-    record = database.otps_db.find_one({"email": request.email})
+    # Normalize input
+    input_otp = request.otp.strip()
+    input_email = request.email.strip()
+    
+    logger.info(f"Verifying OTP for {input_email}. Input: {input_otp}")
+    
+    record = database.otps_db.find_one({"email": input_email})
     if not record:
+        logger.warning(f"No OTP record found for {input_email}")
         raise HTTPException(status_code=400, detail="Invalid request")
     
     # Check expiry (10 mins)
     if (datetime.utcnow() - record["created_at"]).total_seconds() > 600:
+         logger.warning(f"OTP expired for {input_email}")
          raise HTTPException(status_code=400, detail="OTP expired")
          
-    if record["otp"] != request.otp:
+    if str(record["otp"]).strip() != input_otp:
+        logger.warning(f"Invalid OTP for {input_email}. Expected: {record['otp']}, Got: {input_otp}")
         raise HTTPException(status_code=400, detail="Invalid OTP")
         
     # Reset Password
@@ -159,7 +168,9 @@ async def verify_otp_reset(request: VerifyOTPRequest):
 # Google Auth Endpoints
 @router.get("/login/google")
 async def login_google(request: Request):
+    # Dynamic redirect URI based on the request URL
     redirect_uri = request.url_for('auth_google')
+    logger.info(f"Initiating Google OAuth with redirect_uri: {redirect_uri}")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @router.get("/auth/callback")
@@ -194,8 +205,14 @@ async def auth_google(request: Request):
         
         # Redirect to frontend
         # Assuming frontend is at root. We pass token as query param to be picked up by JS
-        return RedirectResponse(url=f"/?token={access_token}&role={role}&username={email}&name={name}")
+        params = f"token={access_token}&role={role}&username={email}"
+        if name:
+             params += f"&name={name}"
+             
+        return RedirectResponse(url=f"/?{params}")
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"Google Auth Error: {e}")
         return RedirectResponse(url="/?error=GoogleAuthFailed")

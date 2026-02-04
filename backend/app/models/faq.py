@@ -27,3 +27,5 @@ class Notification(BaseModel):
     message: str
     timestamp: datetime
     read: bool = False
+    recipient_username: Optional[str] = None
+    recipient_role: Optional[str] = None

@@ -5,13 +5,15 @@ from ..core import database
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services import rag_service
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
+
 import shutil
 from bson import ObjectId
 
 router = APIRouter(prefix="/study-buddy", tags=["Study Buddy"])
 
-UPLOAD_DIR = "uploads/study_materials"
+UPLOAD_DIR = "backend/uploads/study_materials"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload")
@@ -109,6 +111,24 @@ async def summarize_material(material_id: str, current_user: User = Depends(get_
              raise HTTPException(status_code=500, detail="AI Service unavailable: LLM engine failed to warm up.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/materials/{material_id}")
+async def delete_material(material_id: str, current_user: User = Depends(get_current_user)):
+    material = database.study_materials_db.find_one({"_id": ObjectId(material_id), "user_id": current_user.username})
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    # Delete from filesystem
+    if os.path.exists(material["file_path"]):
+        os.remove(material["file_path"])
+    
+    # Delete from DB
+    database.study_materials_db.delete_one({"_id": ObjectId(material_id)})
+    
+    # Note: Chunks in Vector DB remain but are filtered by user_id in retrieval. 
+    # Proper vector deletion would require tracking chunk IDs.
+    
+    return {"status": "success", "message": "Material deleted"}
 
 @router.get("/exams")
 async def get_exams(current_user: User = Depends(get_current_user)):

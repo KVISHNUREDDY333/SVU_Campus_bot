@@ -4,7 +4,7 @@ from typing import Optional
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-    incognito: bool = False
+
     language: Optional[str] = "en"
 
 class FeedbackRequest(BaseModel):

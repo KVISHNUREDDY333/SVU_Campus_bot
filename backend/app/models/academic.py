@@ -14,12 +14,7 @@ class ExamDateModel(BaseModel):
     description: Optional[str] = None
     department: str = "Common"
 
-class PlacementRecordModel(BaseModel):
-    year: int
-    company_name: str
-    package: float
-    student_name: Optional[str] = None
-    department: str
+
 
 class ResumeAnalysisRequest(BaseModel):
     resume_text: str

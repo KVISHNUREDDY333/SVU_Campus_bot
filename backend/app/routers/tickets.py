@@ -41,6 +41,14 @@ async def create_ticket(ticket: TicketCreate, current_user: User = Depends(get_c
     
     result = database.tickets_db.insert_one(new_ticket)
     
+    # Notify All Admins
+    from .admin import _add_notification
+    await _add_notification(
+        "New Support Ticket", 
+        f"A new ticket has been raised: {new_ticket['subject']}",
+        recipient_role="admin"
+    )
+    
     return TicketResponse(
         id=str(result.inserted_id),
         **new_ticket
@@ -67,6 +75,7 @@ async def get_all_tickets(current_user: User = Depends(get_current_user)):
 class TicketUpdate(BaseModel):
     status: str
     resolution: Optional[str] = None
+    save_as_faq: bool = False
 
 @router.put("/admin/tickets/{ticket_id}")
 async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: User = Depends(get_current_user)):
@@ -74,10 +83,46 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
         raise HTTPException(status_code=403, detail="Admin access required")
         
     try:
+        # Get ticket to find the creator
+        ticket = database.tickets_db.find_one({"_id": ObjectId(ticket_id)})
+        if not ticket:
+             raise HTTPException(status_code=404, detail="Ticket not found")
+
         database.tickets_db.update_one(
             {"_id": ObjectId(ticket_id)},
             {"$set": {"status": update.status, "resolution": update.resolution}}
         )
+
+        if update.save_as_faq and update.resolution:
+             new_faq = {
+                "question": ticket['subject'],
+                "answer": update.resolution,
+                "category": ticket.get('category', 'General'),
+                "created_at": datetime.utcnow(),
+                "source": "ticket_resolution"
+             }
+             if database.faqs_db is not None:
+                 result = database.faqs_db.insert_one(new_faq)
+                 
+                 # Sync with Vector DB for RAG
+                 try:
+                     from ..services.rag_service import rag_service
+                     faq_text = f"Question: {new_faq['question']}\nAnswer: {new_faq['answer']}"
+                     rag_service.add_document(
+                         faq_text, 
+                         metadata={"id": str(result.inserted_id), "type": "faq", "category": new_faq['category']}
+                     )
+                 except Exception as e:
+                     print(f"RAG Sync Error: {e}")
+
+        # Notify the user who created the ticket
+        from .admin import _add_notification
+        await _add_notification(
+            "Ticket Updated", 
+            f"Your ticket '{ticket['subject']}' status is now: {update.status}",
+            recipient_username=ticket.get("created_by")
+        )
+
         return {"status": "success"}
     except:
         raise HTTPException(status_code=400, detail="Invalid ID")

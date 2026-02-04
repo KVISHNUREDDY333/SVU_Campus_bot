@@ -1,5 +1,6 @@
 const API_URL = window.location.origin;
 console.log("Using API_URL:", API_URL);
+console.log("SVU Bot Script v9 Loaded-02021532");
 
 // DOM Elements
 const chatBox = document.getElementById('chat-box');
@@ -34,6 +35,7 @@ function updateThemeUI(isDark) {
 // Auth State
 let ACCESS_TOKEN = localStorage.getItem('access_token');
 let USER_ROLE = localStorage.getItem('user_role');
+let notificationInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     // Check for Google OAuth callback params
@@ -61,7 +63,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // Check Auth first
-    checkAuth();
+    if (checkAuth()) {
+        startNotificationPolling();
+        loadChatHistory();
+        populateSidebarProfile();
+    }
+
 
     // Register PWA Service Worker
     if ('serviceWorker' in navigator) {
@@ -94,14 +101,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (userInput) userInput.focus();
 
+    if (userInput) userInput.focus();
+
     // Ensure the default section is shown
     setTimeout(() => {
         showSection('chat');
     }, 100);
-
-    loadChatHistory();
-    populateSidebarProfile();
 });
+
 
 // --- Auth Functions ---
 function checkAuth() {
@@ -109,11 +116,13 @@ function checkAuth() {
 
     if (!ACCESS_TOKEN) {
         if (overlay) overlay.classList.add('active');
+        return false;
     } else {
         if (overlay) overlay.classList.remove('active');
-        // Optional: verify token validity with backend /users/me here
+        return true;
     }
 }
+
 
 function switchAuthTab(tab) {
     const loginForm = document.getElementById('login-form');
@@ -349,6 +358,12 @@ function saveSession(data) {
         if (navAdmin) navAdmin.style.display = 'block';
         if (navDashboard) navDashboard.style.display = 'block';
     }
+
+    // Start notification polling
+    startNotificationPolling();
+
+    // Reset chat to "New Chat" on login
+    clearChat();
 }
 
 function logout() {
@@ -357,6 +372,8 @@ function logout() {
     localStorage.removeItem('username');
     ACCESS_TOKEN = null;
     USER_ROLE = null;
+
+    stopNotificationPolling();
 
     // Hide restricted links immediately
     const navAdmin = document.getElementById('nav-admin');
@@ -380,22 +397,9 @@ function loadChatHistory() {
 
 // ... existing code ...
 
-const incognitoToggle = document.getElementById('incognito-toggle');
-let isIncognito = false;
 
-if (incognitoToggle) {
-    incognitoToggle.addEventListener('change', (e) => {
-        isIncognito = e.target.checked;
-        if (isIncognito) {
-            document.body.classList.add('incognito-active');
-        } else {
-            document.body.classList.remove('incognito-active');
-        }
-    });
-}
 
-// Polling for Notifications (Every 60 seconds to reduce server load)
-setInterval(checkNotifications, 60000);
+
 
 
 function populateSidebarProfile() {
@@ -454,6 +458,17 @@ async function checkNotifications() {
         const res = await fetch(`${API_URL}/notifications`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
+
+        if (res.status === 401 || res.status === 403) {
+            console.warn("Notification Auth Failure. Stopping Polling.");
+            // Clear local credentials to prevent restart
+            ACCESS_TOKEN = null;
+            localStorage.removeItem('access_token');
+            stopNotificationPolling();
+            checkAuth(); // Update UI
+            return;
+        }
+
         if (!res.ok) return;
 
         const notifications = await res.json();
@@ -478,6 +493,21 @@ async function checkNotifications() {
         localStorage.setItem('last_notification_id', newLastSeenId.toString());
     } catch (e) {
         // console.error("Notification Poll Error", e);
+    }
+}
+
+function startNotificationPolling() {
+    if (notificationInterval) clearInterval(notificationInterval);
+    // Poll every 60 seconds
+    notificationInterval = setInterval(checkNotifications, 60000);
+    // Also check immediately
+    checkNotifications();
+}
+
+function stopNotificationPolling() {
+    if (notificationInterval) {
+        clearInterval(notificationInterval);
+        notificationInterval = null;
     }
 }
 
@@ -576,12 +606,12 @@ function showSection(section) {
     if (section === 'admin') {
         loadDocuments();
         loadAllTickets();
-        loadCalendarAdmin();
-        loadUsers();
+        loadCalendar(); // admin view uses same calendar loader but might have specific admin features
+        loadAllUsers();
         loadSystemHealth();
-        loadLLMConfig();
         loadSuggestedFAQs();
     }
+
     if (section === 'calendar') {
         loadCalendar();
     }
@@ -611,7 +641,8 @@ async function sendMessage() {
     }
 
     // Add user message
-    appendMessage(text, 'user', !isIncognito);
+    // Add user message
+    appendMessage(text, 'user', true);
     userInput.value = '';
 
     // Show typing indicator
@@ -637,7 +668,6 @@ async function sendMessage() {
             body: JSON.stringify({
                 message: text,
                 session_id: sessionId,
-                incognito: isIncognito,
                 language: document.getElementById('lang-select')?.value || 'en'
             })
         });
@@ -649,7 +679,7 @@ async function sendMessage() {
         hideTypingIndicator();
 
         // Add Chat Message
-        const msgDiv = appendMessage(data.response || "I'm having trouble connecting right now.", 'bot', !isIncognito);
+        const msgDiv = appendMessage(data.response || "I'm having trouble connecting right now.", 'bot', true);
 
         // If bot is unsure, add Ticket Button
         if (data.response && (data.response.toLowerCase().includes("raise a ticket") || data.response.toLowerCase().includes("don't know"))) {
@@ -690,10 +720,12 @@ let roleChartInstance = null;
 let sentimentChartInstance = null;
 
 async function loadDashboard() {
+    if (!ACCESS_TOKEN) return;
     try {
         const res = await fetch(`${API_URL}/dashboard-stats`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
+
         if (!res.ok) return;
 
         const data = await res.json();
@@ -768,10 +800,12 @@ async function loadUsers() {
 }
 
 async function loadDocuments() {
+    if (!ACCESS_TOKEN) return;
     try {
         const res = await fetch(`${API_URL}/admin/documents`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
+
         if (!res.ok) return;
         const docs = await res.json();
         allDocuments = docs; // Update global store
@@ -807,7 +841,7 @@ function renderDocuments(docs, limit = null) {
     const visibleDocs = docs.slice(0, showCount);
 
     visibleDocs.forEach(doc => {
-        const dateStr = new Date(doc.upload_date).toLocaleDateString();
+        const dateStr = new Date(doc.uploaded_at || doc.upload_date).toLocaleDateString();
         const iconClass = (doc.type === 'url') ? 'fa-link' : 'fa-file-pdf';
         const typeLabel = (doc.type === 'url') ? 'URL' : 'PDF';
 
@@ -969,6 +1003,13 @@ function appendMessage(text, sender, save = true) {
         speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
         speakBtn.onclick = () => speakText(text, textSpan, speakBtn);
 
+        // Raise Ticket Button
+        const ticketBtn = document.createElement('button');
+        ticketBtn.className = 'speech-btn';
+        ticketBtn.title = "Raise Support Ticket";
+        ticketBtn.innerHTML = '<i class="fa-solid fa-ticket"></i>';
+
+
         // Thumbs Up
         const upBtn = document.createElement('button');
         upBtn.className = 'speech-btn feedback-up';
@@ -992,11 +1033,14 @@ function appendMessage(text, sender, save = true) {
 
         upBtn.onclick = () => sendFeedback(triggeredQuery, text, 1, upBtn);
         downBtn.onclick = () => sendFeedback(triggeredQuery, text, -1, downBtn);
+        ticketBtn.onclick = () => openTicketModal(triggeredQuery, text);
 
         actionsDiv.appendChild(copyBtn);
         actionsDiv.appendChild(speakBtn);
+        actionsDiv.appendChild(ticketBtn);
         actionsDiv.appendChild(upBtn);
         actionsDiv.appendChild(downBtn);
+
 
         bubble.appendChild(textSpan);
         contentWrapper.appendChild(bubble);
@@ -1100,7 +1144,12 @@ function hideTypingIndicator() {
     if (typingIndicator) typingIndicator.style.display = 'none';
 }
 
+// Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
 async function loadSystemHealth() {
+    if (!API_URL || !ACCESS_TOKEN) {
+        console.warn("API_URL or ACCESS_TOKEN not defined. Skipping system health check.");
+        return;
+    }
     try {
         const res = await fetch(`${API_URL}/admin/system-health`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
@@ -1481,8 +1530,8 @@ function highlightWordAt(charIndex, spans) {
 
     if (targetSpan) {
         targetSpan.classList.add('speaking-word');
-        // Auto-scroll to keep it in view
-        targetSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Auto-scroll disabled per user request to allow manual navigation
+        // targetSpan.scrollIntoView({ behavior: "smooth", block: "center" });
     }
 }
 
@@ -1705,9 +1754,11 @@ async function submitFAQSuggestion() {
 }
 
 async function loadSuggestedFAQs() {
+    if (!ACCESS_TOKEN) return;
     if (USER_ROLE !== 'admin') return;
 
     try {
+
         const res = await fetch(`${API_URL}/admin/suggested-faqs`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
@@ -2106,7 +2157,9 @@ function addToGoogleCalendar(title, dateStr, desc) {
 
 // --- Calendar Admin Logic ---
 async function loadCalendarAdmin() {
+    if (!ACCESS_TOKEN) return;
     const tbody = document.getElementById('calendar-admin-table-body');
+
     if (!tbody) return;
 
     try {
@@ -2237,10 +2290,12 @@ async function deleteCalendarEvent(id) {
 }
 
 async function loadAllTickets() {
+    if (!ACCESS_TOKEN) return;
     try {
         const res = await fetch(`${API_URL}/admin/tickets`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
+
         if (!res.ok) return;
         const tickets = await res.json();
         // Store globally
@@ -2286,8 +2341,11 @@ function renderTicketsTable(tickets, limit = null) {
             <td>${escapeHtml(t.category)}</td>
             <td>${escapeHtml(t.created_by)}</td>
             <td><span class="badge ${badgeClass}" style="cursor:pointer;" onclick="toggleTicketStatus('${t.id}', '${t.status}')">${t.status.toUpperCase()}</span></td>
-            <td>
-                <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}', '${escapeHtml(t.description)}', '${escapeHtml(t.resolution || '')}')">
+            <td style="display: flex; gap: 5px; justify-content: flex-end;">
+                 <button class="icon-btn" title="Reply / Resolve" onclick="openTicketResponseModal('${t.id}', '${escapeHtml(t.subject)}')" style="color: var(--primary-color);">
+                    <i class="fa-solid fa-reply"></i>
+                </button>
+                <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}')">
                     <i class="fa-solid fa-eye"></i>
                 </button>
             </td>
@@ -2326,8 +2384,80 @@ async function toggleTicketStatus(id, currentStatus) {
     } catch (e) { console.error(e); }
 }
 
-function viewTicketDetails(id, desc, resolution) {
-    alert(`Ticket #${id.substring(id.length - 6)}\n\nDescription:\n${desc}\n\nResolution:\n${resolution || "Pending"}`);
+function viewTicketDetails(id) {
+    const modal = document.getElementById('ticket-view-modal');
+    if (!modal) return;
+
+    // Robust Lookup
+    const ticket = window.allTickets ? window.allTickets.find(t => t.id === id) : null;
+    if (!ticket) {
+        console.error("Ticket not found in memory:", id);
+        return;
+    }
+
+    document.getElementById('view-ticket-id').textContent = '#' + ticket.id.substring(ticket.id.length - 6);
+    document.getElementById('view-ticket-subject').textContent = ticket.subject;
+    document.getElementById('view-ticket-desc').textContent = ticket.description;
+
+    const resEl = document.getElementById('view-ticket-resolution');
+    resEl.textContent = ticket.resolution || "Pending Review";
+    resEl.style.background = ticket.resolution ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-secondary)';
+
+    const statusEl = document.getElementById('view-ticket-status');
+    statusEl.textContent = ticket.status.toUpperCase();
+    statusEl.className = `badge ${ticket.status === 'open' ? 'warning' : 'success'}`;
+
+    modal.classList.add('active');
+}
+
+function closeTicketViewModal() {
+    const modal = document.getElementById('ticket-view-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function openTicketResponseModal(id, subject) {
+    document.getElementById('ticket-response-modal').classList.add('active');
+    document.getElementById('resp-ticket-id').value = id;
+    document.getElementById('resp-ticket-subject').value = subject;
+    document.getElementById('resp-ticket-answer').value = "";
+}
+
+function closeTicketResponseModal() {
+    document.getElementById('ticket-response-modal').classList.remove('active');
+}
+
+async function submitTicketResponse() {
+    const id = document.getElementById('resp-ticket-id').value;
+    const resolution = document.getElementById('resp-ticket-answer').value.trim();
+    const saveFaq = document.getElementById('resp-save-faq').checked;
+
+    if (!resolution) {
+        alert("Please provide a response.");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/tickets/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                status: "closed",
+                resolution: resolution,
+                save_as_faq: saveFaq
+            })
+        });
+
+        if (res.ok) {
+            closeTicketResponseModal();
+            loadAllTickets();
+            showStatusPopup("Response sent & Ticket closed!");
+        } else {
+            alert("Failed to submit response");
+        }
+    } catch (e) { console.error(e); }
 }
 
 // Locations Logic
@@ -2887,7 +3017,9 @@ async function toggleUserRole(id, currentRole) {
 // --- System Health and LLM Config Logic ---
 
 async function loadSystemHealth() {
+    if (!ACCESS_TOKEN) return;
     try {
+
         const start = Date.now();
         const res = await fetch(`${API_URL}/admin/system-health`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
@@ -2928,88 +3060,143 @@ async function loadSystemHealth() {
         }
 
     } catch (e) {
-        console.error("Health Check Error", e);
+        console.error("Error checking notifications:", e);
     }
 }
 
-async function loadLLMConfig() {
-    try {
-        const res = await fetch(`${API_URL}/admin/llm-config`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-
-        const modelSelect = document.getElementById('llm-model-select');
-        const tempRange = document.getElementById('llm-temp-range');
-        const tempDisplay = document.getElementById('llm-temp-display');
-
-        if (modelSelect) modelSelect.value = data.model;
-        if (tempRange) tempRange.value = data.temperature * 100;
-        if (tempDisplay) tempDisplay.textContent = data.temperature;
-
-    } catch (e) {
-        console.error("LLM Config Load Error", e);
-    }
+// User Management Modal Actions
+function openAddUserModal() {
+    const modal = document.getElementById('add-user-modal');
+    if (modal) modal.classList.add('active');
 }
 
-async function saveLLMConfig() {
-    const model = document.getElementById('llm-model-select').value;
-    const tempVal = document.getElementById('llm-temp-range').value;
-    const temperature = parseFloat(tempVal) / 100;
+function closeAddUserModal() {
+    const modal = document.getElementById('add-user-modal');
+    if (modal) modal.classList.remove('active');
+}
 
-    showStatusPopup("Applying new configuration...");
+async function submitAddUser() {
+    const email = document.getElementById('new-user-email').value.trim();
+    const pass = document.getElementById('new-user-pass').value;
+    const role = document.getElementById('new-user-role').value;
+
+    if (!email || !pass) {
+        showStatusPopup("Please fill all fields", "warning");
+        return;
+    }
 
     try {
-        const res = await fetch(`${API_URL}/admin/llm-config`, {
+        const res = await fetch(`${API_URL}/admin/users`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
             },
-            body: JSON.stringify({ model, temperature })
+            body: JSON.stringify({ username: email, password: pass, role: role })
         });
-
+        const data = await res.json();
         if (res.ok) {
-            showStatusPopup("LLM Configuration Updated!");
+            showStatusPopup("User created successfully!");
+            closeAddUserModal();
+            loadAllUsers(); // Refresh the list
         } else {
-            alert("Failed to update config");
+
+            showStatusPopup(data.detail || "Failed to create user", "error");
         }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error(e);
+        showStatusPopup("Connection error", "error");
+    }
 }
+
 
 // --- Study Buddy Feature ---
 async function loadStudyBuddy() {
+    if (!ACCESS_TOKEN) return;
     const listEl = document.getElementById('study-materials-list');
+
+    const examsEl = document.getElementById('study-exams-list');
     if (!listEl) return;
 
+    // Load Materials
     try {
         const res = await fetch(`${API_URL}/study-buddy/materials`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
-        if (!res.ok) return;
-        const materials = await res.json();
-
-        if (materials.length === 0) {
-            listEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes uploaded yet. Start by uploading a PDF!</p>';
-            return;
+        if (res.ok) {
+            const materials = await res.json();
+            if (materials.length === 0) {
+                listEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes uploaded yet. Start by uploading a PDF!</p>';
+            } else {
+                listEl.innerHTML = '';
+                materials.forEach(m => {
+                    const date = new Date(m.upload_date).toLocaleDateString();
+                    listEl.innerHTML += `
+                    <div class="study-material-item">
+                        <div class="material-content" onclick="summarizeMaterial('${m.id}')" style="display: flex; align-items: center; gap: 15px; flex: 1; cursor: pointer;">
+                            <div class="material-icon"><i class="fa-solid fa-file-pdf"></i></div>
+                            <div class="material-details">
+                                <span class="material-name">${escapeHtml(m.filename)}</span>
+                                <span class="material-meta">Uploaded on ${date}</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="action-btn" title="Summarize" onclick="summarizeMaterial('${m.id}')"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                            <div class="action-btn delete" title="Delete" onclick="deleteStudyMaterial('${m.id}')" style="color: #ef4444;"><i class="fa-solid fa-trash-can"></i></div>
+                        </div>
+                    </div>`;
+                });
+            }
         }
+    } catch (e) { console.error("Load Materials Error", e); }
 
-        listEl.innerHTML = '';
-        materials.forEach(m => {
-            const date = new Date(m.upload_date).toLocaleDateString();
-            listEl.innerHTML += `
-            <div class="study-material-item" onclick="summarizeMaterial('${m.id}')">
-                <div class="material-icon"><i class="fa-solid fa-file-pdf"></i></div>
-                <div class="material-details">
-                    <span class="material-name">${escapeHtml(m.filename)}</span>
-                    <span class="material-meta">Uploaded on ${date}</span>
-                </div>
-                <div class="action-btn"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
-            </div>`;
+    // Load Exams
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/exams`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
-    } catch (e) { console.error("Load Study Error", e); }
+        if (res.ok) {
+            const exams = await res.json();
+            if (exams.length === 0) {
+                examsEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 13px;">No upcoming exams found.</p>';
+            } else {
+                examsEl.innerHTML = '';
+                exams.forEach(ex => {
+                    const d = new Date(ex.date);
+                    const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    examsEl.innerHTML += `
+                    <div style="display: flex; gap: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border-left: 3px solid #ef4444;">
+                        <div style="text-align: center; min-width: 45px;">
+                            <div style="font-size: 11px; text-transform: uppercase; color: #ef4444; font-weight: 700;">${d.toLocaleDateString('en-US', { month: 'short' })}</div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${d.getDate()}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${escapeHtml(ex.subject)}</div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(ex.department)}</div>
+                        </div>
+                    </div>`;
+                });
+            }
+        }
+    } catch (e) { console.error("Load Exams Error", e); }
 }
+
+async function deleteStudyMaterial(id) {
+    if (!confirm("Are you sure you want to delete this material?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/materials/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (res.ok) {
+            showStatusPopup("Material deleted");
+            loadStudyBuddy();
+            document.getElementById('material-summary-content').innerHTML = "Select a document to generate a smart AI summary.";
+        }
+    } catch (e) { console.error(e); }
+}
+
 
 async function summarizeMaterial(id) {
     const summaryEl = document.getElementById('material-summary-content');
@@ -3076,33 +3263,7 @@ async function checkResume() {
 
 // --- Exam Countdown ---
 
-async function adminAddPlacement() {
-    const company = document.getElementById('admin-place-company').value;
-    const pkg = document.getElementById('admin-place-pkg').value;
-    if (!company || !pkg) return alert("Fill all fields");
 
-    try {
-        const res = await fetch(`${API_URL}/career/add-placement`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                company_name: company,
-                package: parseFloat(pkg),
-                year: new Date().getFullYear(),
-                department: "All Branches"
-            })
-        });
-        if (res.ok) {
-            showStatusPopup("Placement record added!");
-            document.getElementById('admin-place-company').value = '';
-            document.getElementById('admin-place-pkg').value = '';
-            loadCareerCenter();
-        }
-    } catch (e) { console.error(e); }
-}
 
 async function adminAddExam() {
     const subject = document.getElementById('admin-exam-subject').value;
