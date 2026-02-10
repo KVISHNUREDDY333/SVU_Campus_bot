@@ -55,21 +55,29 @@ async def create_ticket(ticket: TicketCreate, current_user: User = Depends(get_c
     )
 
 @router.get("/tickets/my", response_model=List[TicketResponse])
-async def get_my_tickets(current_user: User = Depends(get_current_user)):
+async def get_my_tickets(
+    skip: int = 0,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user)
+):
     if database.tickets_db is None: return []
     
-    cursor = database.tickets_db.find({"created_by": current_user.username}).sort("created_at", -1)
+    cursor = database.tickets_db.find({"created_by": current_user.username}).sort("created_at", -1).skip(skip).limit(limit)
     return [TicketResponse(id=str(t["_id"]), **t) for t in cursor]
 
 # Admin: Get All Tickets
 @router.get("/admin/tickets", response_model=List[TicketResponse])
-async def get_all_tickets(current_user: User = Depends(get_current_user)):
+async def get_all_tickets(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
         
     if database.tickets_db is None: return []
     
-    cursor = database.tickets_db.find().sort("created_at", -1)
+    cursor = database.tickets_db.find().sort("created_at", -1).skip(skip).limit(limit)
     return [TicketResponse(id=str(t["_id"]), **t) for t in cursor]
 
 class TicketUpdate(BaseModel):
@@ -126,3 +134,31 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
         return {"status": "success"}
     except:
         raise HTTPException(status_code=400, detail="Invalid ID")
+
+@router.delete("/tickets/{ticket_id}")
+async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current_user)):
+    if database.tickets_db is None:
+        raise HTTPException(status_code=503, detail="Database Unavailable")
+
+    try:
+        if not ObjectId.is_valid(ticket_id):
+             raise HTTPException(status_code=400, detail="Invalid Ticket ID")
+             
+        ticket = database.tickets_db.find_one({"_id": ObjectId(ticket_id)})
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        # Only Admin can delete tickets
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Only admins can delete tickets")
+
+        # For non-admins, ensure ticket is closed? (Optional based on requirements, but safer)
+        # The prompt says "delete button should be visible for closed tickets".
+        
+        database.tickets_db.delete_one({"_id": ObjectId(ticket_id)})
+        return {"status": "success", "message": "Ticket deleted successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Delete Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")

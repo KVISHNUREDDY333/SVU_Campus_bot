@@ -16,6 +16,7 @@
     /* Teal 600 */
     --secondary-accent: #f59e0b;
     /* Amber 500 */
+    --border-color: #cbd5e1;
 
     /* Backgrounds with Depth */
     --bg-base: #f8fafc;
@@ -725,14 +726,7 @@ body.dark-mode .incognito-badge {
     letter-spacing: -0.5px;
 }
 
-.splash-motto {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-secondary);
-    letter-spacing: 2px;
-    margin-bottom: 16px;
-    text-transform: uppercase;
-}
+
 
 .splash-quote {
     font-size: 16px;
@@ -936,6 +930,16 @@ body.dark-mode .send-btn:hover {
 .doc-icon {
     background: linear-gradient(135deg, #f59e0b, #d97706);
     box-shadow: 0 8px 16px -4px rgba(245, 158, 11, 0.4);
+}
+
+.splash-motto {
+    font-size: 0.9rem;
+    color: #FF9933 !important;
+    /* Saffron Force */
+    margin-bottom: 24px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
 }
 
 .stat-info h3 {
@@ -2360,18 +2364,31 @@ body.dark-mode .toast-notification {
 
 /* Calendar Section */
 .calendar-card {
-    background: var(--card-bg);
+    background: #ffffff;
+    /* Explicit white for contrast */
     border-radius: 16px;
     padding: 20px;
     display: flex;
     gap: 20px;
-    border: 1px solid var(--border-color);
+    border: 1px solid #cbd5e1;
+    /* Slate 300 - Standard visible border */
     transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    /* Subtle shadow for depth */
+}
+
+body.dark-mode .calendar-card {
+    background: #1e293b;
+    /* Slate 800 */
+    border-color: #475569;
+    /* Slate 600 - Visible on dark */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
 }
 
 .calendar-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+    border-color: var(--accent-color);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
 }
 
 .calendar-date {
@@ -2777,4 +2794,25 @@ body.dark-mode .placement-record-item:hover {
     border-radius: 16px;
     max-height: 400px;
     overflow-y: auto;
+}
+
+/* Mic Listening Animation */
+#mic-btn.listening {
+    color: #ef4444 !important;
+    animation: pulse-red 1.5s infinite;
+    background: rgba(239, 68, 68, 0.1) !important;
+}
+
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
 }

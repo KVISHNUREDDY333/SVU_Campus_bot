@@ -8,10 +8,6 @@ from bson import ObjectId
 
 router = APIRouter(prefix="/career", tags=["Career Center"])
 
-
-
-
-
 from ..models.academic import ResumeAnalysisRequest
 
 @router.post("/check-resume")

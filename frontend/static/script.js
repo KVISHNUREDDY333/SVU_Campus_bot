@@ -99,9 +99,10 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 1500);
     }
 
-    if (userInput) userInput.focus();
-
-    if (userInput) userInput.focus();
+    if (userInput) {
+        userInput.value = ''; // Prevent browser autofill
+        userInput.focus();
+    }
 
     // Ensure the default section is shown
     setTimeout(() => {
@@ -277,6 +278,14 @@ async function handleRegister(e) {
     // Frontend Validation
     if (!validateEmail(username)) {
         errorEl.textContent = "Invalid email format.";
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    // Full Name Validation
+    const nameRegex = /^[A-Za-z\s]+$/;
+    if (!nameRegex.test(fullName)) {
+        errorEl.textContent = "Full Name must contain only alphabets and spaces (no numbers or special characters).";
         errorEl.style.display = 'block';
         return;
     }
@@ -606,14 +615,14 @@ function showSection(section) {
     if (section === 'admin') {
         loadDocuments();
         loadAllTickets();
-        loadCalendar(); // admin view uses same calendar loader but might have specific admin features
+        loadAcademicCalendar(); // Load admin calendar management table
         loadAllUsers();
         loadSystemHealth();
         loadSuggestedFAQs();
     }
 
     if (section === 'calendar') {
-        loadCalendar();
+        loadCalendar(); // Load student calendar view
     }
     if (section === 'study') {
         loadStudyBuddy();
@@ -766,43 +775,14 @@ async function loadDashboard() {
 }
 
 async function loadUsers() {
-    try {
-        const res = await fetch(`${API_URL}/admin/users`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const users = await res.json();
-        const tbody = document.getElementById('user-table-body');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-        users.forEach(u => {
-            const roleBadge = u.role === 'admin' ? 'success' : 'warning';
-            tbody.innerHTML += `
-            <tr style="border-bottom: 1px solid var(--border-color);">
-                <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
-                    <div style="width: 32px; height: 32px; background: #6366f1; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
-                        ${u.username[0].toUpperCase()}
-                    </div>
-                    <div>
-                        <div style="font-weight: 600;">${escapeHtml(u.username.split('@')[0])}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(u.username)}</div>
-                    </div>
-                </td>
-                <td style="padding: 12px;"><span class="badge ${roleBadge}">${u.role.charAt(0).toUpperCase() + u.role.slice(1)}</span></td>
-                <td style="padding: 12px;"><span class="badge success">Active</span></td>
-                <td style="padding: 12px; text-align: right;">
-                    <button class="icon-btn" style="width: 32px; height: 32px; font-size: 14px;"><i class="fa-solid fa-pen"></i></button>
-                </td>
-            </tr>`;
-        });
-    } catch (e) { console.error("Load Users Error", e); }
+    // Function removed - see optimized version below
+    console.warn("Using deprecated loadUsers - check script.js structure");
 }
 
 async function loadDocuments() {
     if (!ACCESS_TOKEN) return;
     try {
-        const res = await fetch(`${API_URL}/admin/documents`, {
+        const res = await fetch(`${API_URL}/admin/documents?limit=50`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
 
@@ -1146,31 +1126,7 @@ function hideTypingIndicator() {
 
 // Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
 async function loadSystemHealth() {
-    if (!API_URL || !ACCESS_TOKEN) {
-        console.warn("API_URL or ACCESS_TOKEN not defined. Skipping system health check.");
-        return;
-    }
-    try {
-        const res = await fetch(`${API_URL}/admin/system-health`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-
-        const updateStatus = (id, status) => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-                el.className = `badge ${status === 'healthy' || status === 'connected' || status === 'active' || status === 'online' ? 'success' : 'danger'}`;
-            }
-        };
-
-        updateStatus('health-api', data.api_status);
-        updateStatus('health-vector', data.vector_db_status);
-        updateStatus('health-llm', data.llm_service);
-        updateStatus('health-mongo', data.mongodb_status);
-
-    } catch (e) { console.error("Health Check Error", e); }
+    // Function removed - see optimized version below
 }
 
 function scrollToBottom() {
@@ -1390,12 +1346,19 @@ function speakText(text, element = null, button = null) {
         preferredVoice = availableVoices.find(v => v.lang.startsWith("en") && (v.name.includes("Female") || v.name.includes("Google")));
     }
 
-    // Default English Logic if still null or English selected
+    // Default English Logic
     if (!preferredVoice && selectedLang === 'en') {
+        // Prioritize "Microsoft Zira" or "Google US English"
         preferredVoice = availableVoices.find(v =>
-            (v.name.includes("Google US English") || v.name.includes("Zira") || v.name.includes("Female")) &&
-            v.lang.startsWith("en")
+            v.name.includes("Zira") ||
+            (v.name.includes("Google") && v.lang === 'en-US')
         );
+    }
+
+    // 4.1 Force Reset if voice is stuck (Safety Mechanism)
+    if (!preferredVoice && availableVoices.length > 0) {
+        // If still no voice, just take the first one that matches the language prefix
+        preferredVoice = availableVoices.find(v => v.lang.startsWith(selectedLang)) || availableVoices[0];
     }
 
     if (preferredVoice) {
@@ -1403,14 +1366,15 @@ function speakText(text, element = null, button = null) {
         utterance.voice = preferredVoice;
         utterance.lang = preferredVoice.lang;
     } else {
-        // Ultimate fallback
+        // Fallback
         utterance.lang = targetLangCode;
     }
 
+    // Adjust rate/pitch for better naturalness
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
 
-    // Store in global to prevent GC
+    // Store in global to prevent Garbage Collection (CRITICAL FIX)
     currentUtterance = utterance;
 
     if (element) {
@@ -1424,30 +1388,33 @@ function speakText(text, element = null, button = null) {
             console.log("[TTS] Finished");
             resetHighlighting();
         };
+
+        // Handle interruption/error
         utterance.onerror = (e) => {
             console.error("[TTS] Utterance Error:", e);
-            if (e.error !== 'interrupted') {
-                showStatusPopup(`TTS Error: ${e.error}`, 3000);
-            }
             resetHighlighting();
         };
     }
 
-    // 5. Execution - Immediate
+    // 5. Execution - Immediate & Robust
     console.log("[TTS] Executing commands...");
     try {
-        synth.cancel(); // Force clearing
-        synth.resume(); // Wake up engine
+        // Browser quirk fix: Cancel before speaking to clear queue
+        synth.cancel();
+
+        // Timeout to detect if speech didn't start (common Chrome bug)
+        const speechTimeout = setTimeout(() => {
+            if (synth.speaking) return; // Started fine
+            console.warn("[TTS] Speech didn't start, forcing resume...");
+            synth.cancel();
+            synth.resume();
+            synth.speak(utterance);
+        }, 300);
+
         synth.speak(utterance);
-
-        // Final fail-safe check
-        if (availableVoices.length === 0) {
-            showStatusPopup("Voice engine is busy or no voices found. Playing default...", 2000);
-        }
-
     } catch (e) {
         console.error("[TTS] Exception during speak:", e);
-        showStatusPopup("Audio Engine Failed. Please refresh.", 3000);
+        showStatusPopup("Audio Engine Error. Please refresh.", 3000);
     }
 }
 
@@ -1515,17 +1482,31 @@ function highlightWordAt(charIndex, spans) {
     let targetSpan = spans.find(span => {
         const start = parseInt(span.dataset.start);
         const end = parseInt(span.dataset.end);
-        // Standard check: is index inside the word?
+        // Standard check: is index inside the word or right at start?
+        // Note: charIndex matches the start position of the words in the original string
         return charIndex >= start && charIndex < end;
     });
 
-    // Fallback: Sometimes browsers report index slightly before the word start (whitespace issue)
+    // Fallback 1: Exact Start Match (Most reliable for boundaries)
     if (!targetSpan) {
-        targetSpan = spans.find(span => {
+        targetSpan = spans.find(span => parseInt(span.dataset.start) === charIndex);
+    }
+
+    // Fallback 2: Nearest Forward Neighbour (Handle slight drift/whitespace skips)
+    if (!targetSpan) {
+        // Find smallest positive difference
+        let closest = null;
+        let minDiff = 5; // Tolerance window
+
+        spans.forEach(span => {
             const start = parseInt(span.dataset.start);
-            // Allow a small tolerance (e.g., 2 chars) for leading punctuation/whitespace drift
-            return Math.abs(start - charIndex) <= 2;
+            const diff = Math.abs(start - charIndex);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = span;
+            }
         });
+        targetSpan = closest;
     }
 
     if (targetSpan) {
@@ -1548,54 +1529,99 @@ function resetHighlighting() {
     currentSpeechBtn = null;
 }
 
-// 2. Speech-to-Text (STT)
+// 2. Speech-to-Text (STT) Refactored
 const micBtn = document.getElementById('mic-btn');
-let recognition;
+let recognition = null;
+let isListening = false; // Explicit state tracking
 
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+function initializeSTT() {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        if (micBtn) micBtn.style.display = 'none';
+        console.warn("Web Speech API not supported.");
+        return null;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false; // changed to true if you want real-time feedback
-    recognition.lang = 'en-US';
+    const recognizer = new SpeechRecognition();
 
-    recognition.onstart = () => {
+    recognizer.continuous = false;
+    recognizer.interimResults = false;
+
+    // Dynamic Language Selection based on dropdown
+    const langSelect = document.getElementById('lang-select');
+    const selectedLang = langSelect ? langSelect.value : 'en';
+
+    // Map short codes to full BCP-47 codes
+    const langMap = {
+        'en': 'en-US',
+        'te': 'te-IN',
+        'hi': 'hi-IN'
+    };
+    recognizer.lang = langMap[selectedLang] || 'en-US';
+    console.log(`[STT] Initialized for language: ${recognizer.lang}`);
+
+    recognizer.onstart = () => {
+        isListening = true;
         micBtn.classList.add('listening');
-        userInput.placeholder = "Listening...";
+        // micBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i>'; // Optional icon change
+        userInput.placeholder = "Listening... Speak now";
     };
 
-    recognition.onend = () => {
+    recognizer.onend = () => {
+        isListening = false;
         micBtn.classList.remove('listening');
+        // micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
         userInput.placeholder = "Ask anything... (Type or Speak)";
     };
 
-    recognition.onresult = (event) => {
+    recognizer.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
+        console.log(`[STT] Heard: "${transcript}"`);
         userInput.value = transcript;
-        sendMessage(); // Auto-send on voice input
+
+        // Optional: Auto-send after short delay
+        setTimeout(() => sendMessage(), 500);
     };
 
-    recognition.onerror = (event) => {
+    recognizer.onerror = (event) => {
         console.error("Speech recognition error", event.error);
-        stopVoiceInput();
+        isListening = false;
         micBtn.classList.remove('listening');
+
+        if (event.error === 'not-allowed') {
+            showStatusPopup("Microphone access denied. Please enable permissions.", 4000);
+        } else if (event.error === 'no-speech') {
+            showStatusPopup("No speech detected. Please try again.", 2000);
+        }
     };
-} else {
-    if (micBtn) micBtn.style.display = 'none'; // Hide if not supported
-    console.log("Web Speech API not supported in this browser.");
+
+    return recognizer;
 }
 
 function toggleVoiceInput() {
-    if (!recognition) return;
-    if (micBtn.classList.contains('listening')) {
+    // Always re-initialize to pick up latest language selection
+    if (isListening && recognition) {
         recognition.stop();
-    } else {
-        recognition.start();
+        return;
+    }
+
+    // Create new instance with current settings
+    recognition = initializeSTT();
+
+    if (recognition) {
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error("Failed to start recognition:", e);
+            // Sometimes it throws if already started, force stop and retry logic could go here
+        }
     }
 }
 
 function stopVoiceInput() {
-    if (recognition) recognition.stop();
+    if (recognition && isListening) {
+        recognition.stop();
+    }
 }
 // --- End Voice Assistant ---
 
@@ -2157,23 +2183,7 @@ function addToGoogleCalendar(title, dateStr, desc) {
 
 // --- Calendar Admin Logic ---
 async function loadCalendarAdmin() {
-    if (!ACCESS_TOKEN) return;
-    const tbody = document.getElementById('calendar-admin-table-body');
-
-    if (!tbody) return;
-
-    try {
-        const res = await fetch(`${API_URL}/calendar`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const events = await res.json();
-        // Store globally for toggling
-        window.allCalendarEvents = events;
-        renderCalendarAdminTable(events, 3); // show 3 initially
-    } catch (e) {
-        console.error("Load Calendar Admin Error", e);
-    }
+    // Function removed - see optimized version below
 }
 
 function renderCalendarAdminTable(events, limit = null) {
@@ -2239,7 +2249,7 @@ function closeCalendarModal() {
 async function saveCalendarEvent() {
     const title = document.getElementById('event-title').value;
     const date = document.getElementById('event-date').value;
-    const type = document.getElementById('event-type').value;
+    const type = document.getElementById('calendar-event-type').value;
     const desc = document.getElementById('event-desc').value;
 
     if (!title || !date) {
@@ -2272,27 +2282,13 @@ async function saveCalendarEvent() {
 }
 
 async function deleteCalendarEvent(id) {
-    if (!confirm("Remove this event from the academic calendar?")) return;
-
-    try {
-        const res = await fetch(`${API_URL}/admin/calendar/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (res.ok) {
-            loadCalendarAdmin();
-            loadCalendar();
-        } else {
-            alert("Failed to delete event.");
-        }
-    } catch (e) { console.error(e); }
+    // Function removed - see optimized version below
 }
 
 async function loadAllTickets() {
     if (!ACCESS_TOKEN) return;
     try {
-        const res = await fetch(`${API_URL}/admin/tickets`, {
+        const res = await fetch(`${API_URL}/admin/tickets?limit=50`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
 
@@ -2334,6 +2330,19 @@ function renderTicketsTable(tickets, limit = null) {
 
     visibleTickets.forEach(t => {
         const badgeClass = t.status === 'open' ? 'warning' : 'success';
+
+        // Delete Button Logic (Only for Closed Tickets and Admins)
+        let deleteBtn = '';
+        // Strict role check from storage to ensure freshness
+        const currentRole = localStorage.getItem('user_role');
+        if (t.status.toLowerCase() === 'closed' && currentRole === 'admin') {
+            deleteBtn = `
+                <button class="icon-btn" title="Delete Ticket" onclick="deleteTicket('${t.id}')" style="color: #ef4444;">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+             `;
+        }
+
         tbody.innerHTML += `
         <tr>
             <td>#${t.id.substring(t.id.length - 6)}</td>
@@ -2348,6 +2357,7 @@ function renderTicketsTable(tickets, limit = null) {
                 <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}')">
                     <i class="fa-solid fa-eye"></i>
                 </button>
+                ${deleteBtn}
             </td>
         </tr>`;
     });
@@ -2381,6 +2391,25 @@ async function toggleTicketStatus(id, currentStatus) {
             body: JSON.stringify({ status: newStatus, resolution: "Status updated by Admin" })
         });
         if (res.ok) loadAllTickets();
+    } catch (e) { console.error(e); }
+}
+
+async function deleteTicket(id) {
+    if (!confirm("Are you sure you want to delete this ticket permanently?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/tickets/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("Ticket deleted.");
+            loadAllTickets();
+        } else {
+            const data = await res.json();
+            alert(data.detail || "Failed to delete ticket.");
+        }
     } catch (e) { console.error(e); }
 }
 
@@ -2527,7 +2556,14 @@ async function submitDocument() {
     }
 
     progressDiv.style.display = 'block';
-    statusText.textContent = currentUploadTarget === 'study' ? "Uploading notes..." : "Uploading and processing (Extracting FAQs)...";
+
+    // Customized Status Message
+    if (currentUploadTarget === 'study') {
+        statusText.textContent = "Uploading & Analyzing with AI... (This may take a moment)";
+    } else {
+        statusText.textContent = "Uploading and processing (Extracting FAQs)...";
+    }
+
     progressBar.style.width = "50%";
 
     const formData = new FormData();
@@ -2552,10 +2588,22 @@ async function submitDocument() {
 
         setTimeout(() => {
             closeUploadModal();
-            showStatusPopup(currentUploadTarget === 'study' ? "Notes uploaded successfully!" : `Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`);
+
             if (currentUploadTarget === 'study') {
+                showStatusPopup("Notes uploaded & Summarized!");
                 loadStudyBuddy();
+                // Inject Summary
+                if (data.summary) {
+                    const summaryEl = document.getElementById('material-summary-content');
+                    if (summaryEl) {
+                        summaryEl.innerHTML = `<div class="markdown-body">${marked.parse(data.summary)}</div>`;
+                        // Highlight the sidebar to show user something happened
+                        summaryEl.parentElement.style.border = "2px solid var(--accent-color)";
+                        setTimeout(() => { summaryEl.parentElement.style.border = "none"; }, 2000);
+                    }
+                }
             } else {
+                showStatusPopup(`Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`);
                 loadDocuments();
                 loadFAQs();
             }
@@ -2617,6 +2665,69 @@ async function submitUrl() {
         statusText.textContent = "Error: " + e.message;
         statusText.style.color = "#ef4444";
     }
+}
+
+// Text Entry Ingestion
+const textModal = document.getElementById('text-modal');
+function openTextModal() { if (textModal) textModal.classList.add('active'); }
+function closeTextModal() { if (textModal) textModal.classList.remove('active'); }
+
+async function submitText() {
+    const title = document.getElementById('text-title').value.trim();
+    const content = document.getElementById('text-content').value.trim();
+    const progressDiv = document.getElementById('text-progress');
+    const statusText = document.getElementById('text-status');
+
+    if (!title || !content) {
+        alert("Please provide both a Title and Content.");
+        return;
+    }
+
+    progressDiv.style.display = 'block';
+    statusText.textContent = "Processing text (Extracting FAQs)...";
+    statusText.style.color = "var(--accent-color)";
+
+    try {
+        const res = await fetch(`${API_URL}/admin/add-text`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ title: title, content: content })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Text ingestion failed");
+        }
+
+        const data = await res.json();
+
+        statusText.textContent = `Success! ${data.faqs_extracted || 0} FAQs extracted.`;
+        statusText.style.color = "#10b981";
+
+        setTimeout(() => {
+            closeTextModal();
+            showStatusPopup(`Text Ingested! ${data.faqs_extracted || 0} FAQs added.`);
+            loadDocuments();
+            loadFAQs();
+
+            // Reset fields
+            document.getElementById('text-title').value = "";
+            document.getElementById('text-content').value = "";
+            progressDiv.style.display = 'none';
+        }, 1500);
+
+    } catch (e) {
+        statusText.textContent = "Error: " + e.message;
+        statusText.style.color = "#ef4444";
+    }
+}
+
+// --- Resume Checker Logic ---
+async function checkResume() {
+    // Function removed - see optimized version below
 }
 
 // --- Original Locations Logic Below ---
@@ -2874,12 +2985,15 @@ function showStatusPopup(message, duration = 2000) {
 
 async function loadUsers() {
     try {
-        const res = await fetch(`${API_URL}/admin/users`, {
+        const res = await fetch(`${API_URL}/admin/users?limit=50`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
         if (!res.ok) return;
         const users = await res.json();
-        renderUsersTable(users, 3);
+        // Render all fetched users (up to 50)
+        renderUsersTable(users, 50);
+
+        // Show total count hint or Load More button logic could go here
     } catch (e) {
         console.error("Load Users Error", e);
     }
@@ -2991,6 +3105,148 @@ async function deleteUser(id) {
     } catch (e) { console.error(e); }
 }
 
+// --- User Management Data Loading ---
+// Duplicate loadAllUsers removed
+
+// --- Academic Calendar Data Loading ---
+// Duplicate loadAcademicCalendar removed
+
+// --- Data Mutation Logic (User & Calendar) ---
+
+// 1. User Creation Logic
+const addUserModal = document.getElementById('add-user-modal');
+
+
+
+// Function removed - see optimized version below
+
+// 2. Calendar Event Logic
+const calendarModal = document.getElementById('calendar-event-modal');
+
+function openCalendarModal() {
+    if (calendarModal) calendarModal.classList.add('active');
+}
+
+function closeCalendarModal() {
+    if (calendarModal) calendarModal.classList.remove('active');
+}
+
+async function submitCalendarEvent() {
+    const title = document.getElementById('event-title').value;
+    const date = document.getElementById('event-date').value;
+    const type = document.getElementById('calendar-event-type').value;
+    const desc = document.getElementById('event-desc').value;
+
+    if (!title || !date) {
+        alert("Title and Date are required");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                title: title,
+                date: date,
+                type: type,
+                description: desc
+            })
+        });
+
+        if (res.ok) {
+            closeCalendarModal();
+            showStatusPopup("Event posted successfully!");
+            // Clear form
+            document.getElementById('event-title').value = "";
+            document.getElementById('event-date').value = "";
+            document.getElementById('event-desc').value = "";
+
+            loadCalendarAdmin(); // Refresh list
+        } else {
+            const data = await res.json();
+            alert(data.detail || "Failed to post event");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Connection error");
+    }
+}
+
+// Global functions for Calendar Admin
+function getEventTypeBadge(type) {
+    const typeMap = {
+        'Exam': 'error',
+        'Holiday': 'success',
+        'Event': 'info'
+    };
+    return typeMap[type] || 'info';
+}
+
+async function loadCalendarAdmin() {
+    if (!ACCESS_TOKEN) return;
+    const tbody = document.getElementById('calendar-admin-table-body');
+    if (!tbody) return;
+
+    try {
+        const res = await fetch(`${API_URL}/calendar?limit=20`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const events = await res.json();
+
+        tbody.innerHTML = '';
+        if (events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No events found.</td></tr>';
+            return;
+        }
+
+        events.forEach(e => {
+            const badge = getEventTypeBadge(e.type);
+            tbody.innerHTML += `
+            <tr>
+                <td style="padding: 12px;">${e.date}</td>
+                <td style="padding: 12px; font-weight: 500;">${escapeHtml(e.title)}</td>
+                <td style="padding: 12px;"><span class="badge ${badge}">${escapeHtml(e.type)}</span></td>
+                <td style="padding: 12px; text-align: right;">
+                    <button class="icon-btn" onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            </tr>`;
+        });
+    } catch (e) {
+        console.error("Load Calendar Admin Error", e);
+    }
+}
+window.loadCalendarAdmin = loadCalendarAdmin;
+
+async function deleteCalendarEvent(eventId) {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar/${eventId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup('Event deleted successfully');
+            loadCalendarAdmin();
+        } else {
+            const data = await res.json();
+            showStatusPopup(data.detail || 'Failed to delete event', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showStatusPopup('Connection error', 'error');
+    }
+}
+window.deleteCalendarEvent = deleteCalendarEvent;
+
 async function toggleUserRole(id, currentRole) {
     const newRole = currentRole === 'admin' ? 'student' : 'admin';
     if (!confirm(`Switch this user's role to ${newRole.toUpperCase()}?`)) return;
@@ -3013,6 +3269,7 @@ async function toggleUserRole(id, currentRole) {
         }
     } catch (e) { console.error(e); }
 }
+window.toggleUserRole = toggleUserRole;
 
 // --- System Health and LLM Config Logic ---
 
@@ -3098,7 +3355,7 @@ async function submitAddUser() {
         if (res.ok) {
             showStatusPopup("User created successfully!");
             closeAddUserModal();
-            loadAllUsers(); // Refresh the list
+            loadUsers(); // Refresh the list
         } else {
 
             showStatusPopup(data.detail || "Failed to create user", "error");
@@ -3115,7 +3372,7 @@ async function loadStudyBuddy() {
     if (!ACCESS_TOKEN) return;
     const listEl = document.getElementById('study-materials-list');
 
-    const examsEl = document.getElementById('study-exams-list');
+    // Removed Exam Loading Logic
     if (!listEl) return;
 
     // Load Materials
@@ -3149,37 +3406,8 @@ async function loadStudyBuddy() {
             }
         }
     } catch (e) { console.error("Load Materials Error", e); }
-
-    // Load Exams
-    try {
-        const res = await fetch(`${API_URL}/study-buddy/exams`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (res.ok) {
-            const exams = await res.json();
-            if (exams.length === 0) {
-                examsEl.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 13px;">No upcoming exams found.</p>';
-            } else {
-                examsEl.innerHTML = '';
-                exams.forEach(ex => {
-                    const d = new Date(ex.date);
-                    const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    examsEl.innerHTML += `
-                    <div style="display: flex; gap: 12px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 10px; margin-bottom: 10px; border-left: 3px solid #ef4444;">
-                        <div style="text-align: center; min-width: 45px;">
-                            <div style="font-size: 11px; text-transform: uppercase; color: #ef4444; font-weight: 700;">${d.toLocaleDateString('en-US', { month: 'short' })}</div>
-                            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${d.getDate()}</div>
-                        </div>
-                        <div>
-                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${escapeHtml(ex.subject)}</div>
-                            <div style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(ex.department)}</div>
-                        </div>
-                    </div>`;
-                });
-            }
-        }
-    } catch (e) { console.error("Load Exams Error", e); }
 }
+window.loadStudyBuddy = loadStudyBuddy;
 
 async function deleteStudyMaterial(id) {
     if (!confirm("Are you sure you want to delete this material?")) return;
@@ -3225,6 +3453,7 @@ async function summarizeMaterial(id) {
 async function loadCareerCenter() {
     // Placements feature removed - focusing on Resume Checker
 }
+window.loadCareerCenter = loadCareerCenter;
 
 async function checkResume() {
     const textInput = document.getElementById('resume-text-input');
@@ -3260,34 +3489,4 @@ async function checkResume() {
         console.error(e);
     }
 }
-
-// --- Exam Countdown ---
-
-
-
-async function adminAddExam() {
-    const subject = document.getElementById('admin-exam-subject').value;
-    const date = document.getElementById('admin-exam-date').value;
-    if (!subject || !date) return alert("Fill all fields");
-
-    try {
-        const res = await fetch(`${API_URL}/study-buddy/add-exam`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ subject, date, department: "Common" })
-        });
-        if (res.ok) {
-            showStatusPopup("Exam date added!");
-            document.getElementById('admin-exam-subject').value = '';
-            document.getElementById('admin-exam-date').value = '';
-            loadCareerCenter(); // Refresh career center instead if needed, or nothing
-        }
-    } catch (e) { console.error(e); }
-}
-
-
-
-
+window.checkResume = checkResume;

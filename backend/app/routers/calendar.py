@@ -18,23 +18,30 @@ class CalendarResponse(CalendarEvent):
     id: str
 
 @router.get("/calendar", response_model=List[CalendarResponse])
-async def get_calendar(current_user: User = Depends(get_current_user)):
+async def get_calendar(
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user)
+):
     if database.calendar_db is None:
         return []
     
-    cursor = database.calendar_db.find().sort("date", 1)
+    # Sort by date ascending (soonest first)
+    cursor = database.calendar_db.find().sort("date", 1).skip(skip).limit(limit)
     results = []
     for e in cursor:
         e["id"] = str(e["_id"])
         results.append(CalendarResponse(**e))
     return results
 
-@router.post("/admin/calendar", response_model=CalendarEvent)
+@router.post("/admin/calendar", response_model=CalendarResponse)
 async def add_calendar_event(event: CalendarEvent, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
         
-    database.calendar_db.insert_one(event.dict())
+    event_dict = event.model_dump()
+    res = database.calendar_db.insert_one(event_dict)
+    event_dict["id"] = str(res.inserted_id)
     
     # Send Global Notification
     from .admin import _add_notification
@@ -43,7 +50,7 @@ async def add_calendar_event(event: CalendarEvent, current_user: User = Depends(
         f"A new event has been added: {event.title} on {event.date}",
         recipient_username=None
     )
-    return event
+    return CalendarResponse(**event_dict)
 
 @router.delete("/admin/calendar/{event_id}")
 async def delete_calendar_event(event_id: str, current_user: User = Depends(get_current_user)):

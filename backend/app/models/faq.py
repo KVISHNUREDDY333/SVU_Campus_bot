@@ -1,15 +1,24 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 class FAQModel(BaseModel):
     question: str
     answer: str
     category: str = "General"
+    keywords: List[str] = []
+    source_type: List[str] = ["manual"] # ["pdf", "website", "manual"]
+    source_urls: List[str] = []
+    verified: bool = False
+    verification_status: str = "PENDING" # VERIFIED, PARTIALLY_VERIFIED, NOT_VERIFIED, PENDING
+    verification_source: str = "https://svuniversity.edu.in/"
+    last_verified: Optional[datetime] = None
+    confidence_score: float = 0.0
 
 class FAQResponse(FAQModel):
     id: str
     created_at: datetime
+    # Inherits new fields automatically
 
 class SuggestedFAQModel(BaseModel):
     question: str

@@ -65,6 +65,25 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Application Components...")
     get_db_client()
+    
+    # Create Indexes for Performance
+    try:
+        if database.users_db is not None:
+             database.users_db.create_index([("created_at", -1)])
+             database.users_db.create_index("username", unique=True)
+        if database.calendar_db is not None:
+             database.calendar_db.create_index([("date", 1)])
+        if database.tickets_db is not None:
+             database.tickets_db.create_index([("created_at", -1)])
+        if database.documents_db is not None:
+             database.documents_db.create_index([("uploaded_at", -1)])
+        if database.faqs_db is not None:
+             database.faqs_db.create_index([("category", 1)])
+        if database.suggested_faqs_db is not None:
+             database.suggested_faqs_db.create_index([("created_at", -1)])
+    except Exception as e:
+        logger.error(f"Failed to create indexes: {e}")
+
     setup_rag_chain()
     await seed_admin()
     await seed_data()

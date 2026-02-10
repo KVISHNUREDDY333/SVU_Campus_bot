@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CampusConnect AI</title>
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=21">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link
@@ -179,8 +179,14 @@
                 <!-- Floating Input Area -->
                 <div class="input-area-wrapper">
                     <div class="input-container">
+                        <!-- Trap for browser autofill -->
+                        <input type="text" style="display:none; opacity:0; height:0; width:0; position:absolute;"
+                            tabindex="-1">
+                        <input type="password" style="display:none; opacity:0; height:0; width:0; position:absolute;"
+                            tabindex="-1">
+
                         <input type="text" id="user-input" placeholder="Ask anything... (Type or Speak)"
-                            autocomplete="off">
+                            autocomplete="off" name="chat-input-field">
                         <select id="lang-select" class="lang-select" title="Select Input/Output Language">
                             <option value="en">English</option>
                             <option value="te">Telugu</option>
@@ -301,6 +307,10 @@
                                 <button class="btn-submit" onclick="openUrlModal()"
                                     style="padding: 10px 18px; font-size: 13px; display: flex; align-items: center; gap: 8px; background: #3b82f6; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25);">
                                     <i class="fa-solid fa-link"></i> Add URL
+                                </button>
+                                <button class="btn-submit" onclick="openTextModal()"
+                                    style="padding: 10px 18px; font-size: 13px; display: flex; align-items: center; gap: 8px; background: var(--glass-bg); border: 1px solid var(--border-color); color: var(--text-primary); box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                                    <i class="fa-solid fa-file-lines"></i> Add Text
                                 </button>
                             </div>
                         </div>
@@ -591,17 +601,7 @@
                             </div>
                         </div>
 
-                        <div class="settings-card">
-                            <div class="card-header">
-                                <div class="card-icon" style="background: #ef4444;"><i
-                                        class="fa-solid fa-calendar-day"></i></div>
-                                <h4>Upcoming Exams</h4>
-                            </div>
-                            <div id="study-exams-list" style="margin-top: 15px;">
-                                <p style="text-align: center; color: var(--text-secondary); font-size: 13px;">Loading
-                                    exams...</p>
-                            </div>
-                        </div>
+
                     </div>
 
                 </div>
@@ -777,6 +777,41 @@
     </div>
 
     <!-- Upload Modal -->
+    <!-- Text Input Modal -->
+    <div id="text-modal" class="modal">
+        <div class="modal-content premium-modal">
+            <div class="modal-header">
+                <h3>Ingest Text Content</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Title / Source Name</label>
+                    <input type="text" id="text-title" class="search-input" placeholder="e.g., Department Overview"
+                        style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); margin-bottom: 15px;">
+                </div>
+                <div class="form-group">
+                    <label>Content</label>
+                    <textarea id="text-content" class="search-input" rows="8"
+                        placeholder="Paste text content here to generate FAQs and add to knowledge base..."
+                        style="width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); resize: vertical;"></textarea>
+                </div>
+
+                <div id="text-progress" style="display: none; margin-top: 15px;">
+                    <p id="text-status"
+                        style="font-size: 13px; text-align: center; color: var(--accent-color); font-weight: 500;">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i> Processing Text...
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeTextModal()">Cancel</button>
+                <button class="btn-primary" style="padding: 10px 24px; border-radius: 10px;" onclick="submitText()">
+                    <i class="fa-solid fa-file-import"></i> Ingest Text
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Upload Modal -->
     <div id="upload-modal" class="modal">
         <div class="modal-content premium-modal">
@@ -915,7 +950,7 @@
 
                 <div class="form-group">
                     <label>Full Name</label>
-                    <input type="text" id="reg-fullname" required placeholder="e.g. Vishnu Reddy">
+                    <input type="text" id="reg-fullname" required placeholder="Enter your full name">
                 </div>
                 <div class="form-group">
                     <label>Role</label>
@@ -988,7 +1023,7 @@
                     </div>
                     <div class="form-group" style="flex: 1;">
                         <label>Event Type</label>
-                        <select id="event-type" class="custom-select" style="background: white;">
+                        <select id="calendar-event-type" class="custom-select" style="background: white;">
                             <option value="Exam">📝 Exam</option>
                             <option value="Holiday">🌴 Holiday</option>
                             <option value="Event">🎉 Event / Workshop</option>
