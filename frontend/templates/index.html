@@ -4,7 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CampusConnect AI</title>
+    <meta name="description"
+        content="Official AI Assistant for Sri Venkateswara University (SVU). Get instant answers about admissions, courses, campus facilities, and more.">
+    <title>SVU Campus Connect | AI Assistant</title>
     <link rel="stylesheet" href="/static/style.css?v=21">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -46,6 +48,38 @@
             <div class="logo">
                 <img src="/static/images/svu_logo_final_v2.jpg" alt="SVU logo" class="logo-img">
                 <h2>CampusConnect AI</h2>
+            </div>
+            <div class="assistant-menu-wrapper" style="padding: 0 24px; margin-bottom: 24px; display: block; width: 100%;">
+                <h3 style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--text-primary); cursor: pointer; display: flex; align-items: center; gap: 8px;" onclick="toggleAssistantDropdown()">
+                    Assistant <i class="fa-solid fa-chevron-down" style="font-size: 12px; opacity: 0.7;"></i>
+                </h3>
+                <div class="assistant-dropdown" id="assistant-dropdown">
+                    <div class="dropdown-item" onclick="showSection('admin')">
+                        <i class="fa-solid fa-cogs"></i> Admin Settings
+                    </div>
+                    <div class="dropdown-item" onclick="showSection('dashboard')">
+                        <i class="fa-solid fa-chart-line"></i> Dashboard
+                    </div>
+                    <div class="dropdown-item" onclick="window.open('https://svuniversity.edu.in/', '_blank')">
+                        <i class="fa-solid fa-globe"></i> Official Website
+                    </div>
+                    <div class="dropdown-item" onclick="showSection('calendar')">
+                        <i class="fa-solid fa-calendar-days"></i> Calendar
+                    </div>
+                    <div class="dropdown-item" onclick="openLocations()">
+                        <i class="fa-solid fa-location-dot"></i> Locations
+                    </div>
+                    <div class="dropdown-item" onclick="showSection('study')">
+                        <i class="fa-solid fa-book-open-reader"></i> Study Buddy
+                    </div>
+                    <div class="dropdown-item" onclick="showSection('career')">
+                        <i class="fa-solid fa-briefcase"></i> Career Center
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-item danger" onclick="logout()">
+                        <i class="fa-solid fa-right-from-bracket"></i> Logout
+                    </div>
+                </div>
             </div>
             <nav>
                 <ul>
@@ -95,12 +129,9 @@
                 <!-- Header -->
                 <div class="header">
                     <div style="display: flex; align-items: center; gap: 16px;">
-                        <i class="fa-solid fa-bars mobile-toggle" id="sidebar-toggle"
-                            style="font-size: 18px; cursor: pointer; color: var(--text-primary);"
-                            onclick="toggleSidebar()"></i>
-                        <h3
-                            style="font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.2rem; color: var(--text-primary);">
-                            Assistant</h3>
+
+                        
+
                     </div>
 
                     <div class="header-actions"
@@ -108,6 +139,11 @@
 
 
 
+
+
+                        <!-- Home Button -->
+                        <i class="fa-solid fa-house" title="Home" onclick="showSection('chat')" 
+                           style="cursor: pointer; font-size: 18px;"></i>
 
                         <i class="fa-solid fa-moon" id="header-theme-icon" title="Toggle Theme" onclick="toggleTheme()"
                             style="cursor: pointer; font-size: 18px;"></i>
@@ -270,7 +306,7 @@
                         </div>
                         <table class="documents-table" style="width: 100%; border-collapse: collapse;">
                             <thead>
-                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                <tr>
                                     <th style="padding: 12px; text-align: left;">User</th>
                                     <th style="padding: 12px; text-align: left;">Role</th>
                                     <th style="padding: 12px; text-align: left;">Joined</th>
@@ -412,7 +448,7 @@
                         <table class="documents-table"
                             style="width: 100%; border-collapse: collapse; margin-top: 15px;">
                             <thead>
-                                <tr style="border-bottom: 1px solid var(--border-color);">
+                                <tr>
                                     <th style="text-align: left; padding: 12px;">ID</th>
                                     <th style="text-align: left; padding: 12px;">Subject</th>
                                     <th style="text-align: left; padding: 12px;">Category</th>
@@ -601,7 +637,24 @@
                             </div>
                         </div>
 
-
+                        <!-- Specialized AI Chat for Document -->
+                        <div class="settings-card" id="document-chat-card" style="display: none; height: 350px; flex-direction: column;">
+                            <div class="card-header">
+                                <div class="card-icon" style="background: var(--gradient-primary);"><i class="fa-solid fa-message"></i></div>
+                                <h4>Ask this Document</h4>
+                            </div>
+                            <div id="document-chat-history" style="flex: 1; overflow-y: auto; padding: 10px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.02);">
+                                <p style="color: var(--text-secondary); text-align: center; margin: auto;">Ask me anything about these notes!</p>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="document-chat-input" placeholder="Ask specific questions..." 
+                                    style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; font-size: 13px;"
+                                    onkeypress="if(event.key === 'Enter') askStudyBuddy()">
+                                <button class="btn-primary" onclick="askStudyBuddy()" style="width: 40px; height: 40px; min-width: 40px; padding: 0;">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
@@ -618,6 +671,11 @@
                             <div class="card-icon" style="background: #6366f1;"><i class="fa-solid fa-file-invoice"></i>
                             </div>
                             <h4>AI Resume Checker</h4>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Target Job Role (Optional)</label>
+                            <input type="text" id="resume-target-role" placeholder="e.g., Software Engineer, Data Analyst..." 
+                                style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none;">
                         </div>
                         <p style="font-size: 13px; color: var(--text-secondary); margin: 10px 0;">Paste your resume
                             text below for instant feedback based on SVU guidelines and industry standards.</p>
@@ -1114,18 +1172,39 @@
                     <label class="checkbox-container"
                         style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; color: var(--text-primary); margin-top: 15px;">
                         <input type="checkbox" id="resp-save-faq" checked>
-                        <span>Also save as public FAQ (in this category)</span>
+                        Save as verified FAQ in Knowledge Base
                     </label>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-ghost" onclick="closeTicketResponseModal()">Cancel</button>
-                <button class="btn-submit" onclick="submitTicketResponse()">
-                    <i class="fa-solid fa-paper-plane"></i> Send Response
-                </button>
+                <button class="btn-primary" onclick="submitTicketResponse()">Send Response</button>
             </div>
         </div>
     </div>
+
+    <!-- Document FAQs Modal -->
+    <div id="document-faqs-modal" class="modal">
+        <div class="modal-content premium-modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-eye"></i> Extracted FAQs</h3>
+                <p id="doc-faqs-title" style="color: rgba(255,255,255,0.7); font-size: 13px; margin: 5px 0 0 0;"></p>
+            </div>
+            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+                <div id="doc-faqs-list" class="faq-list">
+                    <!-- populated by script -->
+                </div>
+                <div id="doc-faqs-empty" style="text-align: center; padding: 40px; display: none;">
+                    <i class="fa-solid fa-folder-open" style="font-size: 40px; color: var(--text-secondary); opacity: 0.3;"></i>
+                    <p style="margin-top: 15px; color: var(--text-secondary);">No FAQs found for this document.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="closeDocFaqsModal()" style="padding: 8px 24px;">Close</button>
+            </div>
+        </div>
+    </div>
+
 
     <!-- Add User Modal -->
     <div id="add-user-modal" class="modal">

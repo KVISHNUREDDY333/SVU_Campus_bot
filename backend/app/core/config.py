@@ -18,5 +18,5 @@ class Config:
     
     # Model Configuration
     GROQ_MODEL_ID = os.getenv("GROQ_MODEL_ID", "llama-3.3-70b-versatile")
-    GROQ_FAST_MODEL_ID = os.getenv("GROQ_FAST_MODEL_ID", "llama-3.1-8b-instant")
+    GROQ_FAST_MODEL_ID = os.getenv("GROQ_FAST_MODEL_ID", "llama3-70b-8192")
 

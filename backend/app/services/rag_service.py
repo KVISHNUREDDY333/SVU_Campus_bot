@@ -7,7 +7,7 @@ from langchain.chains import create_history_aware_retriever, create_retrieval_ch
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_community.tools import DuckDuckGoSearchRun
@@ -161,7 +161,7 @@ retrieval_chain = None
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     return MongoDBChatMessageHistory(
         session_id=session_id,
-        client=database.mongo_client,
+        connection_string=Config.MONGODB_URI,
         database_name=Config.DB_NAME,
         collection_name="chat_history",
     )
@@ -344,10 +344,9 @@ def setup_rag_chain():
                 ]
             }
             return vector_db.as_retriever(
-                search_type="similarity_score_threshold",
+                search_type="similarity",
                 search_kwargs={
-                    "k": 5,  # Increased context window slightly
-                    "score_threshold": 0.4, 
+                    "k": 5,  # Let LLM filter relevance instead of strict threshold
                     "pre_filter": pre_filter
                 }
             )
@@ -360,23 +359,24 @@ def setup_rag_chain():
         )
 
         # 3. QA Chain (Use SMART LLM)
-        qa_system_prompt = MASTER_AGENT_PROMPT + """
+        qa_system_prompt = """You are SVU CampusConnect AI.
         
-        CURRENT CONTEXT (PHASE 5 EXECUTION):
-        - Current Time: {current_time}
-        - Known Conversation Entities: {entities}
-        - User Personal Info: {user_context}
-        - Language Instruction: {language_instruction}
+Context:
+{context}
 
-        Use the following pieces of retrieved context to answer the question.
-        
-        **CRITICAL INSTRUCTIONS**:
-        1. **Depth & Detail**: Elaborate on the 'Why' and 'How' if context permits.
-        2. **Formatting**: Use Markdown (Headers, Bold, Bullet points, Tables).
-        3. **Maps**: Append "[Map Link]" for locations.
-        4. **Safety**: Do not share private data.
-        
-        Context: {context}"""
+User Question:
+{input}
+
+Strict Rules:
+1. **Context-Only**: Answer strictly using the provided context. If the answer is not in the context, do NOT guess.
+2. **Relevance Check**: If the retrieved context is irrelevant to the user's question, or if it is empty, YOU MUST RESPOND WITH EXACTLY:
+   "No relevant information was found in the university database."
+3. **No Hallucinations**: Do not use external knowledge.
+4. **Professional Tone**: Be helpful and clear.
+
+Instructions:
+- Provide a structured answer based ONLY on the context.
+"""
         
         qa_prompt = ChatPromptTemplate.from_messages(
             [
@@ -386,8 +386,23 @@ def setup_rag_chain():
             ]
         )
         
+        # Helper to format docs
         def format_docs(docs):
-            return "\n\n".join(doc.page_content for doc in docs) if isinstance(docs, list) else ""
+            if not docs:
+                return ""
+            return "\n\n".join(doc.page_content for doc in docs)
+
+        # Safety layer to prevent hallucinations on empty/irrelevant context
+        def safe_rag_chain(input_dict):
+            context_str = input_dict["context"]
+            
+            # Strict Context Check
+            if len(context_str.strip()) < 20:
+                return "No relevant information was found in the university database."
+            
+            # If context is sufficient, pass to LLM
+            # We need to reconstruction the inputs for the prompt
+            return (qa_prompt | smart_llm | StrOutputParser()).invoke(input_dict)
 
         question_answer_chain = (
             {
@@ -400,9 +415,7 @@ def setup_rag_chain():
                 "language_instruction": lambda x: x.get("language_instruction", "Reply in English"),
                 "user_username": lambda x: x.get("user_username", "guest")
             }
-            | qa_prompt
-            | smart_llm 
-            | StrOutputParser()
+            | RunnableLambda(safe_rag_chain)
         )
         
         retrieval_chain = RunnableWithMessageHistory(
@@ -661,9 +674,9 @@ async def extract_faqs_from_text(text: str):
     if not llm:
          return []
     
-    # Split text into manageable chunks (approx 15k chars ≈ 3-4k tokens)
-    # This allows processing unlimited text size by breaking it down.
-    chunk_size = 15000
+    # Split text into manageable chunks (approx 6k chars ≈ 1.5k tokens)
+    # Reduced from 15k to ensure higher focus and maximum recall per chunk.
+    chunk_size = 6000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
     
     all_faqs = []
@@ -676,22 +689,31 @@ async def extract_faqs_from_text(text: str):
 
     for i, chunk in enumerate(chunks):
         prompt = f"""
-        PHASE 2: FAQ GENERATION (Mode: MAX RECALL)
+        PHASE 2: FAQ GENERATION (Mode: MAXIMUM DENSITY & RECALL)
         
         Analyze the text fragment (Part {i+1}/{len(chunks)}).
         
-        **Goal**: Generate the MAXIMUM possible number of FAQs.
+        **Goal**: Extract the MAXIMUM POSSIBLE number of detailed FAQ pairs. 
+        Don't skip small details. Every date, name, contact info, procedure, and eligibility rule must be converted into a Q&A pair.
+        
+        **Target Information**:
+        - Admission dates and procedures
+        - Exam schedules and rules
+        - Hostel fees and facilities
+        - Department contact details
+        - Scholarships and eligibility
+        - Any official university regulation
+        
         **Source Text**:
         {chunk}
         
         **Strict Format**:
-        Return ONLY valid JSON. Do not include any markdown formatting (like ```json ... ```), preamble, or explanation.
-        The format must be exact:
+        Return ONLY valid JSON. The format must be exact:
         {{
             "faqs": [
                 {{
-                    "question": "...",
-                    "answer": "...",
+                    "question": "Exactly what the user might ask?",
+                    "answer": "Detailed, complete answer from source.",
                     "category": "Admissions|Exams|Hostels|...",
                     "keywords": ["tag1", "tag2"]
                 }}

@@ -8,6 +8,7 @@ from ..services import rag_service
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 
+from ..models.academic import StudyBuddyChatRequest
 import shutil
 from bson import ObjectId
 
@@ -15,6 +16,65 @@ router = APIRouter(prefix="/study-buddy", tags=["Study Buddy"])
 
 UPLOAD_DIR = "backend/uploads/study_materials"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@router.post("/chat")
+async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = Depends(get_current_user)):
+    material = database.study_materials_db.find_one({"_id": ObjectId(req.material_id), "user_id": current_user.username})
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    try:
+        from ..services.rag_service import rag_service
+        if not rag_service.vector_db:
+            rag_service.setup_rag_chain()
+        
+        # We perform a similarity search filtered by filename and user_id
+        # This ensures the context is ONLY from this specific document
+        filter_metadata = {
+            "source": material["filename"],
+            "user_id": current_user.username
+        }
+        
+        # Use existing vector_db for search
+        docs = rag_service.vector_db.similarity_search(
+            req.query, 
+            k=5, 
+            filter=filter_metadata
+        )
+        
+        context = "\n\n".join([doc.page_content for doc in docs])
+        
+        if not context.strip():
+            # Fallback if no specific chunks found (maybe metadata mismatch)
+            # Try searching just by filename
+            docs = rag_service.vector_db.similarity_search(req.query, k=5, filter={"source": material["filename"]})
+            context = "\n\n".join([doc.page_content for doc in docs])
+
+        prompt = f"""
+        You are an academic assistant helping a student with their lecture notes.
+        DOCUMENT: {material['filename']}
+        
+        CONTEXT FROM DOCUMENT:
+        {context}
+        
+        USER QUESTION:
+        {req.query}
+        
+        INSTRUCTIONS:
+        1. Answer based ONLY on the context provided above.
+        2. If the answer is not in the context, say: "I couldn't find specific information about that in this document, but I can help you with what's available."
+        3. Be encouraging and helpful.
+        """
+        
+        if not rag_service.llm:
+             rag_service.setup_rag_chain()
+             
+        response = await rag_service.llm.ainvoke(prompt)
+        return {"response": response.content, "context_used": len(docs) > 0}
+
+    except Exception as e:
+        print(f"Study Chat Error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Chat Error: {str(e)}")
 
 @router.post("/upload")
 async def upload_material(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):

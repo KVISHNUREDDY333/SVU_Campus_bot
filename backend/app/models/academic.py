@@ -15,6 +15,10 @@ class ExamDateModel(BaseModel):
     department: str = "Common"
 
 
-
 class ResumeAnalysisRequest(BaseModel):
     resume_text: str
+    target_role: Optional[str] = None
+
+class StudyBuddyChatRequest(BaseModel):
+    material_id: str
+    query: str

@@ -23,9 +23,13 @@ async def check_resume(req: ResumeAnalysisRequest):
     5. Internships: Highlight responsibilities and outcomes.
     """
     
+    target_role_context = f"Target Job Role: {req.target_role}" if req.target_role else "Target Job Role: Not Specified (General Analysis)"
+    
     prompt = f"""
     You are an elite Career Strategy Expert and Technical Recruiter with deep knowledge of SV University standards and global industry expectations. 
     Analyze the following resume text with extreme detail and provide a comprehensive report.
+    
+    {target_role_context}
     
     Guidelines to consider:
     {guidelines}
@@ -42,10 +46,10 @@ async def check_resume(req: ResumeAnalysisRequest):
     Point out missing keywords, vague duty descriptions, or gaps in information specific to SVU guidelines.
     
     ### 💻 Technical & Soft Skills Analysis
-    Evaluate the skills listed. Are they relevant for current market trends? Suggest 3-5 high-demand skills to add based on the candidate's field.
+    Evaluate the skills listed. Are they relevant for the target role? Suggest 3-5 high-demand skills to add based on the candidate's field and target role.
     
     ### 🚀 Actionable Roadmap
-    Provide 5 specific, high-impact bullet points the candidate should change or add IMMEDIATELY to double their interview chances.
+    Provide 5 specific, high-impact bullet points the candidate should change or add IMMEDIATELY to double their interview chances for the target role.
     
     ### 🛠 ATS Compatibility Check
     Analyze how well this resume would be parsed by Applicant Tracking Systems. 

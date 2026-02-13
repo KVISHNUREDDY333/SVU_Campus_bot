@@ -108,7 +108,25 @@ document.addEventListener("DOMContentLoaded", () => {
     setTimeout(() => {
         showSection('chat');
     }, 100);
+
+    // Close Dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const wrapper = document.querySelector('.assistant-menu-wrapper');
+        const dropdown = document.getElementById('assistant-dropdown');
+        if (wrapper && !wrapper.contains(event.target)) {
+            dropdown.classList.remove('active');
+        }
+    });
 });
+
+
+// --- Dropdown Logic ---
+function toggleAssistantDropdown() {
+    const dropdown = document.getElementById('assistant-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
+}
 
 
 // --- Auth Functions ---
@@ -796,18 +814,28 @@ async function loadDocuments() {
 function renderDocuments(docs, limit = null) {
     const tbody = document.getElementById('documents-table-body');
     if (!tbody) return;
-    const container = tbody.parentElement.parentElement; // table -> .documents-list-container -> .settings-card
-    // Add View More button if not exists
+
+    // Safety check for container traversal
+    let container = tbody.parentElement;
+    if (container) container = container.parentElement;
+    if (container && !container.classList.contains('settings-card')) {
+        if (container.parentElement && container.parentElement.classList.contains('settings-card')) {
+            container = container.parentElement;
+        }
+    }
 
     // Add View More button if not exists
-    let btn = container.querySelector('.btn-view-more');
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.className = 'btn-secondary btn-view-more';
-        btn.style.width = '100%';
-        btn.style.marginTop = '15px';
-        btn.style.textAlign = 'center';
-        container.appendChild(btn);
+    let btn = null;
+    if (container) {
+        btn = container.querySelector('.btn-view-more');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'btn-secondary btn-view-more';
+            btn.style.width = '100%';
+            btn.style.marginTop = '15px';
+            btn.style.textAlign = 'center';
+            container.appendChild(btn);
+        }
     }
 
     tbody.innerHTML = '';
@@ -822,8 +850,19 @@ function renderDocuments(docs, limit = null) {
 
     visibleDocs.forEach(doc => {
         const dateStr = new Date(doc.uploaded_at || doc.upload_date).toLocaleDateString();
-        const iconClass = (doc.type === 'url') ? 'fa-link' : 'fa-file-pdf';
-        const typeLabel = (doc.type === 'url') ? 'URL' : 'PDF';
+        let iconClass = 'fa-file-pdf';
+        let typeLabel = 'PDF';
+        let badgeClass = 'success';
+
+        if (doc.type === 'url') {
+            iconClass = 'fa-link';
+            typeLabel = 'URL';
+            badgeClass = 'warning';
+        } else if (doc.type === 'text') {
+            iconClass = 'fa-pen';
+            typeLabel = 'TEXT';
+            badgeClass = 'info';
+        }
 
         tbody.innerHTML += `
             <tr>
@@ -831,11 +870,14 @@ function renderDocuments(docs, limit = null) {
                     <i class="fa-solid ${iconClass}" style="color: var(--accent-color);"></i>
                     ${escapeHtml(doc.filename)}
                 </td>
-                <td><span class="badge ${doc.type === 'url' ? 'warning' : 'success'}">${typeLabel}</span></td>
+                <td><span class="badge ${badgeClass}">${typeLabel}</span></td>
                 <td style="text-align: center;">${doc.id || doc.chunks}</td>
                 <td style="text-align: center;">${doc.uploaded_by || 'Admin'}</td>
-                <td style="text-align: right;">
-                    <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;">
+                <td style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button class="icon-btn" onclick="viewDocumentFAQs('${doc._id}', '${escapeHtml(doc.filename)}')" title="View Extracted FAQs" style="color: var(--primary-color);">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                    <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;" title="Delete Document">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </td>
@@ -860,20 +902,152 @@ function renderDocuments(docs, limit = null) {
 
 async function deleteDocument(docId) {
     if (!confirm("Are you sure you want to delete this document?")) return;
-
     try {
         const res = await fetch(`${API_URL}/admin/documents/${docId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
-
         if (res.ok) {
-            alert("Document deleted.");
+            showStatusPopup("Document deleted.");
             loadDocuments();
-        } else {
-            alert("Failed to delete document.");
         }
     } catch (e) { console.error(e); }
+}
+
+async function viewDocumentFAQs(docId, filename) {
+    const modal = document.getElementById('document-faqs-modal');
+    const title = document.getElementById('doc-faqs-title');
+    const list = document.getElementById('doc-faqs-list');
+    const empty = document.getElementById('doc-faqs-empty');
+
+    if (!modal || !list) return;
+
+    title.textContent = `Source: ${filename}`;
+    list.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading FAQs...</div>';
+    empty.style.display = 'none';
+    modal.style.display = 'flex';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/documents/${docId}/faqs`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch FAQs");
+        const faqs = await res.json();
+
+        list.innerHTML = '';
+        if (faqs.length === 0) {
+            empty.style.display = 'block';
+        } else {
+            faqs.forEach(f => {
+                const faqItem = document.createElement('div');
+                faqItem.className = 'faq-item';
+                faqItem.id = `faq-item-${f.id}`;
+                faqItem.style.marginBottom = '20px';
+                faqItem.style.padding = '15px';
+                faqItem.style.background = 'var(--bg-secondary)';
+                faqItem.style.borderRadius = '8px';
+                faqItem.style.border = '1px solid var(--border-color)';
+
+                faqItem.innerHTML = `
+                    <div class="faq-display-mode">
+                        <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 8px;">Q: ${escapeHtml(f.question)}</div>
+                        <div style="color: var(--text-primary); line-height: 1.5;">A: ${escapeHtml(f.answer)}</div>
+                        <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
+                            <span class="badge info" style="font-size: 10px;">${escapeHtml(f.category)}</span>
+                            ${f.verified ? '<span class="badge success" style="font-size: 10px;">VERIFIED</span>' : ''}
+                            <button onclick="enableEditFAQ('${f.id}')" style="margin-left: auto; background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 12px;">
+                                <i class="fa-solid fa-pen"></i> Edit
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="faq-edit-mode" style="display: none;">
+                        <input type="text" id="edit-q-${f.id}" value="${escapeHtml(f.question)}" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                        <textarea id="edit-a-${f.id}" rows="3" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">${escapeHtml(f.answer)}</textarea>
+                        <select id="edit-c-${f.id}" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                            <option value="General" ${f.category === 'General' ? 'selected' : ''}>General</option>
+                            <option value="Academic" ${f.category === 'Academic' ? 'selected' : ''}>Academic</option>
+                            <option value="Admissions" ${f.category === 'Admissions' ? 'selected' : ''}>Admissions</option>
+                            <option value="Facilities" ${f.category === 'Facilities' ? 'selected' : ''}>Facilities</option>
+                        </select>
+                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                            <button onclick="cancelEditFAQ('${f.id}')" class="btn-secondary" style="font-size: 12px; padding: 6px 12px;">Cancel</button>
+                            <button onclick="updateFAQ('${f.id}')" class="btn-primary" style="font-size: 12px; padding: 6px 12px;">Save</button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(faqItem);
+            });
+        }
+    } catch (e) {
+        console.error(e);
+        list.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">Error: ${e.message}</div>`;
+    }
+}
+
+function closeDocFaqsModal() {
+    const modal = document.getElementById('document-faqs-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function enableEditFAQ(id) {
+    const item = document.getElementById(`faq-item-${id}`);
+    if (!item) return;
+    item.querySelector('.faq-display-mode').style.display = 'none';
+    item.querySelector('.faq-edit-mode').style.display = 'block';
+}
+
+function cancelEditFAQ(id) {
+    const item = document.getElementById(`faq-item-${id}`);
+    if (!item) return;
+    item.querySelector('.faq-display-mode').style.display = 'block';
+    item.querySelector('.faq-edit-mode').style.display = 'none';
+}
+
+async function updateFAQ(id) {
+    const q = document.getElementById(`edit-q-${id}`).value;
+    const a = document.getElementById(`edit-a-${id}`).value;
+    const c = document.getElementById(`edit-c-${id}`).value;
+
+    if (!q || !a) {
+        alert("Question and Answer are required");
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ question: q, answer: a, category: c })
+        });
+
+        if (res.ok) {
+            showStatusPopup("FAQ Updated Successfully");
+            // Refresh the specific item or the list. 
+            // For simplicity, let's refresh the current view via viewDocumentFAQs
+            // accessing the variables from closure might be tricky without passing source info.
+            // But we can just reload the modal content if we had the docId. 
+            // Since we don't duplicate state, let's just update the DOM to reflect changes immediately
+            // which is faster and better UX.
+            
+            const item = document.getElementById(`faq-item-${id}`);
+            if (item) {
+                 item.querySelector('.faq-display-mode div:nth-child(1)').innerHTML = `Q: ${escapeHtml(q)}`;
+                 item.querySelector('.faq-display-mode div:nth-child(2)').innerHTML = `A: ${escapeHtml(a)}`;
+                 item.querySelector('.badge.info').textContent = escapeHtml(c);
+                 cancelEditFAQ(id);
+            }
+        } else {
+            alert("Failed to update FAQ");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Connection Error");
+    }
 }
 
 
@@ -1125,9 +1299,8 @@ function hideTypingIndicator() {
 }
 
 // Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
-async function loadSystemHealth() {
-    // Function removed - see optimized version below
-}
+// loadSystemHealth definition moved to Admin section
+
 
 function scrollToBottom() {
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -1625,6 +1798,108 @@ function stopVoiceInput() {
 }
 // --- End Voice Assistant ---
 
+// --- Navigation Logic ---
+function showSection(sectionId) {
+    // 1. Hide all sections
+    document.querySelectorAll('.content-section').forEach(sec => {
+        sec.style.display = 'none';
+        sec.classList.remove('active-section'); // Animation hook
+    });
+
+    // 2. Show target section
+    const target = document.getElementById(sectionId + '-section');
+    if (target) {
+        target.style.display = 'block';
+        setTimeout(() => target.classList.add('active-section'), 10);
+    }
+
+    // 3. Update Sidebar Active State
+    document.querySelectorAll('nav ul li').forEach(li => li.classList.remove('active'));
+    
+    // Try to find link by ID first (more reliable)
+    let activeLink = document.getElementById('nav-' + sectionId);
+    
+    // Fallback to onclick matching if ID not found
+    if (!activeLink) {
+        activeLink = document.querySelector(`nav ul li[onclick*="'${sectionId}'"]`);
+    }
+    
+    if (activeLink) activeLink.classList.add('active');
+
+    // 4. Dynamic Data Loading
+    if (sectionId === 'dashboard') loadDashboard();
+    if (sectionId === 'admin') {
+        loadUsers();
+        loadDocuments();
+        loadFAQs();
+        loadCalendarAdmin();
+        loadSystemHealth();
+        loadSuggestedFAQs();
+        loadAllTickets();
+    }
+    if (sectionId === 'calendar') loadCalendar();
+    if (sectionId === 'study') loadStudyBuddy();
+    if (sectionId === 'career') loadCareerCenter();
+
+    // Mobile: Close sidebar after selection
+    if (window.innerWidth <= 768) {
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (sidebar) sidebar.classList.remove('active');
+        if (overlay) overlay.classList.remove('active');
+    }
+}
+
+// --- Dashboard Logic ---
+
+
+async function loadDashboard() {
+    if (!ACCESS_TOKEN) return;
+
+    try {
+        const res = await fetch(`${API_URL}/dashboard-stats`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        // Update Counts
+        animateValue("total-queries", 0, data.total_queries, 1000);
+        animateValue("active-users", 0, data.active_users, 1000);
+
+        // Update Charts
+        renderCharts(data.role_distribution, data.sentiment_stats);
+
+    } catch (e) {
+        console.error("Dashboard Load Error", e);
+    }
+}
+
+function animateValue(id, start, end, duration) {
+    const obj = document.getElementById(id);
+    if (!obj) return;
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        obj.innerHTML = Math.floor(progress * (end - start) + start);
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        }
+    };
+    window.requestAnimationFrame(step);
+}
+
+// --- Document Management ---
+
+
+function scrollToBottom() {
+    const chatBox = document.getElementById('chat-box');
+    if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+}
+
 // Admin Logic
 // Global variable to store FAQs
 let allFAQs = [];
@@ -1784,7 +2059,6 @@ async function loadSuggestedFAQs() {
     if (USER_ROLE !== 'admin') return;
 
     try {
-
         const res = await fetch(`${API_URL}/admin/suggested-faqs`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
@@ -1792,55 +2066,99 @@ async function loadSuggestedFAQs() {
 
         const suggestions = await res.json();
         window.allSuggestions = suggestions; // Store for lookup
-
-        const tbody = document.getElementById('suggested-faqs-table-body');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-        if (suggestions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No suggestions pending.</td></tr>';
-            return;
-        }
-
-        suggestions.forEach(s => {
-            const dateStr = new Date(s.timestamp).toLocaleDateString();
-            const initial = s.suggested_by.charAt(0).toUpperCase();
-
-            tbody.innerHTML += `
-            <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle; cursor: pointer;" 
-                onclick="openReviewModal('${s.id}')"
-                class="review-row">
-                <td style="padding: 16px;">
-                    <div class="suggested-faq-content">
-                        <div class="suggested-faq-question">${escapeHtml(s.question)}</div>
-                        <div class="suggested-faq-answer">${escapeHtml(s.answer)}</div>
-                        <div class="suggested-faq-meta">
-                            <span class="badge success" style="font-size: 9px; padding: 2px 6px;">${escapeHtml(s.category || 'General')}</span>
-                        </div>
-                    </div>
-                </td>
-                <td style="padding: 16px;">
-                    <div class="contributor-item">
-                        <div class="contributor-avatar">${initial}</div>
-                        <div class="contributor-info">
-                            <div class="contributor-name">${escapeHtml(s.suggested_by)}</div>
-                            <div class="contributor-date">${dateStr}</div>
-                        </div>
-                    </div>
-                </td>
-                <td style="padding: 16px; text-align: right;">
-                    <div class="action-buttons">
-                        <button class="btn-approve" onclick="event.stopPropagation(); approveSuggestion('${s.id}')">
-                            <i class="fa-solid fa-check"></i> Approve
-                        </button>
-                        <button class="btn-reject" onclick="event.stopPropagation(); rejectSuggestion('${s.id}')">
-                            Reject
-                        </button>
-                    </div>
-                </td>
-            </tr>`;
-        });
+        renderSuggestedFAQsTable(suggestions, 3);
     } catch (e) { console.error("Load Suggestions Error", e); }
+}
+
+function renderSuggestedFAQsTable(suggestions, limit = null) {
+    const tbody = document.getElementById('suggested-faqs-table-body');
+    if (!tbody) return;
+
+    // Safety check for container traversal
+    let container = tbody.parentElement;
+    if (container) container = container.parentElement;
+    if (container && !container.classList.contains('settings-card')) {
+        if (container.parentElement && container.parentElement.classList.contains('settings-card')) {
+            container = container.parentElement;
+        }
+    }
+
+    // Add View More button if not exists
+    let btn = null;
+    if (container) {
+        btn = container.querySelector('.btn-view-more');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'btn-secondary btn-view-more';
+            btn.style.width = '100%';
+            btn.style.marginTop = '15px';
+            btn.style.textAlign = 'center';
+            container.appendChild(btn);
+        }
+    }
+
+    tbody.innerHTML = '';
+    if (suggestions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No suggestions pending.</td></tr>';
+        btn.style.display = 'none';
+        return;
+    }
+
+    const showCount = limit ? limit : suggestions.length;
+    const visibleSuggestions = suggestions.slice(0, showCount);
+
+    visibleSuggestions.forEach(s => {
+        const dateStr = new Date(s.timestamp).toLocaleDateString();
+        const initial = s.suggested_by.charAt(0).toUpperCase();
+
+        tbody.innerHTML += `
+        <tr style="border-bottom: 1px solid var(--border-color); vertical-align: middle; cursor: pointer;" 
+            onclick="openReviewModal('${s.id}')"
+            class="review-row">
+            <td style="padding: 16px;">
+                <div class="suggested-faq-content">
+                    <div class="suggested-faq-question">${escapeHtml(s.question)}</div>
+                    <div class="suggested-faq-answer">${escapeHtml(s.answer)}</div>
+                    <div class="suggested-faq-meta">
+                        <span class="badge success" style="font-size: 9px; padding: 2px 6px;">${escapeHtml(s.category || 'General')}</span>
+                    </div>
+                </div>
+            </td>
+            <td style="padding: 16px;">
+                <div class="contributor-item">
+                    <div class="contributor-avatar">${initial}</div>
+                    <div class="contributor-info">
+                        <div class="contributor-name">${escapeHtml(s.suggested_by)}</div>
+                        <div class="contributor-date">${dateStr}</div>
+                    </div>
+                </div>
+            </td>
+            <td style="padding: 16px; text-align: right;">
+                <div class="action-buttons">
+                    <button class="btn-approve" onclick="event.stopPropagation(); approveSuggestion('${s.id}')">
+                        <i class="fa-solid fa-check"></i> Approve
+                    </button>
+                    <button class="btn-reject" onclick="event.stopPropagation(); rejectSuggestion('${s.id}')">
+                        Reject
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    });
+
+    // Toggle Button Logic
+    if (suggestions.length <= 3) {
+        btn.style.display = 'none';
+    } else {
+        btn.style.display = 'block';
+        if (limit) {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${suggestions.length - 3} more)`;
+            btn.onclick = () => renderSuggestedFAQsTable(suggestions, null);
+        } else {
+            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+            btn.onclick = () => renderSuggestedFAQsTable(suggestions, 3);
+        }
+    }
 }
 
 function openReviewModal(id) {
@@ -2182,23 +2500,51 @@ function addToGoogleCalendar(title, dateStr, desc) {
 }
 
 // --- Calendar Admin Logic ---
-async function loadCalendarAdmin() {
-    // Function removed - see optimized version below
+
+async function loadAcademicCalendar() {
+    if (!ACCESS_TOKEN) return;
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) return;
+        const events = await res.json();
+        window.allCalendarEvents = events;
+        renderCalendarAdminTable(events, 3);
+    } catch (e) {
+        console.error("Load Calendar Error", e);
+    }
 }
+
+// Alias for compatibility
+async function loadCalendarAdmin() {
+    return loadAcademicCalendar();
+}
+
 
 function renderCalendarAdminTable(events, limit = null) {
     const tbody = document.getElementById('calendar-admin-table-body');
-    const container = tbody.parentElement.parentElement; // table -> div -> div.settings-card
+    // Safety check for container traversal
+    let container = tbody.parentElement;
+    if (container) container = container.parentElement;
+    if (container && !container.classList.contains('settings-card')) {
+        if (container.parentElement && container.parentElement.classList.contains('settings-card')) {
+            container = container.parentElement;
+        }
+    }
 
     // Add View More button if not exists
-    let btn = container.querySelector('.btn-view-more');
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.className = 'btn-secondary btn-view-more';
-        btn.style.width = '100%';
-        btn.style.marginTop = '15px';
-        btn.style.textAlign = 'center';
-        container.appendChild(btn);
+    let btn = null;
+    if (container) {
+        btn = container.querySelector('.btn-view-more');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'btn-secondary btn-view-more';
+            btn.style.width = '100%';
+            btn.style.marginTop = '15px';
+            btn.style.textAlign = 'center';
+            container.appendChild(btn);
+        }
     }
 
     if (events.length === 0) {
@@ -2281,9 +2627,8 @@ async function saveCalendarEvent() {
     }
 }
 
-async function deleteCalendarEvent(id) {
-    // Function removed - see optimized version below
-}
+// deleteCalendarEvent defined below
+
 
 async function loadAllTickets() {
     if (!ACCESS_TOKEN) return;
@@ -2305,17 +2650,28 @@ async function loadAllTickets() {
 function renderTicketsTable(tickets, limit = null) {
     const tbody = document.getElementById('tickets-table-body');
     if (!tbody) return;
-    const container = tbody.parentElement.parentElement;
+
+    // Safety check for container traversal
+    let container = tbody.parentElement;
+    if (container) container = container.parentElement;
+    if (container && !container.classList.contains('settings-card')) {
+        if (container.parentElement && container.parentElement.classList.contains('settings-card')) {
+            container = container.parentElement;
+        }
+    }
 
     // Add View More button if not exists
-    let btn = container.querySelector('.btn-view-more');
-    if (!btn) {
-        btn = document.createElement('button');
-        btn.className = 'btn-secondary btn-view-more';
-        btn.style.width = '100%';
-        btn.style.marginTop = '15px';
-        btn.style.textAlign = 'center';
-        container.appendChild(btn);
+    let btn = null;
+    if (container) {
+        btn = container.querySelector('.btn-view-more');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.className = 'btn-secondary btn-view-more';
+            btn.style.width = '100%';
+            btn.style.marginTop = '15px';
+            btn.style.textAlign = 'center';
+            container.appendChild(btn);
+        }
     }
 
     tbody.innerHTML = '';
@@ -2726,9 +3082,8 @@ async function submitText() {
 }
 
 // --- Resume Checker Logic ---
-async function checkResume() {
-    // Function removed - see optimized version below
-}
+// checkResume defined below
+
 
 // --- Original Locations Logic Below ---
 function openLocations() {
@@ -2990,10 +3345,10 @@ async function loadUsers() {
         });
         if (!res.ok) return;
         const users = await res.json();
-        // Render all fetched users (up to 50)
-        renderUsersTable(users, 50);
-
-        // Show total count hint or Load More button logic could go here
+        // Store globally for see more/less functionality
+        window.allUsers = users;
+        // Render only first 3 users initially
+        renderUsersTable(users, 3);
     } catch (e) {
         console.error("Load Users Error", e);
     }
@@ -3105,20 +3460,12 @@ async function deleteUser(id) {
     } catch (e) { console.error(e); }
 }
 
-// --- User Management Data Loading ---
-// Duplicate loadAllUsers removed
-
-// --- Academic Calendar Data Loading ---
-// Duplicate loadAcademicCalendar removed
+// --- Data Loading Placeholders Removed ---
 
 // --- Data Mutation Logic (User & Calendar) ---
 
 // 1. User Creation Logic
 const addUserModal = document.getElementById('add-user-modal');
-
-
-
-// Function removed - see optimized version below
 
 // 2. Calendar Event Logic
 const calendarModal = document.getElementById('calendar-event-modal');
@@ -3186,42 +3533,55 @@ function getEventTypeBadge(type) {
     return typeMap[type] || 'info';
 }
 
+
+
 async function loadCalendarAdmin() {
-    if (!ACCESS_TOKEN) return;
-    const tbody = document.getElementById('calendar-admin-table-body');
-    if (!tbody) return;
+    const listEl = document.getElementById('calendar-events-list');
+    if (!listEl) return;
+
+    listEl.innerHTML = '<p class="loading-text">Loading events...</p>';
 
     try {
-        const res = await fetch(`${API_URL}/calendar?limit=20`, {
+        const res = await fetch(`${API_URL}/admin/calendar`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
-        if (!res.ok) return;
-        const events = await res.json();
 
-        tbody.innerHTML = '';
-        if (events.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">No events found.</td></tr>';
-            return;
-        }
+        if (res.ok) {
+            const events = await res.json();
+            listEl.innerHTML = '';
 
-        events.forEach(e => {
-            const badge = getEventTypeBadge(e.type);
-            tbody.innerHTML += `
-            <tr>
-                <td style="padding: 12px;">${e.date}</td>
-                <td style="padding: 12px; font-weight: 500;">${escapeHtml(e.title)}</td>
-                <td style="padding: 12px;"><span class="badge ${badge}">${escapeHtml(e.type)}</span></td>
-                <td style="padding: 12px; text-align: right;">
-                    <button class="icon-btn" onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444;">
+            if (events.length === 0) {
+                listEl.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-secondary);">No events scheduled.</p>';
+                return;
+            }
+
+            events.forEach(e => {
+                const badge = getEventTypeBadge(e.type);
+                listEl.innerHTML += `
+                <div class="calendar-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);">
+                    <div style="flex: 1;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                            <span class="badge ${badge}">${e.type}</span>
+                            <span style="font-weight: 600; color: var(--text-primary);">${escapeHtml(e.title)}</span>
+                        </div>
+                        <div style="font-size: 13px; color: var(--text-secondary);">
+                            <i class="fa-regular fa-calendar"></i> ${e.date} &nbsp;|&nbsp; ${escapeHtml(e.description)}
+                        </div>
+                    </div>
+                    <button class="icon-btn" onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444;" title="Delete">
                         <i class="fa-solid fa-trash"></i>
                     </button>
-                </td>
-            </tr>`;
-        });
+                </div>`;
+            });
+        } else {
+             listEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load events.</p>';
+        }
     } catch (e) {
-        console.error("Load Calendar Admin Error", e);
+        console.error(e);
+        listEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Connection error.</p>';
     }
 }
+
 window.loadCalendarAdmin = loadCalendarAdmin;
 
 async function deleteCalendarEvent(eventId) {
@@ -3425,6 +3785,7 @@ async function deleteStudyMaterial(id) {
     } catch (e) { console.error(e); }
 }
 
+let currentStudyMaterialId = null;
 
 async function summarizeMaterial(id) {
     const summaryEl = document.getElementById('material-summary-content');
@@ -3443,9 +3804,70 @@ async function summarizeMaterial(id) {
 
         const data = await res.json();
         summaryEl.innerHTML = `<div class="markdown-body">${marked.parse(data.summary)}</div>`;
+        
+        // Setup Chat
+        currentStudyMaterialId = id;
+        const chatCard = document.getElementById('document-chat-card');
+        if (chatCard) {
+            chatCard.style.display = 'flex';
+            const history = document.getElementById('document-chat-history');
+            if (history) history.innerHTML = '<p style="color: var(--text-secondary); text-align: center; margin: auto;">Notes loaded. Ask me anything about them!</p>';
+        }
     } catch (e) {
         summaryEl.innerHTML = `<p style="color: #ef4444;">Failed to generate summary: ${e.message}</p>`;
         console.error(e);
+    }
+}
+
+async function askStudyBuddy() {
+    if (!currentStudyMaterialId) return;
+    const input = document.getElementById('document-chat-input');
+    const history = document.getElementById('document-chat-history');
+    const query = input.value.trim();
+    
+    if (!query) return;
+    
+    // Add user message to mini-history
+    const userMsg = document.createElement('div');
+    userMsg.style.cssText = "align-self: flex-end; background: var(--gradient-primary); color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 85%; font-size: 13px;";
+    userMsg.textContent = query;
+    history.appendChild(userMsg);
+    input.value = '';
+    
+    // Typing indicator
+    const typing = document.createElement('div');
+    typing.innerHTML = '<i class="fa-solid fa-ellipsis fa-fade"></i> AI is reading...';
+    typing.style.cssText = "align-self: flex-start; color: var(--text-secondary); font-size: 11px; margin-top: 5px;";
+    history.appendChild(typing);
+    history.scrollTop = history.scrollHeight;
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ material_id: currentStudyMaterialId, query: query })
+        });
+        
+        history.removeChild(typing);
+        
+        if (!res.ok) throw new Error("Chat failed");
+        const data = await res.json();
+        
+        const aiMsg = document.createElement('div');
+        aiMsg.style.cssText = "align-self: flex-start; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 85%; font-size: 13px; line-height: 1.4;";
+        aiMsg.innerHTML = marked.parse(data.response);
+        history.appendChild(aiMsg);
+        history.scrollTop = history.scrollHeight;
+        
+    } catch (e) {
+        if (typing.parentNode) history.removeChild(typing);
+        const errorMsg = document.createElement('div');
+        errorMsg.style.cssText = "align-self: center; color: #ef4444; font-size: 11px;";
+        errorMsg.textContent = "Connection error.";
+        history.appendChild(errorMsg);
     }
 }
 
@@ -3459,6 +3881,7 @@ async function checkResume() {
     const textInput = document.getElementById('resume-text-input');
     const text = textInput ? textInput.value.trim() : "";
     const feedbackEl = document.getElementById('resume-feedback');
+    const targetRole = document.getElementById('resume-target-role')?.value.trim();
 
     if (!text) {
         alert("Please paste your resume text first.");
@@ -3474,7 +3897,10 @@ async function checkResume() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${ACCESS_TOKEN}`
             },
-            body: JSON.stringify({ resume_text: text })
+            body: JSON.stringify({ 
+                resume_text: text,
+                target_role: targetRole || null
+            })
         });
 
         if (!res.ok) {

@@ -42,8 +42,8 @@ async def create_ticket(ticket: TicketCreate, current_user: User = Depends(get_c
     result = database.tickets_db.insert_one(new_ticket)
     
     # Notify All Admins
-    from .admin import _add_notification
-    await _add_notification(
+    from ..utils.notifications import create_notification
+    await create_notification(
         "New Support Ticket", 
         f"A new ticket has been raised: {new_ticket['subject']}",
         recipient_role="admin"
@@ -124,8 +124,8 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
                      print(f"RAG Sync Error: {e}")
 
         # Notify the user who created the ticket
-        from .admin import _add_notification
-        await _add_notification(
+        from ..utils.notifications import create_notification
+        await create_notification(
             "Ticket Updated", 
             f"Your ticket '{ticket['subject']}' status is now: {update.status}",
             recipient_username=ticket.get("created_by")

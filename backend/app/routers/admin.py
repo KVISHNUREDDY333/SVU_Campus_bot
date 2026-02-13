@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List
 from ..models.user import User
-from ..models.faq import FAQModel, FAQResponse, Notification, SuggestedFAQModel, SuggestedFAQResponse
+from ..models.faq import FAQModel, FAQResponse, Notification, SuggestedFAQModel, SuggestedFAQResponse, FAQRequest
 from .auth import get_current_user, get_password_hash
 
 from ..core import database, config
@@ -42,15 +42,8 @@ class NotificationCreate(pydantic.BaseModel):
 
 
 # --- Helper for Notifications ---
-async def _add_notification(title: str, message: str, recipient_username: str = None, recipient_role: str = None):
-    if database.notifications_db is not None:
-        database.notifications_db.insert_one({
-            "title": title,
-            "message": message,
-            "timestamp": datetime.utcnow(),
-            "recipient_username": recipient_username,
-            "recipient_role": recipient_role
-        })
+# --- Helper for Notifications ---
+from ..utils.notifications import create_notification
 
 @router.get("/notifications", response_model=List[Notification])
 async def get_notifications(current_user: User = Depends(get_current_user)):
@@ -80,7 +73,7 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
     return results
 
 @router.post("/admin/notifications", response_model=Notification)
-async def create_notification(note: NotificationCreate, current_user: User = Depends(get_current_user)):
+async def admin_create_notification(note: NotificationCreate, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
         
@@ -139,8 +132,8 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
     
-    # Send Notification
-    await _add_notification("New FAQ Added", f"Admin added a new FAQ: {faq.question[:50]}...")
+    # Send Notification (REMOVED)
+    # await create_notification("New FAQ Added", f"Admin added a new FAQ: {faq.question[:50]}...")
         
     return new_faq
 
@@ -184,7 +177,16 @@ async def suggest_faq(faq: SuggestedFAQModel):
         "timestamp": datetime.utcnow()
     }
     
+    
     database.suggested_faqs_db.insert_one(new_suggestion)
+    
+    # Notify Admins
+    await create_notification(
+        "New FAQ Suggestion", 
+        f"A student suggested: {faq.question[:50]}...", 
+        recipient_role="admin"
+    )
+
     return {"status": "success", "message": "FAQ suggestion submitted for review"}
 
 @router.get("/admin/suggested-faqs", response_model=List[SuggestedFAQResponse])
@@ -233,7 +235,7 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
 
     # Send Notification to the specific user
     if suggestion.get("suggested_by"):
-        await _add_notification(
+        await create_notification(
             "Suggestion Approved", 
             f"Your FAQ suggestion was approved: {new_faq['question'][:50]}...",
             recipient_username=suggestion.get("suggested_by")
@@ -263,7 +265,7 @@ async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(
 
     # Send Notification to user (Reject)
     if suggestion.get("suggested_by"):
-        await _add_notification(
+        await create_notification(
             "Suggestion Rejected", 
             f"Your FAQ suggestion was declined by the admin.",
             recipient_username=suggestion.get("suggested_by")
@@ -291,11 +293,11 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
         print(f"[DEBUG] Ingesting Text: {req.title}")
         
         # 1. Ingest Text for Vector Search
-        # We treat it like a document chunk
         from ..services.rag_service import ingest_text
         doc_metadata = {"source": req.title, "type": "text_entry", "uploaded_by": current_user.username}
         num_chunks = await ingest_text(req.content, metadata=doc_metadata)
-        
+        print(f"[DEBUG] Text Entry Ingested. Chunks: {num_chunks}")
+
         # 2. Extract FAQs
         extracted_faqs = []
         try:
@@ -304,28 +306,22 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
             
             inserted_count = 0
             for faq in extracted_faqs:
-                # Validation Step
-                val_res = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
-                status = val_res.get("status", "INVALID")
-                score = val_res.get("score", 0.0)
-                source_url = val_res.get("source_url", "")
+                # Validation Step REMOVED as per user request
+                # val_res = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
+                status = "MANUAL_ENTRY"
+                score = 1.0
+                source_url = ""
                 
-                print(f"[DEBUG] Validation for '{faq.get('question')[:30]}...': Status={status}, Score={score}")
-
-                if status == "INVALID":
-                     print(f"Skipping INVALID FAQ: {faq.get('question')}")
-                     continue
-
                 new_faq = {
                     "question": faq.get("question"),
                     "answer": faq.get("answer"),
                     "category": faq.get("category", "General"),
                     "keywords": faq.get("keywords", []),
                     "created_at": datetime.utcnow(),
-                    "source_urls": [source_url, req.title], # Use title as source reference
+                    "source_urls": [req.title], # Use title as source reference
                     "verified": True,
                     "verification_status": status,
-                    "verification_source": "https://svuniversity.edu.in/",
+                    "verification_source": "Admin Manual Entry",
                     "confidence_score": score,
                     "last_verified": datetime.utcnow()
                 }
@@ -368,6 +364,7 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
+@router.post("/admin/upload-document")
 async def upload_document(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -384,7 +381,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
             shutil.copyfileobj(file.file, buffer)
             
         print(f"[DEBUG] Ingesting PDF: {file.filename}")
-        num_chunks, full_text = await ingest_pdf(file_path, user_id="public", store_vectors=False)
+        num_chunks, full_text = await ingest_pdf(file_path, user_id="public", store_vectors=True)
         print(f"[DEBUG] PDF Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
         
         # Extract FAQs
@@ -395,21 +392,10 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
             
             inserted_count = 0
             for faq in extracted_faqs:
-                # Validation Step
-                val_res = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
-                status = val_res.get("status", "INVALID")
-                score = val_res.get("score", 0.0)
-                source_url = val_res.get("source_url", "")
-                
-                print(f"[DEBUG] Validation for '{faq.get('question')[:30]}...': Status={status}, Score={score}")
-
-                if status == "INVALID":
-                     print(f"Skipping INVALID FAQ: {faq.get('question')}")
-                     continue
-
-                # Proceed with VERIFIED and PARTIALLY_VERIFIED FAQs
-                # We auto-accept PARTIALLY_VERIFIED because strict validation often fails on local dev environments
-                # or due to search rate limits, hiding valid data from the user.
+                # Validation Step REMOVED as per user request
+                status = "MANUAL_ENTRY"
+                score = 1.0
+                source_url = ""
                 
                 new_faq = {
                     "question": faq.get("question"),
@@ -417,10 +403,10 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
                     "category": faq.get("category", "General"),
                     "keywords": faq.get("keywords", []),
                     "created_at": datetime.utcnow(),
-                    "source_urls": [source_url] if source_url else [file.filename],
+                    "source_urls": [file.filename],
                     "verified": True,
-                    "verification_status": status, # Store the actual status (VERIFIED/PARTIALLY_VERIFIED)
-                    "verification_source": "https://svuniversity.edu.in/",
+                    "verification_status": status, 
+                    "verification_source": "Admin Upload",
                     "confidence_score": score,
                     "last_verified": datetime.utcnow()
                 }
@@ -474,7 +460,7 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         
     try:
         print(f"[DEBUG] Ingesting URL: {req.url}")
-        num_chunks, full_text = await ingest_url(req.url, store_vectors=False)
+        num_chunks, full_text = await ingest_url(req.url, store_vectors=True)
         print(f"[DEBUG] URL Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
         
         # Extract FAQs
@@ -485,20 +471,10 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
              
              inserted_count = 0
              for faq in extracted_faqs:
-                # Validation Step
-                val_res = await validate_faq_with_web(faq.get("question"), faq.get("answer"))
-                status = val_res.get("status", "INVALID")
-                score = val_res.get("score", 0.0)
-                source_url = val_res.get("source_url", "")
-                
-                print(f"[DEBUG] Validation for '{faq.get('question')[:30]}...': Status={status}, Score={score}")
-
-                if status == "INVALID":
-                     print(f"Skipping INVALID FAQ: {faq.get('question')}")
-                     continue
-
-                # Proceed with VERIFIED and PARTIALLY_VERIFIED FAQs
-                # We auto-accept PARTIALLY_VERIFIED because strict validation often fails on local dev environments
+                # Validation Step REMOVED as per user request
+                status = "MANUAL_ENTRY"
+                score = 1.0
+                source_url = req.url
                 
                 new_faq = {
                     "question": faq.get("question"),
@@ -506,10 +482,10 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
                     "category": faq.get("category", "General"),
                     "keywords": faq.get("keywords", []),
                     "created_at": datetime.utcnow(),
-                    "source_urls": [source_url, req.url],
+                    "source_urls": [req.url], 
                     "verified": True,
-                    "verification_status": status, # Store actual status
-                    "verification_source": "https://svuniversity.edu.in/",
+                    "verification_status": status,
+                    "verification_source": "Admin URL",
                     "confidence_score": score,
                     "last_verified": datetime.utcnow()
                 }
@@ -724,6 +700,35 @@ async def list_documents(
         docs.append(doc)
     return docs
 
+@router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
+async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.documents_db is None or database.faqs_db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    
+    from bson import ObjectId
+    try:
+        doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Documents correlate with FAQs via filename/URL stored in source_urls
+        identifier = doc.get("filename")
+        if not identifier:
+            return []
+            
+        faqs = list(database.faqs_db.find({"source_urls": identifier}))
+        
+        # Convert BSON _id to string for Pydantic
+        for f in faqs:
+            f["id"] = str(f["_id"])
+            
+        return faqs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/admin/documents/{doc_id}")
 async def delete_document(doc_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -772,3 +777,103 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
         print(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
 
+
+# --- Calendar Management Endpoints ---
+
+class CalendarEventCreate(pydantic.BaseModel):
+    title: str
+    date: str # ISO or simple date string
+    type: str # Exam, Holiday, Event
+    description: str = ""
+
+@router.get("/admin/calendar")
+async def get_calendar_events(current_user: User = Depends(get_current_user)):
+    # Allow students to view calendar too? Usually yes, but this is admin router.
+    # If students need to see it, we might need a public endpoint or allow role check.
+    # For now, let's allow all authenticated users for GET, but restrict others.
+    
+    if database.calendar_db is None:
+        return []
+        
+    cursor = database.calendar_db.find().sort("date", 1)
+    events = []
+    for e in cursor:
+        events.append({
+            "id": str(e["_id"]),
+            "title": e.get("title"),
+            "date": e.get("date"),
+            "type": e.get("type", "Event"),
+            "description": e.get("description", "")
+        })
+    return events
+
+@router.post("/admin/calendar")
+async def create_calendar_event(event: CalendarEventCreate, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    new_event = {
+        "title": event.title,
+        "date": event.date,
+        "type": event.type,
+        "description": event.description,
+        "created_by": current_user.username,
+        "created_at": datetime.utcnow()
+    }
+    
+    if database.calendar_db is not None:
+        database.calendar_db.insert_one(new_event)
+        
+        # Broadcast Notification
+        try:
+             await create_notification(
+                 title="New Calendar Event",
+                 message=f"New event: {new_event['title']} ({new_event['date']})",
+                 recipient_role=None # Global Broadcast
+             )
+        except Exception as e:
+             print(f"Failed to send calendar notification: {e}")
+        
+    return {"status": "success", "message": "Event created"}
+
+@router.delete("/admin/calendar/{event_id}")
+async def delete_calendar_event(event_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    try:
+        if database.calendar_db is not None:
+             database.calendar_db.delete_one({"_id": ObjectId(event_id)})
+        return {"status": "success", "message": "Event deleted"}
+    except:
+        raise HTTPException(status_code=400, detail="Invalid Event ID")
+
+@router.put("/admin/faqs/{faq_id}")
+async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.faqs_db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+        
+    from bson import ObjectId
+    try:
+        update_data = {
+            "question": faq.question,
+            "answer": faq.answer,
+            "category": faq.category,
+            "updated_at": datetime.utcnow(),
+            "updated_by": current_user.username
+        }
+        
+        result = database.faqs_db.update_one(
+            {"_id": ObjectId(faq_id)},
+            {"$set": update_data}
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="FAQ not found")
+            
+        return {"status": "success", "message": "FAQ updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

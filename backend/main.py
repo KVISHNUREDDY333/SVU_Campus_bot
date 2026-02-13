@@ -2,11 +2,17 @@ import uvicorn
 import os
 import sys
 import logging
+import asyncio
+import platform
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# Fix for Windows asyncio event loop error
+if platform.system() == 'Windows':
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Define Project Root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -37,7 +43,6 @@ async def seed_admin():
             "role": "admin",
             "created_at": datetime.utcnow()
         }
-        # Upsert: Update if exists, Insert if not
         # We verify username (email)
         database.users_db.update_one(
             {"username": email},
