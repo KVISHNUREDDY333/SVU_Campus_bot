@@ -41,7 +41,6 @@ async def create_ticket(ticket: TicketCreate, current_user: User = Depends(get_c
     
     result = database.tickets_db.insert_one(new_ticket)
     
-    # Notify All Admins
     from ..utils.notifications import create_notification
     await create_notification(
         "New Support Ticket", 
@@ -65,7 +64,6 @@ async def get_my_tickets(
     cursor = database.tickets_db.find({"created_by": current_user.username}).sort("created_at", -1).skip(skip).limit(limit)
     return [TicketResponse(id=str(t["_id"]), **t) for t in cursor]
 
-# Admin: Get All Tickets
 @router.get("/admin/tickets", response_model=List[TicketResponse])
 async def get_all_tickets(
     skip: int = 0,
@@ -91,7 +89,6 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
         raise HTTPException(status_code=403, detail="Admin access required")
         
     try:
-        # Get ticket to find the creator
         ticket = database.tickets_db.find_one({"_id": ObjectId(ticket_id)})
         if not ticket:
              raise HTTPException(status_code=404, detail="Ticket not found")
@@ -112,7 +109,6 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
              if database.faqs_db is not None:
                  result = database.faqs_db.insert_one(new_faq)
                  
-                 # Sync with Vector DB for RAG
                  try:
                      from ..services.rag_service import rag_service
                      faq_text = f"Question: {new_faq['question']}\nAnswer: {new_faq['answer']}"
@@ -123,7 +119,6 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
                  except Exception as e:
                      print(f"RAG Sync Error: {e}")
 
-        # Notify the user who created the ticket
         from ..utils.notifications import create_notification
         await create_notification(
             "Ticket Updated", 
@@ -148,13 +143,9 @@ async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
 
-        # Only Admin can delete tickets
         if current_user.role != "admin":
             raise HTTPException(status_code=403, detail="Only admins can delete tickets")
 
-        # For non-admins, ensure ticket is closed? (Optional based on requirements, but safer)
-        # The prompt says "delete button should be visible for closed tickets".
-        
         database.tickets_db.delete_one({"_id": ObjectId(ticket_id)})
         return {"status": "success", "message": "Ticket deleted successfully"}
     except HTTPException as he:

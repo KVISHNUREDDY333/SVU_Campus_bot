@@ -16,11 +16,13 @@ tickets_db = None
 calendar_db = None
 suggested_faqs_db = None
 study_materials_db = None
+locations_db = None
+trending_queries_db = None
 
 exam_dates_db = None
 
 def get_db_client():
-    global mongo_client, users_db, otps_db, faqs_db, documents_db, analytics_db, notifications_db, tickets_db, calendar_db, suggested_faqs_db, study_materials_db, exam_dates_db
+    global mongo_client, users_db, otps_db, faqs_db, documents_db, analytics_db, notifications_db, tickets_db, calendar_db, suggested_faqs_db, study_materials_db, exam_dates_db, locations_db, trending_queries_db
     if Config.MONGODB_URI:
         try:
             mongo_client = MongoClient(Config.MONGODB_URI, tlsCAFile=certifi.where())
@@ -35,6 +37,8 @@ def get_db_client():
             calendar_db = db["calendar"]
             suggested_faqs_db = db["suggested_faqs"]
             study_materials_db = db["study_materials"]
+            locations_db = db["locations"]
+            trending_queries_db = db["trending_queries"]
 
             exam_dates_db = db["exam_dates"]
             logger.info("Connected to MongoDB")

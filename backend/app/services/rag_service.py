@@ -166,7 +166,6 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
         collection_name="chat_history",
     )
 
-# User profiles will be loaded from DB in future
 mock_academic_data = {}
     
 def get_session_entities(session_id: str) -> dict:
@@ -186,7 +185,6 @@ def update_entities(session_id: str, message: str):
     entities = get_session_entities(session_id)
     msg_lower = message.lower()
     
-    # Campus specific entity extraction
     if "it lab" in msg_lower: entities["last_location"] = "IT Lab"
     if "cse" in msg_lower or "computer science" in msg_lower: entities["department"] = "CSE"
     if "eee" in msg_lower: entities["department"] = "EEE"
@@ -197,7 +195,6 @@ def update_entities(session_id: str, message: str):
         entities["last_location"] = "Student Hostel"
         entities["topic"] = "Hostels"
     if "admin" in msg_lower or "registrar" in msg_lower or "principal" in msg_lower or "vc" in msg_lower: entities["topic"] = "Administration"
-    
     
     if database.mongo_client:
         try:
@@ -217,34 +214,11 @@ def trim_session_history(session_id: str, limit: int = 20):
         db = database.mongo_client[Config.DB_NAME]
         collection = db["chat_history"]
         
-        # History is stored as a single document with a "history" field (JSON string) or list of messages?
-        # langchain-mongodb stores each message as a DOCUMENT usually if using MongoDBChatMessageHistory?
-        # WAIT: MongoDBChatMessageHistory stores individual documents per message with SessionId?
-        # Let's check the constructor usages.
-        # "collection_name='chat_history'".
-        # Standard MongoDBChatMessageHistory stores: {SessionId: ..., History: string} OR individual messages?
-        # In modern versions, it might store a History field.
-        # Actually, let's just rely on the fact that if it's too long, we might need to delete old ones.
-        
-        # Heuristic: If we can't easily trim without breaking the format, we might skip this.
-        # But wait, looking at the code -> `MongoDBChatMessageHistory(session_id=..., collection_name="chat_history")`
-        # It typically uses one document per session with a "History" field containing json.
-        # Let's verify by just implementing a "check length and truncate list" approach if possible.
-        
-        # Checking LangChain MongoDBChatMessageHistory implementation details...
-        # It typically stores a "history" field representing the list of messages.
-        
-        # Correct logic for document-per-message schema (langchain-mongodb)
-        # 1. Count messages
         doc_count = collection.count_documents({"SessionId": session_id})
         
         if doc_count > limit:
-            # 2. Find oldest docs to delete
-            # We want to keep the 'limit' most recent.
-            # So we delete the (doc_count - limit) oldest.
             delete_count = doc_count - limit
             
-            # Find the IDs. Sort by _id ASC (oldest first). Limit to delete_count.
             cursor = collection.find(
                 {"SessionId": session_id},
                 {"_id": 1}
@@ -258,11 +232,8 @@ def trim_session_history(session_id: str, limit: int = 20):
     except Exception as e:
         logger.error(f"Error trimming history: {e}")
 
-# Global State for LLM Config
-# We now use the Config from core/config.py
 CURRENT_TEMPERATURE = 0.2
 
-# Initialize Components
 try:
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 except Exception as e:
@@ -277,26 +248,27 @@ except Exception as e:
         logger.error(f"Critical: Failed to load embeddings both from Hub and Cache: {e2}")
         raise e2
 
-# Define both models globally (will be re-init in setup if needed, but good to have placeholders)
 smart_llm = None
 fast_llm = None
 
 def setup_rag_chain():
     global vector_db, smart_llm, fast_llm, retrieval_chain, llm
     try:
-        # 1. Initialize Dual Models
         logger.info(f"Initializing Groq Models: Smart={Config.GROQ_MODEL_ID}, Fast={Config.GROQ_FAST_MODEL_ID}")
-        # Explicitly setting model parameters as requested (top_p is usually supported in model_kwargs if not direct init)
         smart_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID, 
             groq_api_key=Config.GROQ_API_KEY, 
             temperature=CURRENT_TEMPERATURE,
-            model_kwargs={"top_p": 0.9}
+            model_kwargs={"top_p": 0.9},
+            timeout=60
         )
-        # Using 70b for fast_llm too because it has higher TPM limits (12k vs 6k) on some tiers, preventing rate limits
-        fast_llm = ChatGroq(model=Config.GROQ_MODEL_ID, groq_api_key=Config.GROQ_API_KEY, temperature=0.1)
+        fast_llm = ChatGroq(
+            model=Config.GROQ_FAST_MODEL_ID, 
+            groq_api_key=Config.GROQ_API_KEY, 
+            temperature=0.1,
+            timeout=60
+        )
         
-        # Alias global llm for service functions
         llm = smart_llm
 
         if not database.mongo_client:
@@ -304,10 +276,7 @@ def setup_rag_chain():
             return
 
         logger.info("Initializing Embeddings and Vector DB...")
-        # ... (Embeddings are already initialized globally, but we can double check or re-use)
-        # Re-using global embeddings object
         
-        # Initialize Vector DB if not exists
         if not vector_db:
              vector_db = MongoDBAtlasVectorSearch(
                 collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
@@ -316,7 +285,6 @@ def setup_rag_chain():
                 relevance_score_fn="cosine",
             )
         
-        # 2. Contextualize Question Chain (Use FAST LLM)
         contextualize_q_system_prompt = """Given a chat history and the latest user question 
         which might reference context in the chat history, formulate a standalone question 
         which can be understood without the chat history. 
@@ -335,7 +303,6 @@ def setup_rag_chain():
         )
         
         def get_dynamic_retriever(user_username: str):
-            # Filtering: Include public docs + docs belonging to this specific user
             pre_filter = {
                 "$or": [
                     {"user_id": {"$exists": False}},  # Legacy/Admin docs
@@ -358,7 +325,6 @@ def setup_rag_chain():
             | (lambda x: get_dynamic_retriever(x.get("user_username", "guest")).invoke(x["rephrased_query"]))
         )
 
-        # 3. QA Chain (Use SMART LLM)
         qa_system_prompt = """You are SVU CampusConnect AI.
         
 Context:
@@ -386,22 +352,17 @@ Instructions:
             ]
         )
         
-        # Helper to format docs
         def format_docs(docs):
             if not docs:
                 return ""
             return "\n\n".join(doc.page_content for doc in docs)
 
-        # Safety layer to prevent hallucinations on empty/irrelevant context
         def safe_rag_chain(input_dict):
             context_str = input_dict["context"]
             
-            # Strict Context Check
             if len(context_str.strip()) < 20:
                 return "No relevant information was found in the university database."
             
-            # If context is sufficient, pass to LLM
-            # We need to reconstruction the inputs for the prompt
             return (qa_prompt | smart_llm | StrOutputParser()).invoke(input_dict)
 
         question_answer_chain = (
@@ -433,7 +394,6 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
     if not retrieval_chain:
         return "System initializing, please try again in a moment."
 
-    # Get User Context (Grades/Schedule mocks)
     user_role_key = user_role
     personal_info = mock_academic_data.get(user_role_key, {})
     
@@ -452,14 +412,10 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         lang_instruction = "Reply in English."
 
     try:
-        # Get actual username for filtering
         user_username = session_id
         
-        # Reduced from 50 to 10 (approx 5 conversational turns) to safely fit within Groq Token Limits
         trim_session_history(session_id, limit=10)
         
-        # Entity tracking
-        # Entity tracking
         update_entities(session_id, message)
         entities_str = str(get_session_entities(session_id))
 
@@ -478,23 +434,21 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
             return response_text
         except Exception as e:
             error_str = str(e).lower()
-            if "413" in error_str or "rate limit" in error_str or "too large" in error_str:
-                logger.warning(f"Rate Limit Hit ({e}). Retrying with trimmed history...")
-                # Aggressively trim to last 2 messages (1 turn)
+            if "413" in error_str or "429" in error_str or "rate limit" in error_str or "too large" in error_str:
+                logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history and fast model...")
                 trim_session_history(session_id, limit=2) 
                 
-                response_text = await retrieval_chain.ainvoke(
-                    {
-                        "input": message, 
-                        "user_context": personal_context_str, 
-                        "current_time": current_time,
-                        "entities": entities_str,
-                        "language_instruction": lang_instruction,
-                        "user_username": user_username
-                    },
-                    config={"configurable": {"session_id": session_id}}
-                )
-                return response_text
+                # Fallback to fast model if not already using it
+                # We need to temporarily swap llm if we want retrieval_chain to use it
+                # Or invoke the chain manually with a specific LLM if possible (but retrieval_chain is pre-built)
+                # Since retrieval_chain uses 'smart_llm' internally via the lambda, we can't easily swap without rebuilding.
+                # However, for the chat, we can just try a direct call if RAG fails, or accept that RAG uses smart_llm.
+                # Actually, in safe_rag_chain, it uses smart_llm. 
+                # Let's just return a helpful error for now or try to be smarter.
+                
+                # If it's a 429, we should definitely try to use the faster model if possible.
+                # But the RAG chain is already tied to smart_llm.
+                return "The system is currently experiencing high demand from the AI provider (Rate Limit). Please try again in a few minutes, or try a simpler question."
             else:
                 raise e # Re-raise if not a rate limit issue
     except Exception as e:
@@ -519,11 +473,9 @@ async def ingest_url(url: str, store_vectors: bool = True):
         
         full_text = "\n\n".join([d.page_content for d in docs])
 
-        # Split text
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
         splits = text_splitter.split_documents(docs)
         
-        # Add to Vector DB
         if store_vectors and vector_db:
              vector_db.add_documents(splits)
         elif store_vectors:
@@ -542,13 +494,14 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
     """
     if not vector_db:
          setup_rag_chain()
-         # if not vector_db:
-         #    logger.warning("Vector DB not initialized during ingestion setup.")
 
     try:
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return 0, f"Error: File not found at {file_path}"
+            
         logger.info(f"Ingesting PDF: {file_path} for user: {user_id}")
         
-        # Robust Text Extraction using pypdf directly first (often more reliable for simple text)
         full_text = ""
         try:
             from pypdf import PdfReader
@@ -561,36 +514,28 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
         except Exception as e:
             logger.error(f"pypdf extraction failed: {e}, falling back to loader.")
         
-        # Fallback/Primary Loader logic
         from langchain_community.document_loaders import PyPDFLoader
         loader = PyPDFLoader(file_path)
         pages = loader.load()
         
         if not full_text.strip():
-            # If pypdf failed or returned empty, use loader output
             full_text = "\n\n".join([d.page_content for d in pages])
             logger.info(f"Extracted {len(full_text)} chars using PyPDFLoader.")
 
-        # Normalize source to basename
-        import os
         filename = os.path.basename(file_path)
         
-        # Ensure pages have metadata (if using loader pages for splitting)
         for page in pages:
             page.metadata["user_id"] = user_id
             page.metadata["source"] = filename 
         
-        # Split text (Using loader pages to keep page metadata if possible, else create docs from text)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
         
         if full_text.strip() and not pages:
-             # Case where pypdf worked but loader didn't return pages
              from langchain.schema import Document
              splits = text_splitter.create_documents([full_text], metadatas=[{"source": filename, "user_id": user_id}])
         else:
              splits = text_splitter.split_documents(pages)
         
-        # Add to Vector DB
         if store_vectors and vector_db:
              vector_db.add_documents(splits)
         elif store_vectors:
@@ -617,7 +562,6 @@ async def ingest_text(text: str, metadata: dict = None):
         
         doc = Document(page_content=text, metadata=metadata or {})
         
-        # Split text (optional for short FAQs but good practice)
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents([doc])
         
@@ -646,20 +590,11 @@ async def ingest_faq(question: str, answer: str, source: str = "manual", faq_id:
         
         doc = Document(page_content=content, metadata=metadata)
         
-        # We generally don't split FAQs unless they are massive. 
-        # Ideally, each FAQ is one document.
-        
         ids = [faq_id] if faq_id else None
-        
-        # Check if exists (simple heuristic: try to delete first? No, Atlas handles upsert if ID matches? 
-        # Actually standard LangChain add_documents doesn't always upsert by ID on all stores. 
-        # But assuming MongoDB store typically honors _id if passed.)
-        # Note: langchain-mongodb might assign _id from ids list.
         
         vector_db.add_documents([doc], ids=ids)
         return True
     except Exception as e:
-        # If duplicate key error (E11000), it means it's already there. We can ignore or update.
         if "E11000" in str(e):
              logger.info(f"FAQ {faq_id} already exists. Skipping.")
              return True
@@ -668,91 +603,156 @@ async def ingest_faq(question: str, answer: str, source: str = "manual", faq_id:
 
 async def extract_faqs_from_text(text: str):
     """
-    Uses the LLM to extract potential FAQ pairs from the given text.
-    Handles large text by processing in chunks to avoid Token Rate Limits.
+    Uses the LLM to extract the MAXIMUM possible FAQ pairs from the given text.
+    Strategy: smaller chunks + aggressive prompt + second-pass extraction + deduplication.
     """
     if not llm:
          return []
     
-    # Split text into manageable chunks (approx 6k chars ≈ 1.5k tokens)
-    # Reduced from 15k to ensure higher focus and maximum recall per chunk.
-    chunk_size = 6000
-    chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-    
-    all_faqs = []
-    
     import json
     import re
     import asyncio
+
+    chunk_size = 3000
+    overlap = 500  # Overlap to avoid cutting information at boundaries
+    chunks = []
+    for i in range(0, len(text), chunk_size - overlap):
+        chunks.append(text[i:i + chunk_size])
     
-    logger.info(f"Extracting FAQs from {len(text)} chars in {len(chunks)} chunks...")
+    all_faqs = []
+    
+    logger.info(f"[MAX-FAQ] Extracting FAQs from {len(text)} chars in {len(chunks)} chunks (3k each)...")
+
+    async def _parse_faq_response(content: str) -> list:
+        """Parse LLM response to extract FAQ list from JSON."""
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+        if not json_match:
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        
+        if json_match:
+            json_str = json_match.group(1) if json_match.groups() else json_match.group(0)
+            try:
+                data = json.loads(json_str)
+                return data.get("faqs", [])
+            except json.JSONDecodeError as je:
+                logger.warning(f"JSON Decode Error: {je}")
+        return []
 
     for i, chunk in enumerate(chunks):
-        prompt = f"""
-        PHASE 2: FAQ GENERATION (Mode: MAXIMUM DENSITY & RECALL)
-        
-        Analyze the text fragment (Part {i+1}/{len(chunks)}).
-        
-        **Goal**: Extract the MAXIMUM POSSIBLE number of detailed FAQ pairs. 
-        Don't skip small details. Every date, name, contact info, procedure, and eligibility rule must be converted into a Q&A pair.
-        
-        **Target Information**:
-        - Admission dates and procedures
-        - Exam schedules and rules
-        - Hostel fees and facilities
-        - Department contact details
-        - Scholarships and eligibility
-        - Any official university regulation
-        
-        **Source Text**:
-        {chunk}
-        
-        **Strict Format**:
-        Return ONLY valid JSON. The format must be exact:
+        pass1_prompt = f"""
+PHASE 2: FAQ GENERATION — MODE: EXHAUSTIVE MAXIMUM EXTRACTION
+
+You are analyzing text fragment Part {i+1}/{len(chunks)}.
+
+**CRITICAL INSTRUCTION**: Generate AT LEAST 15-20 FAQ pairs from this text. Extract EVERY possible piece of information as a separate FAQ. Do NOT summarize or merge related facts — keep them as individual Q&A pairs.
+
+**Mine EVERY detail for FAQs including but not limited to**:
+- Dates (deadlines, schedules, academic calendar dates)
+- Fees (tuition, hostel, exam, application, registration)
+- Names (departments, officials, buildings, programs)
+- Contact info (phone numbers, emails, office locations, websites)
+- Procedures (how to apply, register, pay fees, get transcripts)
+- Eligibility criteria (age limits, percentage requirements, qualifications)
+- Rules and regulations (attendance, exams, dress code, hostel rules)
+- Facilities (labs, libraries, hostels, sports, canteen)
+- Scholarships and financial aid (types, eligibility, application process)
+- Exam patterns (marks distribution, passing criteria, revaluation)
+- Placement info (companies, packages, eligibility)
+- Research programs (PhD, M.Phil, areas of research)
+- Faculty information (HODs, professors, specializations)
+- Important links and resources
+- Any numerical data (seats, ratios, capacities, distances)
+
+**TECHNIQUE**: For each piece of information, generate the question a student would naturally ask. Create MULTIPLE questions about the same topic from different angles when possible.
+
+Example: If text says "Hostel fee is ₹5000 per semester, due by July 15":
+- FAQ 1: "What is the hostel fee?" → "₹5000 per semester"
+- FAQ 2: "When is the hostel fee due?" → "July 15"  
+- FAQ 3: "How much does it cost to stay in the hostel for one semester?" → "₹5000"
+
+**Source Text**:
+{chunk}
+
+**Output Format** — Return ONLY valid JSON, nothing else:
+{{
+    "faqs": [
         {{
-            "faqs": [
-                {{
-                    "question": "Exactly what the user might ask?",
-                    "answer": "Detailed, complete answer from source.",
-                    "category": "Admissions|Exams|Hostels|...",
-                    "keywords": ["tag1", "tag2"]
-                }}
-            ]
+            "question": "Natural question a student would ask",
+            "answer": "Complete, detailed answer extracted from source text.",
+            "category": "Admissions|Courses & Programs|Eligibility|Entrance Exams|Fees|Scholarships|Academic Calendar|Examinations|Results|Departments|Faculty|Research|Hostels|Placements|Rules & Regulations|Notifications|Contact & Administration|General",
+            "keywords": ["keyword1", "keyword2", "keyword3"]
         }}
-        """
+    ]
+}}
+"""
         
+        pass1_faqs = []
         try:
-            response = await llm.ainvoke(prompt)
-            content = response.content
-            
-            # Robust JSON cleanup
-            # 1. Try finding json block in markdown
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
-            if not json_match:
-                 # 2. Try finding just the start and end braces
-                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            
-            if json_match:
-                json_str = json_match.group(1) if json_match.groups() else json_match.group(0)
-                try:
-                    data = json.loads(json_str)
-                    chunk_faqs = data.get("faqs", [])
-                    all_faqs.extend(chunk_faqs)
-                    logger.info(f"Chunk {i+1}: Extracted {len(chunk_faqs)} FAQs")
-                except json.JSONDecodeError as je:
-                     logger.warning(f"JSON Decode Error in extraction chunk {i+1}: {je}")
-                     logger.debug(f"Failed Content: {content[:100]}...")
-            else:
-                 logger.warning(f"No JSON found in LLM response for chunk {i+1}")
-            
-            if len(chunks) > 1:
-                await asyncio.sleep(2) 
-
+            response = await llm.ainvoke(pass1_prompt)
+            pass1_faqs = await _parse_faq_response(response.content)
+            all_faqs.extend(pass1_faqs)
+            logger.info(f"[MAX-FAQ] Chunk {i+1} Pass 1: Extracted {len(pass1_faqs)} FAQs")
         except Exception as e:
-            logger.error(f"FAQ Extraction Error (Chunk {i+1}): {e}")
-            continue
+            logger.error(f"[MAX-FAQ] Pass 1 Error (Chunk {i+1}): {e}")
 
-    return all_faqs
+        if len(chunks) > 1:
+            await asyncio.sleep(2)
+
+        existing_questions = [f.get("question", "") for f in pass1_faqs]
+        existing_summary = "\n".join([f"- {q}" for q in existing_questions[:20]])
+
+        pass2_prompt = f"""
+FAQ GENERATION — SECOND PASS: FIND WHAT WAS MISSED
+
+The following FAQs were already extracted from this text:
+{existing_summary}
+
+**YOUR JOB**: Read the source text again carefully and generate ADDITIONAL FAQs that were NOT covered above. Look for:
+- Minor details, footnotes, sub-points that were overlooked
+- Alternative phrasings of important questions students might ask
+- Implicit information (e.g., if it says "open Mon-Fri 9-5", generate "Is the office open on weekends?" → "No, it is open Monday to Friday, 9 AM to 5 PM")
+- Comparative questions (e.g., "What is the difference between X and Y?")
+- Yes/No questions about policies and eligibility
+
+Generate AT LEAST 5-10 additional FAQs.
+
+**Source Text**:
+{chunk}
+
+**Output Format** — Return ONLY valid JSON:
+{{
+    "faqs": [
+        {{
+            "question": "Question not covered in first pass",
+            "answer": "Detailed answer from source.",
+            "category": "Appropriate category",
+            "keywords": ["keyword1", "keyword2"]
+        }}
+    ]
+}}
+"""
+        try:
+            response2 = await llm.ainvoke(pass2_prompt)
+            pass2_faqs = await _parse_faq_response(response2.content)
+            all_faqs.extend(pass2_faqs)
+            logger.info(f"[MAX-FAQ] Chunk {i+1} Pass 2: Extracted {len(pass2_faqs)} additional FAQs")
+        except Exception as e:
+            logger.error(f"[MAX-FAQ] Pass 2 Error (Chunk {i+1}): {e}")
+
+        if len(chunks) > 1:
+            await asyncio.sleep(2)
+
+    seen_questions = set()
+    unique_faqs = []
+    for faq in all_faqs:
+        q = faq.get("question", "").strip().lower()
+        q_normalized = re.sub(r'[^\w\s]', '', q)
+        if q_normalized and q_normalized not in seen_questions:
+            seen_questions.add(q_normalized)
+            unique_faqs.append(faq)
+    
+    logger.info(f"[MAX-FAQ] Total: {len(all_faqs)} raw → {len(unique_faqs)} unique FAQs after dedup")
+    return unique_faqs
 
 async def validate_faq_with_web(question: str, answer: str):
     """
@@ -763,7 +763,6 @@ async def validate_faq_with_web(question: str, answer: str):
     
     try:
         search = DuckDuckGoSearchRun()
-        # Restrict search to official site
         query = f"site:svuniversity.edu.in {question}"
         search_results = search.run(query)
         

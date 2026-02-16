@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from typing import List
+import logging
 from datetime import datetime
 from ..core import database
 from ..models.user import User
@@ -8,13 +9,28 @@ from ..services import rag_service
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
 
-from ..models.academic import StudyBuddyChatRequest
+from ..models.academic import StudyBuddyChatRequest, ZenRequest
 import shutil
 from bson import ObjectId
+from pypdf import PdfReader
+from pydantic import BaseModel
 
+class StudyMaterialTextRequest(BaseModel):
+    title: str
+    content: str
+
+logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/study-buddy", tags=["Study Buddy"])
 
-UPLOAD_DIR = "backend/uploads/study_materials"
+
+# Get absolute path to backend directory (assuming router is in backend/app/routers)
+# .../backend/app/routers/study_buddy.py -> .../backend
+# Standardise to project root "uploads" folder
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+# app/routers -> app -> backend -> project_root
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
+UPLOAD_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "uploads", "study_materials"))
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/chat")
@@ -24,7 +40,7 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
         raise HTTPException(status_code=404, detail="Material not found")
     
     try:
-        from ..services.rag_service import rag_service
+        # from ..services.rag_service import rag_service (Removed: module already imported)
         if not rag_service.vector_db:
             rag_service.setup_rag_chain()
         
@@ -76,6 +92,42 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
         print(f"Study Chat Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Chat Error: {str(e)}")
 
+@router.post("/zen")
+async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user)):
+    """
+    Direct generative AI interaction (Groq-like) without vector search.
+    History is managed in-memory (sent by client).
+    """
+    try:
+        if not rag_service.llm:
+            rag_service.setup_rag_chain()
+        
+        system_prompt = """You are Zen, a brilliant and supportive academic AI assistant for Sri Venkateswara University (SVU).
+        Your goal is to help students with their academic queries, technical concepts, and career guidance.
+        
+        Style Rules:
+        1. Be highly informative, professional, yet encouraging.
+        2. Use structured formatting (bullet points, bold text) for readability.
+        3. At the end of every response, provide 2-3 short, relevant follow-up questions that the student might want to ask next.
+        4. Focus on generative intelligence—if the user asks for a code example, explanation, or roadmap, provide high-quality original content.
+        5. If the query is about SVU specifically (locations, fees), use your internal knowledge about the university, but remind them Zen is for general academic brilliance.
+        """
+        
+        # Construct message list for LangChain
+        messages = [("system", system_prompt)]
+        for msg in req.history[-10:]: # Pass last 10 turns
+            role = "human" if msg["role"] == "user" else "ai"
+            messages.append((role, msg["content"]))
+        
+        messages.append(("human", req.query))
+        
+        response = await rag_service.llm.ainvoke(messages)
+        return {"response": response.content}
+
+    except Exception as e:
+        logger.error(f"Zen Chat Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Zen AI Error: {str(e)}")
+
 @router.post("/upload")
 async def upload_material(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     file_path = os.path.join(UPLOAD_DIR, f"{current_user.username}_{file.filename}")
@@ -98,38 +150,48 @@ async def upload_material(file: UploadFile = File(...), current_user: User = Dep
     # Generate Summary immediately
     summary_text = ""
     try:
-        from ..services.rag_service import rag_service
-        if not rag_service.llm:
+        # from ..services.rag_service import rag_service (Removed: module already imported)
+        if not rag_service.fast_llm:
              rag_service.setup_rag_chain()
         
-        if rag_service.llm:
+        if rag_service.fast_llm:
             prompt = f"""
-            You are an elite academic consultant and subject matter expert. 
-            Analyze the following educational material with extreme depth and precision.
+            You are an expert academic tutor. Analyze the following document text and provide a structured learning summary.
             
-            Please provide a comprehensive report structured as follows:
+            OUTPUT FORMAT (Strictly follow this structure):
             
-            ### 📌 Deep Topic Overview
-            A detailed explanation of the core subject, its significance, and the main objectives of this material.
-            
-            ### 🔑 Definitions & Core Concepts
-            Create an extensive glossary of all technical terms, formulas, or key dates mentioned. Explain each in easy-to-understand language.
-            
-            ### 📝 Master Summary
-            A massive, structured breakdown of the entire document. Use hierarchy, bullet points, and sections to organize the knowledge logically. 
-            Capture all the nuances—no detail is too small if it's relevant to the topic.
-            
-            ### 💡 Strategic Study Roadmap
-            Provide a step-by-step guide on how to master this specific content. Suggest related topics to review and memory techniques (like Mnemonics) suitable for this data.
-            
-            ### ❓ Expert Exam Preparation (Comprehensive)
-            Generate as many high-probability exam questions as possible, covering all levels of Bloom's Taxonomy.
+            ### 📝 Summary
+            [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
+
+            ### 🔑 Key Points
+            [List 5-8 most critical concepts or takeaways from the text.]
+            - Point 1
+            - Point 2
+            ...
+
+            ### ✅ Advantages / Benefits
+            [List the positive aspects, pros, or benefits discussed in the text.]
+            - Advantage 1
+            - Advantage 2
+            ...
+
+            ### ⚠️ Limitations / Challenges
+            [List the negative aspects, cons, limitations, or challenges discussed.]
+            - Limitation 1
+            - Limitation 2
+            ...
+
+            ### 💡 Examples
+            [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
+            - **Example 1**: [Brief explanation]
+            - **Example 2**: [Brief explanation]
+            ...
             
             ---
             MATERIAL CONTENT:
-            {full_text[:50000]}
+            {full_text[:10000]}
             """
-            response = await rag_service.llm.ainvoke(prompt)
+            response = await rag_service.fast_llm.ainvoke(prompt)
             summary_text = response.content
             
     except Exception as e:
@@ -156,6 +218,99 @@ async def upload_material(file: UploadFile = File(...), current_user: User = Dep
         "summary": summary_text
     }
 
+@router.post("/upload-text")
+async def upload_text_material(req: StudyMaterialTextRequest, current_user: User = Depends(get_current_user)):
+    # Create a pseudo-filename
+    filename = f"{req.title}.txt"
+    file_path = os.path.join(UPLOAD_DIR, f"{current_user.username}_{filename}")
+    
+    # Save text to file
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(req.content)
+    
+    # Ingest text into Vector DB
+    num_chunks = 0
+    try:
+        from ..services.rag_service import ingest_text
+        # We use ingest_text which expects text and metadata
+        num_chunks = await ingest_text(
+            req.content, 
+            metadata={"source": filename, "user_id": current_user.username}
+        )
+    except Exception as e:
+        print(f"Study Material Text Ingestion Failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process text: {str(e)}")
+
+    # Generate Summary
+    summary_text = ""
+    try:
+        if not rag_service.fast_llm:
+             rag_service.setup_rag_chain()
+        
+        if rag_service.fast_llm:
+            prompt = f"""
+            You are an expert academic tutor. Analyze the following document text and provide a structured learning summary.
+            
+            OUTPUT FORMAT (Strictly follow this structure):
+            
+            ### 📝 Summary
+            [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
+
+            ### 🔑 Key Points
+            [List 5-8 most critical concepts or takeaways from the text.]
+            - Point 1
+            - Point 2
+            ...
+
+            ### ✅ Advantages / Benefits
+            [List the positive aspects, pros, or benefits discussed in the text.]
+            - Advantage 1
+            - Advantage 2
+            ...
+
+            ### ⚠️ Limitations / Challenges
+            [List the negative aspects, cons, limitations, or challenges discussed.]
+            - Limitation 1
+            - Limitation 2
+            ...
+
+            ### 💡 Examples
+            [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
+            - **Example 1**: [Brief explanation]
+            - **Example 2**: [Brief explanation]
+            ...
+            
+            ---
+            MATERIAL CONTENT:
+            {req.content[:10000]}
+            """
+            response = await rag_service.fast_llm.ainvoke(prompt)
+            summary_text = response.content
+            
+    except Exception as e:
+        print(f"Auto-Summary Failed: {e}")
+        summary_text = "Summary generation failed. Please try again later."
+
+    # Store in DB
+    material = {
+        "user_id": current_user.username,
+        "filename": filename,
+        "file_path": file_path,
+        "upload_date": datetime.utcnow(),
+        "chunks": num_chunks,
+        "summary": summary_text,
+        "type": "text"
+    }
+    result = database.study_materials_db.insert_one(material)
+    
+    return {
+        "status": "success", 
+        "id": str(result.inserted_id), 
+        "filename": filename, 
+        "chunks": num_chunks,
+        "summary": summary_text
+    }
+
 @router.get("/materials")
 async def get_materials(current_user: User = Depends(get_current_user)):
     materials = list(database.study_materials_db.find({"user_id": current_user.username}).sort("upload_date", -1))
@@ -175,41 +330,60 @@ async def summarize_material(material_id: str, current_user: User = Depends(get_
     # For now, let's keep the re-generation logic as distinct action.
     
     try:
-        from ..services.rag_service import ingest_pdf
-        _, text = await ingest_pdf(material["file_path"])
+        text = ""
+        file_path = material["file_path"]
         
-        from ..services.rag_service import rag_service
-        if not rag_service.llm:
+        if file_path.endswith(".pdf"):
+            from ..services.rag_service import ingest_pdf
+            _, text = await ingest_pdf(file_path)
+        else:
+            # Assume plain text for other types like .txt
+            with open(file_path, "r", encoding="utf-8") as f:
+                text = f.read()
+            logger.info(f"Read {len(text)} chars from text file: {file_path}")
+        
+        # from ..services.rag_service import rag_service (Removed: module already imported)
+        if not rag_service.fast_llm:
              rag_service.setup_rag_chain()
         
         prompt = f"""
-        You are an elite academic consultant and subject matter expert. 
-        Analyze the following educational material with extreme depth and precision.
+        You are an expert academic tutor. Analyze the following document text and provide a structured learning summary.
         
-        Please provide a comprehensive report structured as follows:
+        OUTPUT FORMAT (Strictly follow this structure):
         
-        ### 📌 Deep Topic Overview
-        A detailed explanation of the core subject, its significance, and the main objectives of this material.
-        
-        ### 🔑 Definitions & Core Concepts
-        Create an extensive glossary of all technical terms, formulas, or key dates mentioned. Explain each in easy-to-understand language.
-        
-        ### 📝 Master Summary
-        A massive, structured breakdown of the entire document. Use hierarchy, bullet points, and sections to organize the knowledge logically. 
-        Capture all the nuances—no detail is too small if it's relevant to the topic.
-        
-        ### 💡 Strategic Study Roadmap
-        Provide a step-by-step guide on how to master this specific content. Suggest related topics to review and memory techniques (like Mnemonics) suitable for this data.
-        
-        ### ❓ Expert Exam Preparation (Comprehensive)
-        Generate as many high-probability exam questions as possible, covering all levels of Bloom's Taxonomy.
+        ### 📝 Summary
+        [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
+
+        ### 🔑 Key Points
+        [List 5-8 most critical concepts or takeaways from the text.]
+        - Point 1
+        - Point 2
+        ...
+
+        ### ✅ Advantages / Benefits
+        [List the positive aspects, pros, or benefits discussed in the text.]
+        - Advantage 1
+        - Advantage 2
+        ...
+
+        ### ⚠️ Limitations / Challenges
+        [List the negative aspects, cons, limitations, or challenges discussed.]
+        - Limitation 1
+        - Limitation 2
+        ...
+
+        ### 💡 Examples
+        [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
+        - **Example 1**: [Brief explanation]
+        - **Example 2**: [Brief explanation]
+        ...
         
         ---
         MATERIAL CONTENT:
-        {text[:50000]}
+        {text[:10000]}
         """
         
-        response = await rag_service.llm.ainvoke(prompt)
+        response = await rag_service.fast_llm.ainvoke(prompt)
         
         # Update DB with new summary
         database.study_materials_db.update_one(

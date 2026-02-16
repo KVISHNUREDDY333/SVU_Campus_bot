@@ -16,7 +16,6 @@ class Config:
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
     
-    # Model Configuration
     GROQ_MODEL_ID = os.getenv("GROQ_MODEL_ID", "llama-3.3-70b-versatile")
-    GROQ_FAST_MODEL_ID = os.getenv("GROQ_FAST_MODEL_ID", "llama3-70b-8192")
+    GROQ_FAST_MODEL_ID = os.getenv("GROQ_FAST_MODEL_ID", "llama-3.1-8b-instant")
 

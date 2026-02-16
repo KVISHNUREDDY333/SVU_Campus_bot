@@ -1,6 +1,6 @@
 const API_URL = window.location.origin;
 console.log("Using API_URL:", API_URL);
-console.log("SVU Bot Script v9 Loaded-02021532");
+console.log("SVU Bot Script v11-DEBUG Loaded");
 
 // DOM Elements
 const chatBox = document.getElementById('chat-box');
@@ -11,6 +11,12 @@ const typingIndicator = document.getElementById('typing-indicator');
 
 // Theme Logic
 function toggleTheme() {
+    // Check if user is logged in
+    if (!ACCESS_TOKEN) {
+        showStatusPopup("Please log in to switch themes");
+        return;
+    }
+
     const body = document.body;
     body.classList.toggle('dark-mode');
 
@@ -38,6 +44,23 @@ let USER_ROLE = localStorage.getItem('user_role');
 let notificationInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Load Theme Preference
+    const savedTheme = localStorage.getItem('svu_theme');
+    const hasSession = !!localStorage.getItem('access_token');
+
+    // Default to light unless there's an active session AND dark was saved
+    if (hasSession && savedTheme === 'dark') {
+        document.body.classList.add('dark-mode');
+        updateThemeUI(true);
+    } else {
+        document.body.classList.remove('dark-mode');
+        updateThemeUI(false);
+        // If no session, ensure storage is also light
+        if (!hasSession) {
+            localStorage.setItem('svu_theme', 'light');
+        }
+    }
+
     // Check for Google OAuth callback params
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
@@ -49,13 +72,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (token) {
         const role = urlParams.get('role');
         const username = urlParams.get('username');
+        const fullName = urlParams.get('name');
 
         console.log("Google Login Success:", username);
         saveSession({
             access_token: token,
             role: role,
             username: username,
-            full_name: urlParams.get('name') // Optional if backend sends it
+            full_name: fullName
         });
 
         // Clean URL
@@ -70,11 +94,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
 
-    // Register PWA Service Worker
+
+    // Force Unregister Service Worker to clear cache
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/sw.js')
-            .then(reg => console.log('SW Registered', reg))
-            .catch(err => console.log('SW Fail', err));
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister().then(() => console.log("Service Worker Unregistered"));
+            }
+        });
     }
 
     // Request Notification Permission
@@ -82,12 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
         Notification.requestPermission();
     }
 
-    // Load Theme
-    const savedTheme = localStorage.getItem('svu_theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-mode');
-        updateThemeUI(true);
-    }
+    // Theme extracted to top of DOMContentLoaded
 
     const splashScreen = document.getElementById('splash-screen');
     if (splashScreen) {
@@ -99,6 +121,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 1500);
     }
 
+    // Load Trending Queries
+    loadTrendingQueries();
+
     if (userInput) {
         userInput.value = ''; // Prevent browser autofill
         userInput.focus();
@@ -109,24 +134,9 @@ document.addEventListener("DOMContentLoaded", () => {
         showSection('chat');
     }, 100);
 
-    // Close Dropdown when clicking outside
-    document.addEventListener('click', function(event) {
-        const wrapper = document.querySelector('.assistant-menu-wrapper');
-        const dropdown = document.getElementById('assistant-dropdown');
-        if (wrapper && !wrapper.contains(event.target)) {
-            dropdown.classList.remove('active');
-        }
-    });
+
 });
 
-
-// --- Dropdown Logic ---
-function toggleAssistantDropdown() {
-    const dropdown = document.getElementById('assistant-dropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('active');
-    }
-}
 
 
 // --- Auth Functions ---
@@ -364,6 +374,11 @@ async function handleRegister(e) {
 }
 
 function saveSession(data) {
+    // Force Light Mode on New Session
+    localStorage.setItem('svu_theme', 'light');
+    document.body.classList.remove('dark-mode');
+    updateThemeUI(false);
+
     ACCESS_TOKEN = data.access_token;
     USER_ROLE = data.role;
     localStorage.setItem('access_token', ACCESS_TOKEN);
@@ -399,6 +414,11 @@ function logout() {
     localStorage.removeItem('username');
     ACCESS_TOKEN = null;
     USER_ROLE = null;
+
+    // Reset to Light Mode on Logout
+    localStorage.setItem('svu_theme', 'light');
+    document.body.classList.remove('dark-mode');
+    updateThemeUI(false);
 
     stopNotificationPolling();
 
@@ -538,6 +558,39 @@ function stopNotificationPolling() {
     }
 }
 
+async function loadTrendingQueries() {
+    console.time("TrendingQueriesLoad");
+    try {
+        const res = await fetch(`${API_URL}/admin/trending`);
+        const data = await res.json();
+        const container = document.getElementById('trending-queries-container');
+        
+        if (!container) return;
+        container.innerHTML = '';
+        
+        if (data.length === 0) {
+            // Fallback if no dynamic queries
+            container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:10px;">Ask me anything!</p>';
+            console.timeEnd("TrendingQueriesLoad");
+            return;
+        }
+        
+        data.forEach(q => {
+            const card = document.createElement('div');
+            card.className = 'suggestion-card';
+            // Pass response if it exists, otherwise just text
+            const responseArg = q.response ? `, '${q.response.replace(/'/g, "\\'")}'` : '';
+            card.setAttribute('onclick', `appendQuick('${q.text.replace(/'/g, "\\'")}'${responseArg})`);
+            card.innerHTML = `<div class='icon'><i class='${q.icon}'></i></div><div><div class='title'>${q.text}</div><div class='desc'>${q.subtext}</div></div>`;
+            container.appendChild(card);
+        });
+        console.timeEnd("TrendingQueriesLoad");
+    } catch (e) { 
+        console.error('Failed to load trending queries', e); 
+        console.timeEnd("TrendingQueriesLoad");
+    }
+}
+
 function showToast(title, message) {
     // Create toast container if needed
     let container = document.getElementById('toast-container');
@@ -601,13 +654,16 @@ function showToast(title, message) {
 }
 
 function showSection(section) {
+    console.warn(`[DEBUG] showSection called for: ${section}`);
+    
     // Prevent non-admins from accessing restricted sections
     if ((section === 'admin' || section === 'dashboard') && USER_ROLE !== 'admin') {
+        console.warn(`[DEBUG] Access denied for ${section}. Role: ${USER_ROLE}`);
         showSection('chat');
         return;
     }
 
-    const sections = ['chat', 'admin', 'dashboard', 'calendar', 'study', 'career'];
+    const sections = ['chat', 'admin', 'dashboard', 'calendar', 'locations', 'study', 'career'];
 
     sections.forEach(s => {
         const el = document.getElementById(`${s}-section`);
@@ -619,8 +675,8 @@ function showSection(section) {
 
     const activeSection = document.getElementById(`${section}-section`);
     if (activeSection) {
-        // We use flex for chat-section to maintain layout, block for others
-        activeSection.style.display = (section === 'chat') ? 'flex' : 'block';
+        // We use flex for chat and locations sections to maintain layout, block for others
+        activeSection.style.display = (section === 'chat' || section === 'locations') ? 'flex' : 'block';
     }
 
     const activeNav = document.getElementById(`nav-${section}`);
@@ -628,15 +684,18 @@ function showSection(section) {
 
     // Trigger specific loaders
     if (section === 'dashboard') {
+        console.warn("[DEBUG] Triggering loadDashboard from showSection");
         loadDashboard();
     }
     if (section === 'admin') {
+        loadDashboard(); // Ensure dashboard stats/charts are loaded
         loadDocuments();
         loadAllTickets();
         loadAcademicCalendar(); // Load admin calendar management table
         loadAllUsers();
         loadSystemHealth();
         loadSuggestedFAQs();
+        loadAdminTrending();
     }
 
     if (section === 'calendar') {
@@ -644,6 +703,9 @@ function showSection(section) {
     }
     if (section === 'study') {
         loadStudyBuddy();
+    }
+    if (section === 'locations') {
+        renderLocations(); // Ensure locations are rendered
     }
     if (section === 'career') {
         loadCareerCenter();
@@ -653,7 +715,26 @@ function showSection(section) {
     }
 }
 
-async function appendQuick(text) {
+async function appendQuick(text, preDefinedResponse = null) {
+    if (preDefinedResponse) {
+        // Hide welcome screen if visible
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (welcomeScreen && welcomeScreen.style.display !== 'none') {
+            welcomeScreen.style.display = 'none';
+        }
+        
+        appendMessage(text, 'user', true);
+        showTypingIndicator();
+        
+        // Simulate a small delay for natural feeling
+        setTimeout(() => {
+            hideTypingIndicator();
+            appendMessage(preDefinedResponse, 'bot', true);
+            scrollToBottom();
+        }, 600);
+        return;
+    }
+
     userInput.value = text;
     sendMessage();
 }
@@ -747,48 +828,56 @@ let roleChartInstance = null;
 let sentimentChartInstance = null;
 
 async function loadDashboard() {
-    if (!ACCESS_TOKEN) return;
+    console.warn("[DEBUG] loadDashboard function STARTED");
+    if (!ACCESS_TOKEN) {
+        console.error("[DEBUG] No ACCESS_TOKEN found!");
+        return;
+    }
+
     try {
+        console.log("[DEBUG] Fetching /dashboard-stats...");
         const res = await fetch(`${API_URL}/dashboard-stats`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
 
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        document.getElementById('total-queries').textContent = data.total_queries;
-        document.getElementById('active-users').textContent = data.active_users;
-
-        // Update document count placeholder in dashboard
-        const docCountEl = document.querySelector('.stat-card .doc-icon + .stat-info p');
-        if (docCountEl) docCountEl.textContent = data.active_users; // Fallback or handle separately
-
-        // Fetch specific doc count if needed, or use a general admin endpoint
-        const docsRes = await fetch(`${API_URL}/admin/documents`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (docsRes.ok) {
-            const docs = await docsRes.json();
-            if (docCountEl) docCountEl.textContent = docs.length;
-            // Also update the description text
-            const docDesc = document.querySelector('.settings-card p');
-            if (docDesc && docDesc.textContent.includes('documents in your knowledge base')) {
-                docDesc.textContent = `You have ${docs.length} documents in your knowledge base. Use the Admin Settings to add, remove, or update documents.`;
-            }
+        if (!res.ok) {
+            console.error("Dashboard API Failed:", res.status);
+            return;
         }
 
+        const data = await res.json();
+        console.warn("[DEBUG] Dashboard Data Received:", data);
+
+        // precise helpers to update text
+        const setText = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+
+        setText('total-queries', data.total_queries);
+        setText('active-users', data.active_users);
+        
+        // Update Documents Count
+        const docCount = (data.total_documents !== undefined) ? data.total_documents : 0;
+        setText('total-documents', docCount);
+
+        // Update description text in Settings card if it exists
+        // const docDesc = document.querySelector('.settings-card p');
+        // if (docDesc && docDesc.textContent.includes('documents in your knowledge base')) {
+        //      docDesc.textContent = `You have ${docCount} documents in your knowledge base. Use the Admin Settings to add, remove, or update documents.`;
+        // }
+
         renderCharts(data.role_distribution, data.sentiment_stats);
-
-        // Load real-time system health
+        
+        // Start live updates for other components
         loadSystemHealth();
-
         loadFAQs();
         loadDocuments();
         loadUsers();
 
     } catch (e) {
-        console.error("Dashboard Error", e);
+        console.error("Dashboard Loading Error:", e);
+        showStatusPopup("Failed to refresh dashboard: " + e.message, 3000);
     }
 }
 
@@ -871,10 +960,11 @@ function renderDocuments(docs, limit = null) {
                     ${escapeHtml(doc.filename)}
                 </td>
                 <td><span class="badge ${badgeClass}">${typeLabel}</span></td>
-                <td style="text-align: center;">${doc.id || doc.chunks}</td>
+                <td style="text-align: center;">${doc.chunks || 0}</td>
+                <td style="text-align: center;">${doc.extracted_faqs || 0}</td>
                 <td style="text-align: center;">${doc.uploaded_by || 'Admin'}</td>
                 <td style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="icon-btn" onclick="viewDocumentFAQs('${doc._id}', '${escapeHtml(doc.filename)}')" title="View Extracted FAQs" style="color: var(--primary-color);">
+                    <button class="icon-btn" onclick="viewDocFaqs('${doc._id}', '${escapeHtml(doc.filename)}')" style="color: var(--accent-color);" title="View FAQs">
                         <i class="fa-solid fa-eye"></i>
                     </button>
                     <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;" title="Delete Document">
@@ -914,106 +1004,260 @@ async function deleteDocument(docId) {
     } catch (e) { console.error(e); }
 }
 
-async function viewDocumentFAQs(docId, filename) {
-    const modal = document.getElementById('document-faqs-modal');
-    const title = document.getElementById('doc-faqs-title');
-    const list = document.getElementById('doc-faqs-list');
-    const empty = document.getElementById('doc-faqs-empty');
 
-    if (!modal || !list) return;
+/**
+ * FAQ Management: View All FAQs
+ */
+let allFaqsData = [];
+let currentFilteredFAQs = [];
+let currentFAQPage = 0;
+const FAQ_BATCH_SIZE = 50;
+let activeFAQFilterDocId = null; 
+let activeFAQFilterSource = null; 
 
-    title.textContent = `Source: ${filename}`;
-    list.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fa-solid fa-spinner fa-spin"></i> Loading FAQs...</div>';
+async function loadAllFAQs() {
+    console.log("loadAllFAQs called", activeFAQFilterSource ? "Filtering by: " + activeFAQFilterSource : "Show All");
+    const list = document.getElementById('all-faqs-list');
+    const empty = document.getElementById('all-faqs-empty');
+    if (!list) return;
+
+    list.innerHTML = '<div style="text-align:center; padding:40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;color:var(--primary-color);"></i><p style="margin-top:15px;color:var(--text-secondary);">Loading FAQs...</p></div>';
     empty.style.display = 'none';
-    modal.style.display = 'flex';
+
+    // Update modal header actions
+    const actionContainer = document.getElementById('modal-action-container');
+    if (actionContainer) {
+        actionContainer.innerHTML = '';
+    }
 
     try {
-        const res = await fetch(`${API_URL}/admin/documents/${docId}/faqs`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (!res.ok) throw new Error("Failed to fetch FAQs");
+        const res = await fetch(`${API_URL}/admin/faqs`);
+        if (!res.ok) throw new Error("Failed to fetch FAQs: " + res.status);
         const faqs = await res.json();
-
-        list.innerHTML = '';
-        if (faqs.length === 0) {
-            empty.style.display = 'block';
+        
+        allFaqsData = Array.isArray(faqs) ? faqs : [];
+        
+        // Apply Source Filter if active
+        if (activeFAQFilterSource) {
+            currentFilteredFAQs = allFaqsData.filter(f => 
+                f.source_urls && f.source_urls.includes(activeFAQFilterSource)
+            );
         } else {
-            faqs.forEach(f => {
-                const faqItem = document.createElement('div');
-                faqItem.className = 'faq-item';
-                faqItem.id = `faq-item-${f.id}`;
-                faqItem.style.marginBottom = '20px';
-                faqItem.style.padding = '15px';
-                faqItem.style.background = 'var(--bg-secondary)';
-                faqItem.style.borderRadius = '8px';
-                faqItem.style.border = '1px solid var(--border-color)';
-
-                faqItem.innerHTML = `
-                    <div class="faq-display-mode">
-                        <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 8px;">Q: ${escapeHtml(f.question)}</div>
-                        <div style="color: var(--text-primary); line-height: 1.5;">A: ${escapeHtml(f.answer)}</div>
-                        <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
-                            <span class="badge info" style="font-size: 10px;">${escapeHtml(f.category)}</span>
-                            ${f.verified ? '<span class="badge success" style="font-size: 10px;">VERIFIED</span>' : ''}
-                            <button onclick="enableEditFAQ('${f.id}')" style="margin-left: auto; background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 12px;">
-                                <i class="fa-solid fa-pen"></i> Edit
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="faq-edit-mode" style="display: none;">
-                        <input type="text" id="edit-q-${f.id}" value="${escapeHtml(f.question)}" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
-                        <textarea id="edit-a-${f.id}" rows="3" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">${escapeHtml(f.answer)}</textarea>
-                        <select id="edit-c-${f.id}" style="width: 100%; padding: 8px; margin-bottom: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
-                            <option value="General" ${f.category === 'General' ? 'selected' : ''}>General</option>
-                            <option value="Academic" ${f.category === 'Academic' ? 'selected' : ''}>Academic</option>
-                            <option value="Admissions" ${f.category === 'Admissions' ? 'selected' : ''}>Admissions</option>
-                            <option value="Facilities" ${f.category === 'Facilities' ? 'selected' : ''}>Facilities</option>
-                        </select>
-                        <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                            <button onclick="cancelEditFAQ('${f.id}')" class="btn-secondary" style="font-size: 12px; padding: 6px 12px;">Cancel</button>
-                            <button onclick="updateFAQ('${f.id}')" class="btn-primary" style="font-size: 12px; padding: 6px 12px;">Save</button>
-                        </div>
-                    </div>
-                `;
-                list.appendChild(faqItem);
-            });
+            currentFilteredFAQs = allFaqsData;
         }
+
+        currentFAQPage = 0;
+        renderAllFAQs(true);
+        updateFAQCount();
     } catch (e) {
         console.error(e);
         list.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">Error: ${e.message}</div>`;
     }
 }
 
-function closeDocFaqsModal() {
-    const modal = document.getElementById('document-faqs-modal');
-    if (modal) modal.style.display = 'none';
+async function viewDocFaqs(docId, filename) {
+    activeFAQFilterDocId = docId;
+    activeFAQFilterSource = filename;
+    
+    const modal = document.getElementById('all-faqs-modal');
+    if (modal) {
+        modal.classList.add('active');
+        
+        // Update header for document-specific view
+        const modalTitle = document.getElementById('faq-modal-title');
+        const modalSubtitle = document.getElementById('faq-modal-subtitle');
+        if (modalTitle) modalTitle.textContent = "Extracted FAQs";
+        if (modalSubtitle) modalSubtitle.textContent = `Source: ${filename}`;
+
+        // Reset sub-filters when viewing specific doc
+        const categoryFilter = document.getElementById('faq-category-filter');
+        const searchInput = document.getElementById('faq-search-input');
+        if (categoryFilter) categoryFilter.value = "";
+        if (searchInput) searchInput.value = "";
+        
+        await loadAllFAQs();
+    }
 }
 
-function enableEditFAQ(id) {
-    const item = document.getElementById(`faq-item-${id}`);
+async function openAllFaqsModal() {
+    activeFAQFilterDocId = null;
+    activeFAQFilterSource = null;
+    
+    const modal = document.getElementById('all-faqs-modal');
+    if (modal) {
+        modal.classList.add('active');
+
+        // Update header for all FAQs view
+        const modalTitle = document.getElementById('faq-modal-title');
+        const modalSubtitle = document.getElementById('faq-modal-subtitle');
+        if (modalTitle) modalTitle.textContent = "Knowledge Base FAQs";
+        if (modalSubtitle) modalSubtitle.textContent = "Browse, edit, and manage all extracted FAQs";
+
+        await loadAllFAQs();
+    }
+}
+
+function closeAllFaqsModal() {
+    const modal = document.getElementById('all-faqs-modal');
+    if (modal) {
+        modal.classList.remove('active');
+        activeFAQFilterDocId = null;
+        activeFAQFilterSource = null;
+    }
+}
+
+function updateFAQCount() {
+    const countEl = document.getElementById('faq-count');
+    if (countEl) {
+        countEl.textContent = `Showing ${Math.min((currentFAQPage + 1) * FAQ_BATCH_SIZE, currentFilteredFAQs.length)} of ${currentFilteredFAQs.length} FAQs`;
+    }
+}
+
+function renderAllFAQs(reset = false) {
+    const list = document.getElementById('all-faqs-list');
+    const empty = document.getElementById('all-faqs-empty');
+    if (!list) return;
+
+    if (currentFilteredFAQs.length === 0) {
+        list.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+
+    list.style.display = 'block';
+    empty.style.display = 'none';
+
+    if (reset) {
+        list.innerHTML = '';
+        currentFAQPage = 0;
+    }
+
+    const start = currentFAQPage * FAQ_BATCH_SIZE;
+    const end = start + FAQ_BATCH_SIZE;
+    const batch = currentFilteredFAQs.slice(start, end);
+
+    batch.forEach(f => {
+        list.appendChild(renderFAQItem(f));
+    });
+
+    // Handle "View More" button
+    const existingBtn = document.getElementById('faq-view-more-btn');
+    if (existingBtn) existingBtn.remove();
+
+    if (end < currentFilteredFAQs.length) {
+        const loadMoreBtn = document.createElement('button');
+        loadMoreBtn.id = 'faq-view-more-btn';
+        loadMoreBtn.className = 'btn-secondary';
+        loadMoreBtn.style.display = 'block';
+        loadMoreBtn.style.width = '100%';
+        loadMoreBtn.style.marginTop = '20px';
+        loadMoreBtn.innerHTML = `View More (${currentFilteredFAQs.length - end} remaining)`;
+        loadMoreBtn.onclick = () => {
+            currentFAQPage++;
+            renderAllFAQs(false);
+            updateFAQCount();
+        };
+        list.appendChild(loadMoreBtn);
+    }
+}
+
+function filterFAQs() {
+    const categoryFilter = document.getElementById('faq-category-filter');
+    const searchInput = document.getElementById('faq-search-input');
+    if (!categoryFilter || !searchInput) return;
+
+    const category = categoryFilter.value;
+    const term = searchInput.value.toLowerCase().trim();
+
+    let filtered = allFaqsData;
+    if (category) {
+        filtered = filtered.filter(f => f.category === category);
+    }
+    if (term) {
+        filtered = filtered.filter(f => 
+            f.question.toLowerCase().includes(term) || 
+            f.answer.toLowerCase().includes(term)
+        );
+    }
+
+    currentFilteredFAQs = filtered;
+    renderAllFAQs(true);
+    updateFAQCount();
+}
+
+/**
+ * Shared FAQ Item Renderer
+ */
+function renderFAQItem(f) {
+    const item = document.createElement('div');
+    item.className = 'faq-item';
+    item.id = `all-faq-item-${f.id}`;
+    item.style.marginBottom = '20px';
+    item.style.padding = '15px';
+    item.style.background = 'var(--bg-secondary)';
+    item.style.borderRadius = '12px';
+    item.style.border = '1px solid var(--border-color)';
+
+    item.innerHTML = `
+        <div class="faq-display-mode">
+            <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 8px; font-size: 15px;">Q: ${escapeHtml(f.question)}</div>
+            <div style="color: var(--text-primary); line-height: 1.5; font-size: 14px;">A: ${escapeHtml(f.answer)}</div>
+            <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+                <span class="badge info" style="font-size: 10px; padding: 4px 8px;">${escapeHtml(f.category || 'General')}</span>
+                <div style="margin-left: auto; display: flex; gap: 12px;">
+                    <button onclick="enableEditAllFAQ('${f.id}')" style="background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                        <i class="fa-solid fa-pen"></i> Edit
+                    </button>
+                    <button onclick="deleteAllFAQ('${f.id}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                        <i class="fa-solid fa-trash"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="faq-edit-mode" style="display: none;">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="all-edit-q-${f.id}" value="${escapeHtml(f.question)}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                <textarea id="all-edit-a-${f.id}" rows="4" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">${escapeHtml(f.answer)}</textarea>
+                <div style="display: flex; gap: 10px;">
+                    <select id="all-edit-c-${f.id}" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+                        <option value="General" ${f.category === 'General' ? 'selected' : ''}>General</option>
+                        <option value="Academic" ${f.category === 'Academic' ? 'selected' : ''}>Academic</option>
+                        <option value="Admissions" ${f.category === 'Admissions' ? 'selected' : ''}>Admissions</option>
+                        <option value="Facilities" ${f.category === 'Facilities' ? 'selected' : ''}>Facilities</option>
+                        <option value="Hostels" ${f.category === 'Hostels' ? 'selected' : ''}>Hostels</option>
+                        <option value="Placements" ${f.category === 'Placements' ? 'selected' : ''}>Placements</option>
+                        <option value="User added faqs" ${f.category === 'User added faqs' ? 'selected' : ''}>User Contributions</option>
+                    </select>
+                    <button onclick="cancelEditAllFAQ('${f.id}')" class="btn-ghost">Cancel</button>
+                    <button onclick="updateAllFAQ('${f.id}')" class="btn-primary">Save</button>
+                </div>
+            </div>
+        </div>
+    `;
+    return item;
+}
+
+function enableEditAllFAQ(id) {
+    const item = document.getElementById(`all-faq-item-${id}`);
     if (!item) return;
     item.querySelector('.faq-display-mode').style.display = 'none';
     item.querySelector('.faq-edit-mode').style.display = 'block';
 }
 
-function cancelEditFAQ(id) {
-    const item = document.getElementById(`faq-item-${id}`);
+function cancelEditAllFAQ(id) {
+    const item = document.getElementById(`all-faq-item-${id}`);
     if (!item) return;
     item.querySelector('.faq-display-mode').style.display = 'block';
     item.querySelector('.faq-edit-mode').style.display = 'none';
 }
 
-async function updateFAQ(id) {
-    const q = document.getElementById(`edit-q-${id}`).value;
-    const a = document.getElementById(`edit-a-${id}`).value;
-    const c = document.getElementById(`edit-c-${id}`).value;
+async function updateAllFAQ(id) {
+    const q = document.getElementById(`all-edit-q-${id}`).value;
+    const a = document.getElementById(`all-edit-a-${id}`).value;
+    const c = document.getElementById(`all-edit-c-${id}`).value;
 
-    if (!q || !a) {
-        alert("Question and Answer are required");
-        return;
-    }
+    if (!q || !a) return alert("Question and Answer are required");
 
     try {
         const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
@@ -1026,30 +1270,41 @@ async function updateFAQ(id) {
         });
 
         if (res.ok) {
-            showStatusPopup("FAQ Updated Successfully");
-            // Refresh the specific item or the list. 
-            // For simplicity, let's refresh the current view via viewDocumentFAQs
-            // accessing the variables from closure might be tricky without passing source info.
-            // But we can just reload the modal content if we had the docId. 
-            // Since we don't duplicate state, let's just update the DOM to reflect changes immediately
-            // which is faster and better UX.
-            
-            const item = document.getElementById(`faq-item-${id}`);
-            if (item) {
-                 item.querySelector('.faq-display-mode div:nth-child(1)').innerHTML = `Q: ${escapeHtml(q)}`;
-                 item.querySelector('.faq-display-mode div:nth-child(2)').innerHTML = `A: ${escapeHtml(a)}`;
-                 item.querySelector('.badge.info').textContent = escapeHtml(c);
-                 cancelEditFAQ(id);
+            showStatusPopup("FAQ Updated");
+            // Sync state
+            const idx = allFaqsData.findIndex(f => f.id === id);
+            if (idx !== -1) {
+                allFaqsData[idx].question = q;
+                allFaqsData[idx].answer = a;
+                allFaqsData[idx].category = c;
             }
+            renderAllFAQs(true);
         } else {
             alert("Failed to update FAQ");
         }
-    } catch (e) {
-        console.error(e);
-        alert("Connection Error");
-    }
+    } catch (e) { console.error(e); }
 }
 
+async function deleteAllFAQ(id) {
+    if (!confirm("Delete this FAQ?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("FAQ Deleted");
+            allFaqsData = allFaqsData.filter(f => f.id !== id);
+            currentFilteredFAQs = currentFilteredFAQs.filter(f => f.id !== id);
+            renderAllFAQs(true);
+            updateFAQCount();
+        } else {
+            alert("Failed to delete FAQ");
+        }
+    } catch (e) { console.error(e); }
+}
 
 function renderCharts(roleData, sentimentData) {
     // 1. Role Chart
@@ -1109,10 +1364,6 @@ if (userInput) {
     });
 }
 
-function appendQuick(text) {
-    userInput.value = text;
-    sendMessage();
-}
 
 // Section for consolidated functions - removing duplicate sendMessage placeholder
 
@@ -1799,83 +2050,14 @@ function stopVoiceInput() {
 // --- End Voice Assistant ---
 
 // --- Navigation Logic ---
-function showSection(sectionId) {
-    // 1. Hide all sections
-    document.querySelectorAll('.content-section').forEach(sec => {
-        sec.style.display = 'none';
-        sec.classList.remove('active-section'); // Animation hook
-    });
-
-    // 2. Show target section
-    const target = document.getElementById(sectionId + '-section');
-    if (target) {
-        target.style.display = 'block';
-        setTimeout(() => target.classList.add('active-section'), 10);
-    }
-
-    // 3. Update Sidebar Active State
-    document.querySelectorAll('nav ul li').forEach(li => li.classList.remove('active'));
-    
-    // Try to find link by ID first (more reliable)
-    let activeLink = document.getElementById('nav-' + sectionId);
-    
-    // Fallback to onclick matching if ID not found
-    if (!activeLink) {
-        activeLink = document.querySelector(`nav ul li[onclick*="'${sectionId}'"]`);
-    }
-    
-    if (activeLink) activeLink.classList.add('active');
-
-    // 4. Dynamic Data Loading
-    if (sectionId === 'dashboard') loadDashboard();
-    if (sectionId === 'admin') {
-        loadUsers();
-        loadDocuments();
-        loadFAQs();
-        loadCalendarAdmin();
-        loadSystemHealth();
-        loadSuggestedFAQs();
-        loadAllTickets();
-    }
-    if (sectionId === 'calendar') loadCalendar();
-    if (sectionId === 'study') loadStudyBuddy();
-    if (sectionId === 'career') loadCareerCenter();
-
-    // Mobile: Close sidebar after selection
-    if (window.innerWidth <= 768) {
-        const sidebar = document.getElementById('sidebar');
-        const overlay = document.querySelector('.sidebar-overlay');
-        if (sidebar) sidebar.classList.remove('active');
-        if (overlay) overlay.classList.remove('active');
-    }
-}
+// Navigation Logic moved to top of file
+// Duplicate showSection removed
 
 // --- Dashboard Logic ---
 
 
-async function loadDashboard() {
-    if (!ACCESS_TOKEN) return;
-
-    try {
-        const res = await fetch(`${API_URL}/dashboard-stats`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        // Update Counts
-        animateValue("total-queries", 0, data.total_queries, 1000);
-        animateValue("active-users", 0, data.active_users, 1000);
-
-        // Update Charts
-        renderCharts(data.role_distribution, data.sentiment_stats);
-
-    } catch (e) {
-        console.error("Dashboard Load Error", e);
-    }
-}
+// Dashboard Logic moved to top of file
+// Duplicate loadDashboard removed
 
 function animateValue(id, start, end, duration) {
     const obj = document.getElementById(id);
@@ -2289,61 +2471,60 @@ function openTicketModal(userQuery, botResponse) {
         modal.id = 'ticket-modal';
         modal.className = 'modal';
         modal.innerHTML = `
-    <div class="modal-content" style="max-width: 500px; padding: 0; border-radius: 20px; overflow: hidden;">
-        <div class="modal-header" style="background: var(--gradient-primary); padding: 20px 24px; display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 12px; color: white;">
-                <div style="width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+    <div class="modal-content premium-ticket-modal">
+        <div class="premium-modal-header">
+            <div class="modal-header-content">
+                <div class="modal-icon-wrapper ticket-icon">
                     <i class="fa-solid fa-ticket"></i>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 18px; font-weight: 600;">Raise Support Ticket</h3>
-                    <p style="margin: 0; font-size: 13px; opacity: 0.9;">We'll help you resolve your issue</p>
+                <div class="modal-title-section">
+                    <h3 class="modal-title">Raise Support Ticket</h3>
+                    <p class="modal-subtitle">We'll help you resolve your issue</p>
                 </div>
             </div>
-            <button onclick="closeTicketModal()" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; opacity: 0.8; transition: opacity 0.2s;">
+            <button class="modal-close-btn" onclick="closeTicketModal()">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
         
-        <div style="padding: 24px;">
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Subject</label>
-                <div style="position: relative;">
-                    <i class="fa-solid fa-heading" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7;"></i>
-                    <input type="text" id="ticket-subject" placeholder="Brief summary of the issue" 
-                        style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; transition: border-color 0.2s;">
+        <div class="premium-modal-body">
+            <div class="premium-form-group">
+                <label class="premium-label">Subject</label>
+                <div class="premium-input-wrapper">
+                    <i class="fa-solid fa-heading input-icon"></i>
+                    <input type="text" id="ticket-subject" placeholder="Brief summary of the issue" class="premium-input">
                 </div>
             </div>
             
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Description</label>
-                <div style="position: relative;">
-                     <i class="fa-solid fa-align-left" style="position: absolute; left: 14px; top: 14px; color: var(--text-secondary); opacity: 0.7;"></i>
-                    <textarea id="ticket-desc" rows="5" placeholder="Describe your issue in detail..." 
-                        style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; transition: border-color 0.2s; resize: vertical; font-family: inherit; line-height: 1.5;"></textarea>
+            <div class="premium-form-group">
+                <label class="premium-label">Description</label>
+                <div class="premium-input-wrapper">
+                    <i class="fa-solid fa-align-left input-icon textarea-icon"></i>
+                    <textarea id="ticket-desc" rows="5" placeholder="Describe your issue in detail..." class="premium-textarea"></textarea>
                 </div>
             </div>
             
-            <div class="form-group" style="margin-bottom: 24px;">
-                <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Category</label>
-                <div style="position: relative;">
-                    <i class="fa-solid fa-layer-group" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7; pointer-events: none;"></i>
-                    <select id="ticket-cat" style="width: 100%; padding: 12px 12px 12px 40px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none; appearance: none; cursor: pointer;">
+            <div class="premium-form-group">
+                <label class="premium-label">Category</label>
+                <div class="premium-select-wrapper">
+                    <i class="fa-solid fa-layer-group input-icon"></i>
+                    <select id="ticket-cat" class="premium-select">
                         <option value="General">General Inquiry</option>
                         <option value="Technical">Technical Issue</option>
                         <option value="Academic">Academic/Grades</option>
                         <option value="Facilities">Campus Facilities</option>
                     </select>
-                    <i class="fa-solid fa-chevron-down" style="position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); opacity: 0.7; pointer-events: none; font-size: 12px;"></i>
+                    <i class="fa-solid fa-chevron-down select-arrow"></i>
                 </div>
             </div>
-            
-            <div style="display: flex; gap: 12px; padding-top: 10px;">
-                 <button class="btn-secondary" onclick="closeTicketModal()" style="flex: 1;">Cancel</button>
-                 <button class="btn-primary" onclick="submitTicket()" style="flex: 2; height: auto; padding: 14px;">
-                    <i class="fa-solid fa-paper-plane" style="margin-right: 8px;"></i> Submit Ticket
-                 </button>
-            </div>
+        </div>
+        
+        <div class="premium-modal-footer">
+            <button class="btn-modal-cancel" onclick="closeTicketModal()">Cancel</button>
+            <button class="btn-modal-submit" onclick="submitTicket()">
+                <i class="fa-solid fa-paper-plane"></i>
+                Submit Ticket
+            </button>
         </div>
     </div>`;
         document.body.appendChild(modal);
@@ -2444,17 +2625,52 @@ function renderCalendar(events) {
         return;
     }
 
-    list.innerHTML = events.map(e => {
-        const dateObj = new Date(e.date);
-        const day = dateObj.getDate();
-        const month = dateObj.toLocaleString('default', { month: 'short' }).toUpperCase();
+    // Display all events without pagination
+    const cardsHtml = events.map(e => {
+        const fromDate = e.from_date || e.date || '';
+        const toDate = e.to_date || e.date || '';
+        
+        // Parse as datetime
+        const fromDateTime = new Date(fromDate);
+        const toDateTime = new Date(toDate);
+        
+        // Extract date parts for comparison
+        const fromDateOnly = fromDateTime.toISOString().split('T')[0];
+        const toDateOnly = toDateTime.toISOString().split('T')[0];
+        const isSingleDay = fromDateOnly === toDateOnly;
+        
+        // Format time in 24-hour format
+        const formatTime = (date) => {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        };
+        
+        // Calendar card display (day/month)
+        const day = fromDateTime.getDate();
+        const month = fromDateTime.toLocaleString('default', { month: 'short' }).toUpperCase();
+
+        // Date range text with time
+        let dateRangeText;
+        if (isSingleDay) {
+            const dateFormatted = fromDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const startTime = formatTime(fromDateTime);
+            const endTime = formatTime(toDateTime);
+            dateRangeText = `${dateFormatted} | ${startTime} - ${endTime}`;
+        } else {
+            const fromFormatted = fromDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const toFormatted = toDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const startTime = formatTime(fromDateTime);
+            const endTime = formatTime(toDateTime);
+            dateRangeText = `${fromFormatted} ${startTime} — ${toFormatted} ${endTime}`;
+        }
 
         let colorClass = 'event-holiday';
         if (e.type === 'Exam') colorClass = 'event-exam';
         if (e.type === 'Event') colorClass = 'event-general';
 
         return `
-            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapeHtml(e.title)}', '${e.date}', '${escapeHtml(e.description || '')}')" style="cursor: pointer;" title="Add to Google Calendar">
+            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapeHtml(e.title)}', '${fromDate}', '${toDate}', '${escapeHtml(e.description || '')}')" style="cursor: pointer;" title="Add to Google Calendar">
                 <div class="calendar-date">
                     <span class="day">${day}</span>
                     <span class="month">${month}</span>
@@ -2463,6 +2679,9 @@ function renderCalendar(events) {
                     <span class="event-tag">${e.type}</span>
                     <h4 class="event-title">${e.title}</h4>
                     <p class="event-desc">${e.description || ''}</p>
+                    <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
+                         <i class="fa-regular fa-calendar"></i> ${dateRangeText}
+                    </div>
                     <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
                          <i class="fa-brands fa-google"></i> <span style="text-decoration: underline;">Add to Calendar</span>
                     </div>
@@ -2470,27 +2689,27 @@ function renderCalendar(events) {
             </div>
         `;
     }).join('');
+
+    list.innerHTML = cardsHtml;
 }
 
-function addToGoogleCalendar(title, dateStr, desc) {
-    // Parse date (assuming YYYY-MM-DD format from backend)
-    const date = new Date(dateStr);
+function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
+    const fromDate = new Date(fromDateStr);
+    const toDate = new Date(toDateStr);
 
-    // Format YYYYMMDD
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
+    // Format for Google Calendar: YYYYMMDDTHHmmss
+    const fmtDateTime = (d) => {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${yyyy}${mm}${dd}T${hh}${min}${ss}`;
+    };
 
-    // Create start and end date (all day event)
-    const start = `${yyyy}${mm}${dd}`;
-    // For all day event, end date is next day
-    const nextDay = new Date(date);
-    nextDay.setDate(date.getDate() + 1);
-    const endYYYY = nextDay.getFullYear();
-    const endMM = String(nextDay.getMonth() + 1).padStart(2, '0');
-    const endDD = String(nextDay.getDate()).padStart(2, '0');
-
-    const end = `${endYYYY}${endMM}${endDD}`;
+    const start = fmtDateTime(fromDate);
+    const end = fmtDateTime(toDate);
 
     const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${start}/${end}&details=${encodeURIComponent(desc)}`;
 
@@ -2501,24 +2720,14 @@ function addToGoogleCalendar(title, dateStr, desc) {
 
 // --- Calendar Admin Logic ---
 
-async function loadAcademicCalendar() {
-    if (!ACCESS_TOKEN) return;
-    try {
-        const res = await fetch(`${API_URL}/admin/calendar`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const events = await res.json();
-        window.allCalendarEvents = events;
-        renderCalendarAdminTable(events, 3);
-    } catch (e) {
-        console.error("Load Calendar Error", e);
-    }
-}
+    // Consolidating calendar loading logic - removing duplicate function here
+    // The main function is defined below around line 2900
 
 // Alias for compatibility
 async function loadCalendarAdmin() {
-    return loadAcademicCalendar();
+    const events = await loadAcademicCalendar();
+    window.allAdminEvents = events || [];
+    renderCalendarAdminTable(window.allAdminEvents);
 }
 
 
@@ -2556,18 +2765,57 @@ function renderCalendarAdminTable(events, limit = null) {
     const showCount = limit ? limit : events.length;
     const visibleEvents = events.slice(0, showCount);
 
-    tbody.innerHTML = visibleEvents.map(e => `
+    tbody.innerHTML = visibleEvents.map(e => {
+        const fromDate = e.from_date || e.date || '';
+        const toDate = e.to_date || e.date || '';
+        
+        // Parse as datetime
+        const fromDateTime = new Date(fromDate);
+        const toDateTime = new Date(toDate);
+        
+        // Extract date parts for comparison
+        const fromDateOnly = fromDateTime.toISOString().split('T')[0];
+        const toDateOnly = toDateTime.toISOString().split('T')[0];
+        const isSingleDay = fromDateOnly === toDateOnly;
+        
+        // Format time in 24-hour format
+        const formatTime = (date) => {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
+        };
+        
+        // Date display with time
+        let dateDisplay;
+        if (isSingleDay) {
+            const dateFormatted = fromDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const startTime = formatTime(fromDateTime);
+            const endTime = formatTime(toDateTime);
+            dateDisplay = `${dateFormatted} | ${startTime} - ${endTime}`;
+        } else {
+            const fromFormatted = fromDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const toFormatted = toDateTime.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+            const startTime = formatTime(fromDateTime);
+            const endTime = formatTime(toDateTime);
+            dateDisplay = `${fromFormatted} ${startTime} → ${toFormatted} ${endTime}`;
+        }
+        
+        return `
         <tr>
-            <td style="padding: 12px;">${e.date}</td>
+            <td style="padding: 12px;">${dateDisplay}</td>
             <td style="padding: 12px; font-weight: 500;">${e.title}</td>
             <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${e.type}</span></td>
             <td style="padding: 12px; text-align: right;">
-                <button onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444; background: none; border: none; cursor: pointer;">
+                <button onclick="editCalendarEvent('${e.id}')" style="color: #6366f1; background: none; border: none; cursor: pointer; margin-right: 8px;" title="Edit event">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444; background: none; border: none; cursor: pointer;" title="Delete event">
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 
     // Toggle Button Logic
     if (events.length <= 3) {
@@ -2575,60 +2823,211 @@ function renderCalendarAdminTable(events, limit = null) {
     } else {
         btn.style.display = 'block';
         if (limit) {
-            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${events.length - 3} more)`;
+            const hiddenCount = events.length - limit;
+            btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${hiddenCount})`;
             btn.onclick = () => renderCalendarAdminTable(events, null); // Show all
         } else {
-            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
+            btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> Show Less`;
             btn.onclick = () => renderCalendarAdminTable(events, 3); // Show Less
         }
     }
 }
 
-function openCalendarModal() {
-    document.getElementById('calendar-event-modal').classList.add('active');
+let currentEditEventId = null;
+
+function toggleCustomEventType() {
+    const typeSelect = document.getElementById('calendar-event-type');
+    const customContainer = document.getElementById('custom-event-type-container');
+    const customInput = document.getElementById('custom-event-type-input');
+    
+    if (typeSelect.value === 'Custom') {
+        customContainer.style.display = 'block';
+        customInput.focus();
+    } else {
+        customContainer.style.display = 'none';
+        customInput.value = '';
+    }
+}
+window.toggleCustomEventType = toggleCustomEventType;
+
+function openCalendarModal(eventData = null) {
+    const modal = document.getElementById('calendar-event-modal');
+    
+    if (eventData) {
+        // Edit mode
+        currentEditEventId = eventData.id;
+        document.getElementById('event-title').value = eventData.title;
+        document.getElementById('event-from-date').value = eventData.from_date;
+        document.getElementById('event-to-date').value = eventData.to_date;
+        
+        // Check if it's a predefined type or custom
+        const predefinedTypes = ['Event', 'Exam', 'Holiday'];
+        if (predefinedTypes.includes(eventData.type)) {
+            document.getElementById('calendar-event-type').value = eventData.type;
+            document.getElementById('custom-event-type-container').style.display = 'none';
+        } else {
+            document.getElementById('calendar-event-type').value = 'Custom';
+            document.getElementById('custom-event-type-input').value = eventData.type;
+            document.getElementById('custom-event-type-container').style.display = 'block';
+        }
+        
+        document.getElementById('event-desc').value = eventData.description || '';
+    } else {
+        // Create mode
+        currentEditEventId = null;
+        document.getElementById('event-title').value = '';
+        document.getElementById('event-from-date').value = '';
+        document.getElementById('event-to-date').value = '';
+        document.getElementById('calendar-event-type').value = 'Event';
+        document.getElementById('custom-event-type-container').style.display = 'none';
+        document.getElementById('custom-event-type-input').value = '';
+        document.getElementById('event-desc').value = '';
+    }
+    
+    modal.classList.add('active');
 }
 
 function closeCalendarModal() {
+    currentEditEventId = null;
     document.getElementById('calendar-event-modal').classList.remove('active');
 }
 
 async function saveCalendarEvent() {
     const title = document.getElementById('event-title').value;
-    const date = document.getElementById('event-date').value;
-    const type = document.getElementById('calendar-event-type').value;
+    const fromDate = document.getElementById('event-from-date').value;
+    const toDate = document.getElementById('event-to-date').value;
+    let type = document.getElementById('calendar-event-type').value;
     const desc = document.getElementById('event-desc').value;
+    
+    // If custom type is selected, use the custom input value
+    if (type === 'Custom') {
+        const customType = document.getElementById('custom-event-type-input').value.trim();
+        if (!customType) {
+            alert('Please enter a custom event type name.');
+            return;
+        }
+        type = customType;
+    }
 
-    if (!title || !date) {
-        alert("Please provide title and date.");
+    if (!title || !fromDate || !toDate) {
+        alert("Please provide title, from date (and) to date.");
+        return;
+    }
+
+    if (new Date(toDate) < new Date(fromDate)) {
+        alert("To Date cannot be before From Date.");
         return;
     }
 
     try {
-        const res = await fetch(`${API_URL}/admin/calendar`, {
-            method: 'POST',
+        const isEdit = currentEditEventId !== null;
+        const url = isEdit ? `${API_URL}/admin/calendar/${currentEditEventId}` : `${API_URL}/admin/calendar`;
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const res = await fetch(url, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${ACCESS_TOKEN}`
             },
-            body: JSON.stringify({ title, date, type, description: desc })
+            body: JSON.stringify({ title, from_date: fromDate, to_date: toDate, type, description: desc })
         });
 
         if (res.ok) {
             closeCalendarModal();
-            loadCalendarAdmin();
-            loadCalendar(); // Update main calendar view if open
-            showStatusPopup("Event posted successfully!");
+            loadAcademicCalendar();
+            showStatusPopup(isEdit ? "Event updated successfully!" : "Event added successfully!");
         } else {
-            alert("Failed to post event.");
+            alert("Failed to save event");
         }
     } catch (e) {
         console.error(e);
-        alert("Error posting event.");
+        alert("Error saving event");
     }
 }
 
-// deleteCalendarEvent defined below
+async function editCalendarEvent(eventId) {
+    // Find the event from the cached list
+    const event = window.allCalendarEvents.find(e => e.id === eventId);
+    if (event) {
+        openCalendarModal(event);
+    } else {
+        alert("Event not found");
+    }
+}
+window.editCalendarEvent = editCalendarEvent;
 
+// --- Restored Calendar Admin Logic ---
+
+async function loadCalendarAdmin() {
+    // Alias for consistency with other load functions
+    await loadAcademicCalendar();
+}
+
+// Global alias for HTML onclick access if needed
+window.loadCalendarAdmin = loadCalendarAdmin;
+
+async function loadAcademicCalendar() {
+    const tableBody = document.getElementById('calendar-admin-table-body');
+    if (!tableBody) return;
+
+    tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px;">Loading events...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            const events = await res.json();
+            window.allCalendarEvents = events;
+            window.allAdminEvents = events; // Fix for search filter
+            renderCalendarAdminTable(events);
+            return events; // Return events for other callers
+        } else {
+            tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 20px;">Failed to load events.</td></tr>';
+        }
+    } catch (e) {
+        console.error(e);
+        tableBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 20px;">Connection error.</td></tr>';
+    }
+}
+window.loadAcademicCalendar = loadAcademicCalendar;
+
+
+
+function getEventTypeBadge(type) {
+    const typeMap = {
+        'Exam': 'error',     // Red for exams
+        'Holiday': 'success', // Green for holidays
+        'Event': 'info'       // Blue for events
+    };
+    return typeMap[type] || 'info';
+}
+
+async function deleteCalendarEvent(eventId) {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/calendar/${eventId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup('Event deleted successfully');
+            loadAcademicCalendar(); // Refresh admin list
+            loadCalendar(); // Refresh student view
+        } else {
+            const data = await res.json();
+            showStatusPopup(data.detail || 'Failed to delete event', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showStatusPopup('Connection error', 'error');
+    }
+}
+window.deleteCalendarEvent = deleteCalendarEvent;
 
 async function loadAllTickets() {
     if (!ACCESS_TOKEN) return;
@@ -2848,26 +3247,49 @@ async function submitTicketResponse() {
 // Locations Logic
 const locations = [
     "Sri Venkateswara University, Tirupati",
-    "Computer Centre",
-    "Department of Adult & Continuing Education",
-    "Department of Ancient Indian History, Culture & Archaeology",
-    "Department of Biochemistry",
-    "Department of Biotechnology",
-    "Department of Botany",
-    "Department of Chemistry",
-    "Department of Computer Science",
-    "Department of Econometrics",
-    "Department of Economics",
-    "Department of Education",
-    "Department of Electrical & Electronics Engineering",
-    "Department of English",
-    "Department of Environmental Sciences",
-    "Srinivasa Auditorium",
     "SVU Central Library",
+    "SVU College of Engineering (Main Block)",
     "SVU College of Arts",
+    "SVU College of Sciences",
+    "SVU College of Pharmaceutical Sciences",
     "SVU College of Commerce, Management & Computer Science",
-    "SVU College of Engineering",
-    "SVU College of Sciences"
+    "SVU Administration Building",
+    "SVU Health Center",
+    "SVU Indoor Stadium",
+    "SVU Outdoor Stadium (Tarakarama Stadium)",
+    "SVU Computer Centre",
+    "Department of Computer Science",
+    "Department of Physics",
+    "Department of Chemistry",
+    "Department of Mathematics",
+    "Department of Botany",
+    "Department of Zoology",
+    "Department of Biotechnology",
+    "Department of biochemistry",
+    "Department of Microbiology",
+    "Department of Statistics",
+    "Department of Psychology",
+    "Department of Economics",
+    "Department of English",
+    "Department of Telugu",
+    "Department of History",
+    "Department of Political Science & Public Administration",
+    "Department of Civil Engineering",
+    "Department of Mechanical Engineering",
+    "Department of Electrical & Electronics Engineering",
+    "Department of Electronics & Communication Engineering",
+    "Department of Chemical Engineering",
+    "SVU Boys Hostel (Blocks 1-10)",
+    "SVU Girls Hostel",
+    "SVU Canteen",
+    "SVU Post Office",
+    "SVU State Bank of India & ATM",
+    "SVU Auditorium",
+    "SVU Guest House",
+    "DDE (Directorate of Distance Education)",
+    "SVU Career and Counseling Cell",
+    "NSS Office SVU",
+    "NCC Office SVU"
 ];
 
 const locationsModal = document.getElementById('locations-modal');
@@ -3085,13 +3507,39 @@ async function submitText() {
 // checkResume defined below
 
 
-// --- Original Locations Logic Below ---
+// --- Locations Logic ---
+function filterLocations(query) {
+    const listEl = document.getElementById('locations-list');
+    if (!listEl) return;
+
+    const searchTerm = query.toLowerCase().trim();
+    const items = listEl.querySelectorAll('.location-item');
+
+    items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            item.style.display = 'block';
+            // Simple animation
+            item.style.opacity = '1';
+        } else {
+            item.style.display = 'none';
+            item.style.opacity = '0';
+        }
+    });
+}
+
 function openLocations() {
-    if (locationsListEl) {
+    const listEl = document.getElementById('locations-list');
+    const searchInput = document.getElementById('locations-search');
+    
+    // Reset search on open
+    if (searchInput) searchInput.value = "";
+
+    if (listEl) {
         // Keep the highlighter, clear and re-populate the rest
         const highlighter = document.getElementById('locations-highlighter');
         // Clear all except highlighter
-        Array.from(locationsListEl.children).forEach(child => {
+        Array.from(listEl.children).forEach(child => {
             if (child.id !== 'locations-highlighter') child.remove();
         });
 
@@ -3099,7 +3547,6 @@ function openLocations() {
             const a = document.createElement('a');
             a.href = '#';
             a.className = 'location-item';
-            if (index === 0) a.classList.add('active');
             a.textContent = name;
 
             a.onmouseenter = () => {
@@ -3120,10 +3567,9 @@ function openLocations() {
                 a.classList.add('active');
                 openLocationMap(name);
             };
-            locationsListEl.appendChild(a);
+            listEl.appendChild(a);
         });
     }
-    if (locationsModal) locationsModal.classList.add('active');
 }
 
 function closeLocations() { if (locationsModal) locationsModal.classList.remove('active'); }
@@ -3460,152 +3906,10 @@ async function deleteUser(id) {
     } catch (e) { console.error(e); }
 }
 
-// --- Data Loading Placeholders Removed ---
-
-// --- Data Mutation Logic (User & Calendar) ---
+// --- Data Mutation Logic (User) ---
 
 // 1. User Creation Logic
 const addUserModal = document.getElementById('add-user-modal');
-
-// 2. Calendar Event Logic
-const calendarModal = document.getElementById('calendar-event-modal');
-
-function openCalendarModal() {
-    if (calendarModal) calendarModal.classList.add('active');
-}
-
-function closeCalendarModal() {
-    if (calendarModal) calendarModal.classList.remove('active');
-}
-
-async function submitCalendarEvent() {
-    const title = document.getElementById('event-title').value;
-    const date = document.getElementById('event-date').value;
-    const type = document.getElementById('calendar-event-type').value;
-    const desc = document.getElementById('event-desc').value;
-
-    if (!title || !date) {
-        alert("Title and Date are required");
-        return;
-    }
-
-    try {
-        const res = await fetch(`${API_URL}/admin/calendar`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${ACCESS_TOKEN}`
-            },
-            body: JSON.stringify({
-                title: title,
-                date: date,
-                type: type,
-                description: desc
-            })
-        });
-
-        if (res.ok) {
-            closeCalendarModal();
-            showStatusPopup("Event posted successfully!");
-            // Clear form
-            document.getElementById('event-title').value = "";
-            document.getElementById('event-date').value = "";
-            document.getElementById('event-desc').value = "";
-
-            loadCalendarAdmin(); // Refresh list
-        } else {
-            const data = await res.json();
-            alert(data.detail || "Failed to post event");
-        }
-    } catch (e) {
-        console.error(e);
-        alert("Connection error");
-    }
-}
-
-// Global functions for Calendar Admin
-function getEventTypeBadge(type) {
-    const typeMap = {
-        'Exam': 'error',
-        'Holiday': 'success',
-        'Event': 'info'
-    };
-    return typeMap[type] || 'info';
-}
-
-
-
-async function loadCalendarAdmin() {
-    const listEl = document.getElementById('calendar-events-list');
-    if (!listEl) return;
-
-    listEl.innerHTML = '<p class="loading-text">Loading events...</p>';
-
-    try {
-        const res = await fetch(`${API_URL}/admin/calendar`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (res.ok) {
-            const events = await res.json();
-            listEl.innerHTML = '';
-
-            if (events.length === 0) {
-                listEl.innerHTML = '<p style="text-align:center; padding: 20px; color: var(--text-secondary);">No events scheduled.</p>';
-                return;
-            }
-
-            events.forEach(e => {
-                const badge = getEventTypeBadge(e.type);
-                listEl.innerHTML += `
-                <div class="calendar-item" style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border-color);">
-                    <div style="flex: 1;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
-                            <span class="badge ${badge}">${e.type}</span>
-                            <span style="font-weight: 600; color: var(--text-primary);">${escapeHtml(e.title)}</span>
-                        </div>
-                        <div style="font-size: 13px; color: var(--text-secondary);">
-                            <i class="fa-regular fa-calendar"></i> ${e.date} &nbsp;|&nbsp; ${escapeHtml(e.description)}
-                        </div>
-                    </div>
-                    <button class="icon-btn" onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444;" title="Delete">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>`;
-            });
-        } else {
-             listEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Failed to load events.</p>';
-        }
-    } catch (e) {
-        console.error(e);
-        listEl.innerHTML = '<p style="color: #ef4444; text-align: center;">Connection error.</p>';
-    }
-}
-
-window.loadCalendarAdmin = loadCalendarAdmin;
-
-async function deleteCalendarEvent(eventId) {
-    if (!confirm('Are you sure you want to delete this event?')) return;
-
-    try {
-        const res = await fetch(`${API_URL}/admin/calendar/${eventId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (res.ok) {
-            showStatusPopup('Event deleted successfully');
-            loadCalendarAdmin();
-        } else {
-            const data = await res.json();
-            showStatusPopup(data.detail || 'Failed to delete event', 'error');
-        }
-    } catch (e) {
-        console.error(e);
-        showStatusPopup('Connection error', 'error');
-    }
-}
-window.deleteCalendarEvent = deleteCalendarEvent;
 
 async function toggleUserRole(id, currentRole) {
     const newRole = currentRole === 'admin' ? 'student' : 'admin';
@@ -3726,6 +4030,44 @@ async function submitAddUser() {
     }
 }
 
+/**
+ * Global Admin Refresh: Reloads all dynamic content in the admin section
+ */
+async function refreshAllAdminData() {
+    console.log("Global Admin Refresh Triggered...");
+    const refreshBtn = document.getElementById('admin-refresh-all');
+    const refreshIcon = refreshBtn ? refreshBtn.querySelector('i') : null;
+    
+    // Start spin animation
+    if (refreshIcon) refreshIcon.classList.add('fa-spin');
+    
+    try {
+        showToast("Admin Refresh", "Updating all system features...");
+        
+        // Run all refresh functions in parallel
+        await Promise.all([
+            loadAdminTrending(),
+            loadUsers(),
+            loadDocuments(),
+            loadCalendarAdmin(),
+            fetchLocations(),
+            loadAllTickets(),
+            loadSuggestedFAQs(),
+            loadSystemHealth()
+        ]);
+        
+        showToast("Success", "All admin features updated successfully!");
+    } catch (error) {
+        console.error("Global Refresh Failed:", error);
+        showToast("Refresh Error", "Some components failed to reload.", "error");
+    } finally {
+        // Stop spin animation after a slight delay for better UX
+        setTimeout(() => {
+            if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+        }, 800);
+    }
+}
+
 
 // --- Study Buddy Feature ---
 async function loadStudyBuddy() {
@@ -3786,6 +4128,67 @@ async function deleteStudyMaterial(id) {
 }
 
 let currentStudyMaterialId = null;
+
+// --- Study Text Modal Functions ---
+function openStudyTextModal() {
+    const modal = document.getElementById('study-text-modal');
+    if (modal) {
+        modal.classList.add('active');
+        document.getElementById('study-text-title').value = '';
+        document.getElementById('study-text-content').value = '';
+    }
+}
+
+function closeStudyTextModal() {
+    const modal = document.getElementById('study-text-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function submitStudyText() {
+    const title = document.getElementById('study-text-title').value.trim();
+    const content = document.getElementById('study-text-content').value.trim();
+
+    if (!title || !content) {
+        alert("Please enter both a title and some content.");
+        return;
+    }
+
+    // Show loading state
+    const btn = document.querySelector('#study-text-modal .btn-primary');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`${API_URL}/study-buddy/upload-text`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ title, content })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Upload failed");
+        }
+
+        const data = await res.json();
+        showStatusPopup("Text analyzed successfully!");
+        closeStudyTextModal();
+        loadStudyBuddy();
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+window.openStudyTextModal = openStudyTextModal;
+window.closeStudyTextModal = closeStudyTextModal;
+window.submitStudyText = submitStudyText;
 
 async function summarizeMaterial(id) {
     const summaryEl = document.getElementById('material-summary-content');
@@ -3877,6 +4280,104 @@ async function loadCareerCenter() {
 }
 window.loadCareerCenter = loadCareerCenter;
 
+
+function switchCareerTab(tab) {
+    const checkerTab = document.getElementById('tab-resume-checker');
+    const makerTab = document.getElementById('tab-resume-maker');
+    const checkerView = document.getElementById('resume-checker-view');
+    const makerView = document.getElementById('resume-maker-view');
+
+    if (tab === 'checker') {
+        checkerTab.classList.add('active');
+        makerTab.classList.remove('active');
+        checkerView.style.display = 'block';
+        makerView.style.display = 'none';
+    } else {
+        checkerTab.classList.remove('active');
+        makerTab.classList.add('active');
+        checkerView.style.display = 'none';
+        makerView.style.display = 'block';
+    }
+}
+window.switchCareerTab = switchCareerTab;
+
+async function generateResume() {
+    // Collect Inputs
+    const fullName = document.getElementById('maker-fullname').value.trim();
+    const email = document.getElementById('maker-email').value.trim();
+    const phone = document.getElementById('maker-phone').value.trim();
+    const linkedin = document.getElementById('maker-linkedin').value.trim();
+    const qualification = document.getElementById('maker-qualification').value.trim();
+    const percentage = document.getElementById('maker-percentage').value.trim();
+    const role = document.getElementById('maker-role').value.trim();
+    const level = document.getElementById('maker-level').value;
+    const skillsTech = document.getElementById('maker-skills-tech').value.trim();
+    const skillsCoding = document.getElementById('maker-skills-coding').value.trim();
+    const skillsSoft = document.getElementById('maker-skills-soft').value.trim();
+    const research = document.getElementById('maker-research').value.trim();
+    const experience = document.getElementById('maker-experience').value.trim();
+    
+    const feedbackEl = document.getElementById('resume-generation-feedback');
+
+    // Validation
+    if (!fullName || !email || !qualification || !role || !skillsTech) {
+        alert("Please fill in all required fields (Name, Email, Qualification, Role, Technical Skills).");
+        return;
+    }
+
+    feedbackEl.style.display = 'block';
+    feedbackEl.innerHTML = '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Generating Professional Resume...</div>';
+
+    try {
+        const res = await fetch(`${API_URL}/career/generate-resume`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                full_name: fullName,
+                contact_email: email,
+                contact_phone: phone,
+                linkedin: linkedin,
+                qualification: qualification,
+                qualification_percentage: percentage,
+                skills_soft: skillsSoft,
+                skills_technical: skillsTech,
+                skills_coding: skillsCoding,
+                experience_level: level,
+                target_role: role,
+                research_publications: research,
+                industry_experience: experience
+            })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Generation failed");
+        }
+
+        const data = await res.json();
+        feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.resume)}</div>`;
+        
+        // Add Copy Button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn-secondary';
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Markdown';
+        copyBtn.style.marginTop = '15px';
+        copyBtn.onclick = () => {
+             navigator.clipboard.writeText(data.resume);
+             showStatusPopup("Resume Copied to Clipboard!");
+        };
+        feedbackEl.appendChild(copyBtn);
+
+    } catch (e) {
+        feedbackEl.innerHTML = `<p style="color: #ef4444;">Error: ${e.message}</p>`;
+        console.error(e);
+    }
+}
+window.generateResume = generateResume;
+
 async function checkResume() {
     const textInput = document.getElementById('resume-text-input');
     const text = textInput ? textInput.value.trim() : "";
@@ -3916,3 +4417,752 @@ async function checkResume() {
     }
 }
 window.checkResume = checkResume;
+
+
+// --- University Locations Logic ---
+
+let locationsData = [];
+let isAdminLocationsExpanded = false;
+
+function renderLocations(data = locationsData) {
+    const list = document.getElementById('locations-list');
+    if (!list) return;
+
+    list.innerHTML = ''; // Clear existing content
+
+    // Add Highlighter Div
+    const highlighter = document.createElement('div');
+    highlighter.id = 'locations-highlighter';
+    highlighter.className = 'locations-highlighter';
+    list.appendChild(highlighter);
+
+    const categories = [...new Set(data.map(item => item.category))];
+
+    categories.forEach(category => {
+        // Create Category Header
+        const header = document.createElement('h3');
+        header.className = 'locations-category-header';
+        header.textContent = category;
+        list.appendChild(header);
+
+        // Create Grid for items
+        const grid = document.createElement('div');
+        grid.className = 'locations-category-grid';
+
+        const categoryItems = data.filter(item => item.category === category);
+        
+        categoryItems.forEach((loc, index) => {
+            const item = document.createElement('div');
+            item.className = 'location-item';
+            item.textContent = loc.name;
+            item.style.animationDelay = `${index * 0.03}s`; // Stagger effect
+            item.onclick = (e) => {
+                e.stopPropagation();
+                window.open(`https://www.google.com/maps/search/?api=1&query=Sri+Venkateswara+University+${encodeURIComponent(loc.name)}`, '_blank');
+            };
+            
+            // Hover logic for highlighter
+            item.onmouseenter = (e) => {
+                const rect = item.getBoundingClientRect();
+                const containerRect = list.getBoundingClientRect();
+                
+                highlighter.style.width = `${rect.width}px`;
+                highlighter.style.height = `${rect.height}px`;
+                highlighter.style.top = `${item.offsetTop}px`;
+                highlighter.style.left = `${item.offsetLeft}px`;
+                highlighter.style.opacity = '1';
+            };
+
+            grid.appendChild(item);
+        });
+
+        list.appendChild(grid);
+    });
+
+    // Hide highlighter on mouse leave
+    list.onmouseleave = () => {
+        highlighter.style.opacity = '0';
+    };
+}
+
+function filterLocations(query) {
+    const term = query.toLowerCase();
+    
+    // Filter data
+    const filtered = term ? locationsData.filter(loc => 
+        loc.name.toLowerCase().includes(term) || 
+        loc.category.toLowerCase().includes(term)
+    ) : locationsData;
+
+    renderLocations(filtered);
+
+    // If search produced no results
+    if (term && filtered.length === 0) {
+        const list = document.getElementById('locations-list');
+        if (list) {
+            list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No locations found for "${query}"</div>`;
+        }
+    }
+}
+
+function askLocation(locationName) {
+    showSection('chat');
+    const input = document.getElementById('user-input');
+    if (input) {
+        input.value = `Where is ${locationName}?`;
+        sendMessage(); 
+    }
+}
+
+// --- Location CRUD Functions (Admin) ---
+
+async function fetchLocations() {
+    try {
+        const res = await fetch(`${API_URL}/admin/locations`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (res.ok) {
+            locationsData = await res.json();
+            renderLocations();
+            renderAdminLocationsTable();
+        }
+    } catch (e) { console.error("Fetch Locations Error", e); }
+}
+
+function renderAdminLocationsTable(data = locationsData, bypassExpand = false) {
+    const tbody = document.getElementById('locations-admin-table-body');
+    const toggleContainer = document.getElementById('location-admin-view-toggle');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No locations found.</td></tr>';
+        if (toggleContainer) toggleContainer.style.display = 'none';
+        return;
+    }
+
+    // Show toggle button if there are many locations and we're not searching
+    if (toggleContainer) {
+        toggleContainer.style.display = (!bypassExpand && data.length > 3) ? 'block' : 'none'; // Changed from 5 to 3
+        const btnText = document.getElementById('location-view-btn-text');
+        const btnIcon = document.getElementById('location-view-btn-icon');
+        if (btnText) btnText.textContent = isAdminLocationsExpanded ? "View Less" : "View More";
+        if (btnIcon) btnIcon.className = isAdminLocationsExpanded ? "fa-solid fa-chevron-up" : "fa-solid fa-chevron-down";
+    }
+
+    const displayedData = (isAdminLocationsExpanded || bypassExpand) ? data : data.slice(0, 3); // Changed default limit to 3
+
+    displayedData.forEach(loc => {
+        tbody.innerHTML += `
+        <tr>
+            <td style="padding: 12px; font-weight: 500;">${escapeHtml(loc.name)}</td>
+            <td style="padding: 12px;"><span class="badge info">${escapeHtml(loc.category)}</span></td>
+            <td style="padding: 12px; text-align: right;">
+                <button class="icon-btn" onclick="openLocationModal('${loc.id}')" title="Edit">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button class="icon-btn" onclick="deleteLocation('${loc.id}')" style="color: #ef4444;" title="Delete">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        </tr>`;
+    });
+}
+
+function toggleAdminLocationsView() {
+    isAdminLocationsExpanded = !isAdminLocationsExpanded;
+    renderAdminLocationsTable();
+}
+
+window.toggleAdminLocationsView = toggleAdminLocationsView;
+
+function openLocationModal(locId = null) {
+    const modal = document.getElementById('location-modal');
+    const title = document.getElementById('location-modal-title');
+    const nameInput = document.getElementById('location-name');
+    const catSelect = document.getElementById('location-category');
+    const descInput = document.getElementById('location-description');
+    const idInput = document.getElementById('location-id');
+
+    if (!modal) return;
+
+    if (locId) {
+        const loc = locationsData.find(l => l.id === locId);
+        if (loc) {
+            title.textContent = "Edit Location";
+            nameInput.value = loc.name;
+            catSelect.value = loc.category;
+            descInput.value = loc.description || "";
+            idInput.value = loc.id;
+        }
+    } else {
+        title.textContent = "Add New Location";
+        nameInput.value = "";
+        catSelect.value = "Constituent Colleges";
+        descInput.value = "";
+        idInput.value = "";
+    }
+
+    modal.classList.add('active');
+}
+
+function closeLocationModal() {
+    const modal = document.getElementById('location-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+async function saveLocation() {
+    const id = document.getElementById('location-id').value;
+    const name = document.getElementById('location-name').value.trim();
+    const category = document.getElementById('location-category').value;
+    const description = document.getElementById('location-description').value.trim();
+
+    if (!name || !category) {
+        showStatusPopup("Please enter name and category", "warning");
+        return;
+    }
+
+    const payload = { name, category, description };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `${API_URL}/admin/locations/${id}` : `${API_URL}/admin/locations`;
+
+    try {
+        const res = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showStatusPopup(id ? "Location updated!" : "Location added!");
+            closeLocationModal();
+            fetchLocations();
+        } else {
+            const data = await res.json();
+            showStatusPopup(data.detail || "Failed to save location", "error");
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteLocation(id) {
+    if (!confirm("Delete this location?")) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/locations/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+
+        if (res.ok) {
+            showStatusPopup("Location deleted");
+            fetchLocations();
+        } else {
+            showStatusPopup("Failed to delete", "error");
+        }
+    } catch (e) { console.error(e); }
+}
+
+window.openLocationModal = openLocationModal;
+window.closeLocationModal = closeLocationModal;
+window.saveLocation = saveLocation;
+window.deleteLocation = deleteLocation;
+
+// --- Admin Filtering Logic ---
+
+function filterAdminUsers() {
+    const query = document.getElementById('user-search-input').value.toLowerCase();
+    const filtered = (window.allUsers || []).filter(u => 
+        (u.username && u.username.toLowerCase().includes(query)) ||
+        (u.email && u.email.toLowerCase().includes(query)) ||
+        (u.full_name && u.full_name.toLowerCase().includes(query))
+    );
+    renderUsersTable(filtered);
+}
+
+function filterAdminCalendar() {
+    const query = document.getElementById('calendar-search-input').value.toLowerCase();
+    const filtered = (window.allAdminEvents || []).filter(e => 
+        (e.title && e.title.toLowerCase().includes(query)) ||
+        (e.category && e.category.toLowerCase().includes(query)) ||
+        (e.description && e.description.toLowerCase().includes(query))
+    );
+    renderCalendarAdminTable(filtered);
+}
+
+function filterAdminLocations() {
+    const query = document.getElementById('location-search-input').value.toLowerCase();
+    const filtered = (locationsData || []).filter(l => 
+        (l.name && l.name.toLowerCase().includes(query)) ||
+        (l.category && l.category.toLowerCase().includes(query)) ||
+        (l.description && l.description.toLowerCase().includes(query))
+    );
+    // When filtering, we usually want to see all matches, so we bypass the collapsed state if query is present
+    const bypassExpand = query.length > 0;
+    renderAdminLocationsTable(filtered, bypassExpand);
+}
+
+function filterAdminTickets() {
+    const query = document.getElementById('ticket-search-input').value.toLowerCase();
+    const filtered = (window.allTickets || []).filter(t => 
+        (t.subject && t.subject.toLowerCase().includes(query)) ||
+        (t.category && t.category.toLowerCase().includes(query)) ||
+        (t.user_email && t.user_email.toLowerCase().includes(query)) ||
+        (String(t.id) && String(t.id).toLowerCase().includes(query))
+    );
+    renderTicketsTable(filtered);
+}
+
+function filterAdminSuggestions() {
+    const query = document.getElementById('suggestion-search-input').value.toLowerCase();
+    const filtered = (window.allSuggestions || []).filter(s => 
+        (s.question && s.question.toLowerCase().includes(query)) ||
+        (s.answer && s.answer.toLowerCase().includes(query)) ||
+        (s.user_email && s.user_email.toLowerCase().includes(query))
+    );
+    renderSuggestedFAQsTable(filtered);
+}
+
+window.filterAdminUsers = filterAdminUsers;
+window.filterAdminCalendar = filterAdminCalendar;
+window.filterAdminLocations = filterAdminLocations;
+window.filterAdminTickets = filterAdminTickets;
+window.filterAdminSuggestions = filterAdminSuggestions;
+
+// --- Trending Queries Logic ---
+
+let trendingShowAll = false;
+let currentTrendingQueries = [];
+
+async function loadAdminTrending() {
+    try {
+        const res = await fetch(`${API_URL}/admin/trending`, {headers: {'Authorization': `Bearer ${ACCESS_TOKEN}`}});
+        currentTrendingQueries = await res.json();
+        renderAdminTrendingList();
+    } catch (e) { console.error('Failed to load admin trending', e); }
+}
+
+function renderAdminTrendingList() {
+    const list = document.getElementById('admin-trending-list');
+    const viewMoreContainer = document.getElementById('trending-view-more');
+    if (!list) return;
+
+    list.innerHTML = '';
+    
+    // Logic for View More/Less
+    const visibleQueries = trendingShowAll ? currentTrendingQueries : currentTrendingQueries.slice(0, 3);
+    
+    visibleQueries.forEach(q => {
+        const item = document.createElement('div');
+        item.className = 'trending-item-card';
+        // Applying styles directly for immediate reflection, though external CSS is better
+        item.style.cssText = `
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 12px;
+            transition: transform 0.2s, background 0.2s;
+        `;
+        
+        item.onmouseenter = () => { item.style.background = 'rgba(255, 255, 255, 0.08)'; item.style.transform = 'translateY(-2px)'; };
+        item.onmouseleave = () => { item.style.background = 'rgba(255, 255, 255, 0.05)'; item.style.transform = 'translateY(0)'; };
+        
+        item.innerHTML = `
+            <div style='width:42px; height:42px; background: linear-gradient(135deg, #14b8a6, #0d9488); color:white; display:flex; align-items:center; justify-content:center; border-radius:10px; margin-right:18px; box-shadow: 0 4px 10px rgba(20, 184, 166, 0.2);'>
+                <i class='${q.icon}' style='font-size: 18px;'></i>
+            </div>
+            <div style='flex:1;'>
+                <div style='font-weight:600; color:var(--text-primary); font-size:15px; margin-bottom: 2px;'>${q.text}</div>
+                <div style='font-size:13px; color:var(--text-secondary); opacity: 0.8;'>${q.subtext}</div>
+            </div>
+            <div style='display:flex; gap:10px;'>
+                <button onclick='editTrendingQuery("${q.id}")' style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color:var(--text-secondary); cursor:pointer; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;' title='Edit'>
+                    <i class='fa-solid fa-pen' style='font-size: 13px;'></i>
+                </button>
+                <button onclick='deleteTrendingQuery("${q.id}")' style='background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color:#ef4444; cursor:pointer; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;' title='Delete'>
+                    <i class='fa-solid fa-trash' style='font-size: 13px;'></i>
+                </button>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+
+    // Update View More Link
+    if (viewMoreContainer) {
+        if (currentTrendingQueries.length > 3) {
+            viewMoreContainer.style.display = 'block';
+            viewMoreContainer.querySelector('span').innerText = trendingShowAll ? 'View Less' : 'View All';
+        } else {
+            viewMoreContainer.style.display = 'none';
+        }
+    }
+}
+
+function editTrendingQuery(id) {
+    const query = currentTrendingQueries.find(q => q.id === id);
+    if (query) {
+        openAddTrendingModal(query);
+    }
+}
+
+function toggleTrendingView() {
+    trendingShowAll = !trendingShowAll;
+    renderAdminTrendingList();
+}
+
+function openAddTrendingModal(query = null) {
+    const modal = document.getElementById('trending-modal');
+    if (!modal) return;
+
+    // Reset or Populate
+    const idInput = document.getElementById('trending-id');
+    const textInput = document.getElementById('trending-text');
+    const subtextInput = document.getElementById('trending-subtext');
+    const responseInput = document.getElementById('trending-response');
+    const hiddenIcon = document.getElementById('trending-icon');
+    const modalTitle = modal.querySelector('h3');
+    const submitBtn = document.getElementById('btn-trending-submit');
+
+    if (query) {
+        // Edit Mode
+        if(idInput) idInput.value = query.id;
+        if(textInput) textInput.value = query.text;
+        if(subtextInput) subtextInput.value = query.subtext;
+        if(responseInput) responseInput.value = query.response || '';
+        if(hiddenIcon) hiddenIcon.value = query.icon;
+        
+        if(modalTitle) modalTitle.innerText = 'Update Trending Query';
+        if(submitBtn) {
+            submitBtn.innerText = 'Update Query';
+            submitBtn.onclick = addTrendingQuery;
+        }
+
+        // Highlight icon
+        document.querySelectorAll('.icon-option').forEach(el => {
+           if(el.innerHTML.includes(query.icon)) el.classList.add('selected');
+           else el.classList.remove('selected');
+        });
+    } else {
+        // Add Mode
+        if(idInput) idInput.value = '';
+        if(textInput) textInput.value = '';
+        if(subtextInput) subtextInput.value = '';
+        if(responseInput) responseInput.value = '';
+        if(hiddenIcon) hiddenIcon.value = 'fa-solid fa-fire'; // Default
+        
+        if(modalTitle) modalTitle.innerText = 'Add Trending Query';
+        if(submitBtn) {
+            submitBtn.innerText = 'Add Query';
+            submitBtn.onclick = addTrendingQuery;
+        }
+        
+        // Reset icon selection
+        document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+    }
+
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('active'));
+    renderSymbolPicker();
+}
+
+const TRENDING_ICONS = [
+    'fa-solid fa-graduation-cap', 'fa-solid fa-book', 'fa-solid fa-calendar-days',
+    'fa-solid fa-map-location-dot', 'fa-solid fa-bus', 'fa-solid fa-building-columns',
+    'fa-solid fa-user-graduate', 'fa-solid fa-microscope', 'fa-solid fa-flask',
+    'fa-solid fa-laptop-code', 'fa-solid fa-fire', 'fa-solid fa-star'
+];
+
+function closeTrendingModal() {
+    const modal = document.getElementById('trending-modal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    setTimeout(() => { modal.style.display = 'none'; }, 200);
+}
+
+function renderSymbolPicker() {
+    const container = document.getElementById('icon-picker');
+    const hiddenInput = document.getElementById('trending-icon');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    TRENDING_ICONS.forEach(icon => {
+        const div = document.createElement('div');
+        div.className = 'icon-option';
+        div.innerHTML = `<i class='${icon}'></i>`;
+        
+        if (hiddenInput.value === icon) {
+            div.classList.add('selected');
+        }
+        
+        div.onclick = () => {
+            hiddenInput.value = icon;
+            document.querySelectorAll('.icon-option').forEach(el => el.classList.remove('selected'));
+            div.classList.add('selected');
+        };
+        container.appendChild(div);
+    });
+}
+
+async function addTrendingQuery() {
+    const id = document.getElementById('trending-id').value;
+    const text = document.getElementById('trending-text').value;
+    const subtext = document.getElementById('trending-subtext').value;
+    const icon = document.getElementById('trending-icon').value;
+    const response = document.getElementById('trending-response').value.trim();
+    
+    if (!text || !subtext) {
+        alert('Please fill in all fields');
+        return;
+    }
+    
+    try {
+        const payload = { text, subtext, icon, order: 0, response: response };
+        
+        console.log('Saving Query:', { id, payload });
+
+        let url = `${API_URL}/admin/trending`;
+        let method = 'POST';
+
+        if (id) {
+             url = `${API_URL}/admin/trending/${id}`;
+             method = 'PUT';
+        }
+
+        const res = await fetch(url, {
+            method: method,
+            headers:{'Content-Type': 'application/json', 'Authorization': `Bearer ${ACCESS_TOKEN}`},
+            body: JSON.stringify(payload)
+        });
+        
+        if (res.ok) {
+            closeTrendingModal();
+            loadAdminTrending();
+            loadTrendingQueries(); // Refresh main view too
+            showStatusPopup(id ? "Query updated successfully!" : "Query added successfully!");
+        } else {
+            const data = await res.json();
+            alert(`Failed to save query: ${data.detail || res.statusText}`);
+            console.error('Save Query Error:', data);
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function deleteTrendingQuery(id) {
+    if (!confirm('Delete this query?')) return;
+    try {
+        const res = await fetch(`${API_URL}/admin/trending/${id}`, {
+            method: 'DELETE',
+            headers: {'Authorization': `Bearer ${ACCESS_TOKEN}`}
+        });
+        if (res.ok) {
+            loadAdminTrending();
+            loadTrendingQueries();
+            showStatusPopup("Query deleted");
+        }
+    } catch (e) { console.error(e); }
+}
+
+window.openAddTrendingModal = openAddTrendingModal;
+window.closeTrendingModal = closeTrendingModal;
+window.addTrendingQuery = addTrendingQuery;
+window.deleteTrendingQuery = deleteTrendingQuery;
+
+// --- Zen AI Assistant Logic ---
+let zenChatHistory = [];
+let zenRecognition = null;
+
+function switchStudyTab(tab) {
+    const notesTab = document.getElementById('tab-study-notes');
+    const zenTab = document.getElementById('tab-study-zen');
+    const notesView = document.getElementById('study-notes-view');
+    const zenView = document.getElementById('study-zen-view');
+
+    if (tab === 'notes') {
+        notesTab.classList.add('active');
+        zenTab.classList.remove('active');
+        notesView.style.display = 'flex';
+        zenView.style.display = 'none';
+    } else {
+        zenTab.classList.add('active');
+        notesTab.classList.remove('active');
+        zenView.style.display = 'flex';
+        notesView.style.display = 'none';
+        document.getElementById('zen-input').focus();
+    }
+}
+
+async function sendZenMessage() {
+    const input = document.getElementById('zen-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = '';
+    appendZenMessage(text, 'user');
+
+    try {
+        const response = await fetch(`${API_URL}/study-buddy/zen`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({
+                query: text,
+                history: zenChatHistory
+            })
+        });
+
+        const data = await response.json();
+        if (data.response) {
+            appendZenMessage(data.response, 'zen');
+            zenChatHistory.push({ role: 'user', content: text });
+            zenChatHistory.push({ role: 'assistant', content: data.response });
+        } else {
+            appendZenMessage("Zen is momentarily offline. Please try again.", 'zen');
+        }
+    } catch (err) {
+        console.error('Zen Error:', err);
+        appendZenMessage("Zen encountered a neural hiccup. Check your connection.", 'zen');
+    }
+}
+
+function appendZenMessage(text, role) {
+    const history = document.getElementById('zen-chat-history');
+    if (!history) return;
+
+    const welcome = history.querySelector('.welcome-chat');
+    if (welcome) welcome.remove();
+
+    // Create Item Wrapper
+    const messageItem = document.createElement('div');
+    messageItem.className = `zen-message-item ${role}`;
+
+    // Create Message Bubble
+    const bubble = document.createElement('div');
+    bubble.className = `zen-message ${role}`;
+
+    // Process for formatting
+    let displayText = text;
+    let followups = null;
+
+    // Extract follow-up questions if any
+    const followupMatch = text.match(/Follow-up questions:[\s\S]*$/i) || text.match(/Would you like to know about:[\s\S]*$/i);
+    if (followupMatch && role === 'zen') {
+        const followupText = followupMatch[0];
+        displayText = text.replace(followupText, '');
+        
+        followups = document.createElement('div');
+        followups.className = 'zen-followup-container';
+        
+        const questions = followupText.split('\n').filter(q => q.trim() && q.includes('?'));
+        questions.forEach(q => {
+            const cleanQ = q.replace(/^[\d.*-\s]+/, '').trim();
+            if (cleanQ) {
+                const btn = document.createElement('button');
+                btn.className = 'zen-followup-btn';
+                btn.innerText = cleanQ;
+                btn.onclick = () => {
+                    document.getElementById('zen-input').value = cleanQ;
+                    sendZenMessage();
+                };
+                followups.appendChild(btn);
+            }
+        });
+    }
+
+    bubble.innerHTML = formatText(displayText);
+    messageItem.appendChild(bubble);
+
+    // Create Actions Bar
+    const actions = document.createElement('div');
+    actions.className = 'zen-actions';
+
+    // Copy Button
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'zen-action-btn';
+    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
+    copyBtn.title = 'Copy';
+    copyBtn.onclick = () => {
+        const tempTextArea = document.createElement('textarea');
+        tempTextArea.value = displayText;
+        document.body.appendChild(tempTextArea);
+        tempTextArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempTextArea);
+        showStatusPopup("Copied to clipboard!", 1500);
+    };
+
+    // Speak Button
+    const speakBtn = document.createElement('button');
+    speakBtn.className = 'zen-action-btn';
+    speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    speakBtn.title = 'Listen';
+    speakBtn.onclick = () => speakText(displayText, bubble, speakBtn);
+
+    actions.appendChild(copyBtn);
+    actions.appendChild(speakBtn);
+    messageItem.appendChild(actions);
+
+    // Add Follow-ups if Zen
+    if (followups) {
+        messageItem.appendChild(followups);
+    }
+
+    history.appendChild(messageItem);
+    history.scrollTop = history.scrollHeight;
+}
+
+function newZenChat() {
+    zenChatHistory = [];
+    const history = document.getElementById('zen-chat-history');
+    if (history) {
+        history.innerHTML = `<div class="welcome-chat" style="text-align: center; margin: auto; padding: 20px;"><i class="fa-solid fa-brain" style="font-size: 40px; color: var(--accent-color); margin-bottom: 15px; opacity: 0.8;"></i><h4 style="margin-bottom: 8px;">I am Zen</h4><p style="color: var(--text-secondary); font-size: 14px;">Your generative AI partner for academic brilliance. Ask me anything!</p></div>`;
+    }
+    showStatusPopup("New session started. History cleared.", 2000);
+}
+
+function refreshZenChat() {
+    showStatusPopup("Refreshing connection to Zen...", 1500);
+}
+
+function startZenSTT() {
+    if (!('webkitSpeechRecognition' in window)) {
+        showStatusPopup("STT not supported in this browser.");
+        return;
+    }
+
+    if (zenRecognition) {
+        zenRecognition.stop();
+        return;
+    }
+
+    zenRecognition = new webkitSpeechRecognition();
+    zenRecognition.lang = document.getElementById('lang-select')?.value === 'te' ? 'te-IN' : (document.getElementById('lang-select')?.value === 'hi' ? 'hi-IN' : 'en-US');
+    
+    const btn = document.getElementById('zen-mic-btn');
+    zenRecognition.onstart = () => btn.classList.add('active');
+    zenRecognition.onend = () => {
+        btn.classList.remove('active');
+        zenRecognition = null;
+    };
+    
+    zenRecognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('zen-input').value = transcript;
+        sendZenMessage();
+    };
+    
+    zenRecognition.start();
+}
+
+// Expose Zen functions
+window.switchStudyTab = switchStudyTab;
+window.sendZenMessage = sendZenMessage;
+window.newZenChat = newZenChat;
+window.refreshZenChat = refreshZenChat;
+window.startZenSTT = startZenSTT;

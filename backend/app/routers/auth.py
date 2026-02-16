@@ -18,7 +18,6 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# Google OAuth Setup
 oauth = OAuth()
 oauth.register(
     name='google',
@@ -60,7 +59,6 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     user = database.users_db.find_one({"username": form_data.username})
     
-    # Truncate password to 72 bytes to prevent bcrypt errors/DoS
     pwd_check = form_data.password[:72]
     
     if not user:
@@ -87,11 +85,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 async def register_user(user_data: RegisterRequest):
     try:
 
-        
         if database.users_db.find_one({"username": user_data.email}):
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        # Truncate to 70 bytes safely for bcrypt
         pwd_bytes = user_data.password.encode('utf-8')
         if len(pwd_bytes) > 70:
             truncated = pwd_bytes[:70].decode('utf-8', 'ignore')
@@ -121,7 +117,6 @@ async def register_user(user_data: RegisterRequest):
 async def forgot_password(request: ForgotPasswordRequest):
     user = database.users_db.find_one({"username": request.email})
     if not user:
-        # Don't reveal user existence
         return {"status": "success", "message": "If email exists, OTP sent."}
     
     otp = "{:06d}".format(random.randint(0, 999999))
@@ -131,14 +126,12 @@ async def forgot_password(request: ForgotPasswordRequest):
         upsert=True
     )
     
-    # Send Email
     send_otp_email(request.email, otp)
     
     return {"status": "success", "message": "OTP sent to email"}
 
 @router.post("/verify-otp-reset")
 async def verify_otp_reset(request: VerifyOTPRequest):
-    # Normalize input
     input_otp = request.otp.strip()
     input_email = request.email.strip()
     
@@ -149,7 +142,6 @@ async def verify_otp_reset(request: VerifyOTPRequest):
         logger.warning(f"No OTP record found for {input_email}")
         raise HTTPException(status_code=400, detail="Invalid request")
     
-    # Check expiry (10 mins)
     if (datetime.utcnow() - record["created_at"]).total_seconds() > 600:
          logger.warning(f"OTP expired for {input_email}")
          raise HTTPException(status_code=400, detail="OTP expired")
@@ -158,17 +150,14 @@ async def verify_otp_reset(request: VerifyOTPRequest):
         logger.warning(f"Invalid OTP for {input_email}. Expected: {record['otp']}, Got: {input_otp}")
         raise HTTPException(status_code=400, detail="Invalid OTP")
         
-    # Reset Password
     new_hash = get_password_hash(request.new_password[:72])
     database.users_db.update_one({"username": request.email}, {"$set": {"password_hash": new_hash}})
     database.otps_db.delete_one({"email": request.email})
     
     return {"status": "success", "message": "Password updated"}
 
-# Google Auth Endpoints
 @router.get("/login/google")
 async def login_google(request: Request):
-    # Dynamic redirect URI based on the request URL
     redirect_uri = request.url_for('auth_google')
     logger.info(f"Initiating Google OAuth with redirect_uri: {redirect_uri}")
     return await oauth.google.authorize_redirect(request, redirect_uri)
@@ -203,8 +192,6 @@ async def auth_google(request: Request):
             
         access_token = create_access_token(data={"sub": email, "role": role})
         
-        # Redirect to frontend
-        # Assuming frontend is at root. We pass token as query param to be picked up by JS
         params = f"token={access_token}&role={role}&username={email}"
         if name:
              params += f"&name={name}"

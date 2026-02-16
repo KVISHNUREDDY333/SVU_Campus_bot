@@ -8,7 +8,7 @@ from bson import ObjectId
 
 router = APIRouter(prefix="/career", tags=["Career Center"])
 
-from ..models.academic import ResumeAnalysisRequest
+from ..models.academic import ResumeAnalysisRequest, ResumeGenerationRequest
 
 @router.post("/check-resume")
 async def check_resume(req: ResumeAnalysisRequest):
@@ -73,3 +73,50 @@ async def check_resume(req: ResumeAnalysisRequest):
     except Exception as e:
         print(f"Resume Check Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Analysis Error: {str(e)}")
+
+@router.post("/generate-resume")
+async def generate_resume(req: ResumeGenerationRequest):
+    prompt = f"""
+    You are a Professional Resume Writer and Career Coach. 
+    Create a high-impact, ATS-friendly resume for a candidate with the following profile:
+
+    **Candidate Profile:**
+    - **Name:** {req.full_name}
+    - **Target Role:** {req.target_role}
+    - **Experience Level:** {req.experience_level}
+    - **Qualification:** {req.qualification} ({req.qualification_percentage})
+    - **Technical Skills:** {req.skills_technical}
+    - **Coding Skills:** {req.skills_coding}
+    - **Soft Skills:** {req.skills_soft}
+    - **Research/Publications:** {req.research_publications or "None"}
+    - **Industry Experience:** {req.industry_experience or "Fresher/None"}
+
+    **Instructions:**
+    1.  **Structure:** use standard professional resume sections: Header, Professional Summary, Skills, Experience (or Projects for freshers), Education, Certifications/Achievements.
+    2.  **Professional Summary:** Write a compelling summary tailored to the '{req.target_role}'.
+    3.  **Skills:** Organize skills logically.
+    4.  **Content:** 
+        - If the candidate is a 'Beginner' or 'Fresher', focus on Projects and Academic Achievements. Invent realistic, relevant academic projects if specific project details aren't provided, based on their skills and target role.
+        - If 'Intermediate' or 'Professional', focus on Work Experience.
+    5.  **Tone:** Professional, action-oriented, and concise.
+    6.  **Format:** clean Markdown.
+
+    **Output Resume:**
+    (Provide ONLY the resume content in Markdown)
+    """
+
+    if not rag_service.llm:
+        try:
+            rag_service.setup_rag_chain()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"LLM Initialization Failed: {str(e)}")
+            
+    if not rag_service.llm:
+         raise HTTPException(status_code=500, detail="LLM service is not available")
+    
+    try:
+        response = await rag_service.llm.ainvoke(prompt)
+        return {"resume": response.content}
+    except Exception as e:
+        print(f"Resume Generation Error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Generation Error: {str(e)}")

@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
 
-
 class FAQRequest(BaseModel):
     question: str
     answer: str
@@ -24,7 +23,8 @@ class FAQModel(BaseModel):
 class FAQResponse(FAQModel):
     id: str
     created_at: datetime
-    # Inherits new fields automatically
+    source_urls: List[str] = []
+    verified: bool = False
 
 class SuggestedFAQModel(BaseModel):
     question: str

@@ -24,7 +24,6 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
             language=request.language
         )
         
-        # Analytics Logging
         if database.analytics_db is not None:
              database.analytics_db.insert_one({
                 "timestamp": datetime.utcnow(),
@@ -39,7 +38,6 @@ async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_c
                 "latency_ms": int((datetime.now() - start_time).total_seconds() * 1000)
             })
 
-             
         return {"status": "success", "response": response_text}
     except Exception as e:
         logger.error(f"Chat Error: {e}")
@@ -53,7 +51,6 @@ async def chat_feedback(req: FeedbackRequest, current_user: User = Depends(get_c
              if req.rating == 1: sentiment = "Positive"
              elif req.rating == -1: sentiment = "Negative"
 
-             # Update the most recent matching chat record
              res = database.analytics_db.find_one_and_update(
                  {
                      "user_id": str(current_user.username),
@@ -71,7 +68,6 @@ async def chat_feedback(req: FeedbackRequest, current_user: User = Depends(get_c
                  sort=[("timestamp", -1)] # Target newest if multiple identical
              )
              
-             # Fallback: if not found (res is None), insert new
              if not res:
 
                  database.analytics_db.insert_one({

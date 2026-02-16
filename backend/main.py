@@ -10,15 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Fix for Windows asyncio event loop error
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-# Define Project Root
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
-# Import internal modules
 from backend.app.core.config import Config
 from backend.app.core.database import get_db_client, close_db_client
 from backend.app.services.rag_service import setup_rag_chain
@@ -27,7 +24,6 @@ from backend.app.core.security import get_password_hash
 from backend.app.core import database
 from datetime import datetime
 
-# Logging Setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("uvicorn")
 
@@ -43,7 +39,6 @@ async def seed_admin():
             "role": "admin",
             "created_at": datetime.utcnow()
         }
-        # We verify username (email)
         database.users_db.update_one(
             {"username": email},
             {"$set": user_data},
@@ -67,11 +62,9 @@ async def seed_data():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     logger.info("Starting Application Components...")
     get_db_client()
     
-    # Create Indexes for Performance
     try:
         if database.users_db is not None:
              database.users_db.create_index([("created_at", -1)])
@@ -93,14 +86,11 @@ async def lifespan(app: FastAPI):
     await seed_admin()
     await seed_data()
     yield
-    # Shutdown
     logger.info("Shutting Down Application Components...")
     close_db_client()
 
-# Initialize FastAPI App
 app = FastAPI(lifespan=lifespan)
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -110,7 +100,6 @@ app.add_middleware(
 )
 app.add_middleware(SessionMiddleware, secret_key=Config.SECRET_KEY)
 
-# Include Routers
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
@@ -119,7 +108,6 @@ app.include_router(calendar.router)
 app.include_router(study_buddy.router)
 app.include_router(career.router)
 
-# Static Files (Frontend) - Use Absolute Path
 static_dir = os.path.join(project_root, "frontend", "static")
 if not os.path.exists(static_dir):
     raise RuntimeError(f"Static directory not found: {static_dir}")
@@ -131,10 +119,14 @@ async def read_root():
     template_path = os.path.join(project_root, "frontend", "templates", "index.html")
     if not os.path.exists(template_path):
         raise RuntimeError(f"Template not found: {template_path}")
-    return FileResponse(template_path)
+    response = FileResponse(template_path)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))
     print(f"Running on http://127.0.0.1:{port}")
-    # Run the app object directly
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    # Use import string for better reload support
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=port, reload=True)
