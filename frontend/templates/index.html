@@ -288,8 +288,11 @@
           class="content-section"
           style="display: none"
         >
-          <div class="header">
+          <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
             <h3>System Configuration</h3>
+            <button id="admin-refresh-all" class="btn-primary" onclick="refreshAllAdminData()" style="padding: 8px 16px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
           </div>
           <div class="admin-content">
             <!-- Top Row: Config & Health -->
@@ -834,10 +837,6 @@
               </div>
             </div>
           </div>
-          <!-- Global Refresh FAB for Admin -->
-          <button id="admin-refresh-all" class="admin-refresh-fab" onclick="refreshAllAdminData()" title="Refresh All Data">
-            <i class="fa-solid fa-sync"></i>
-          </button>
         </section>
 
         <!-- Dashboard Section -->
