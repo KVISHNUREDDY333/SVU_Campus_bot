@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import List
 from ..models.user import User
-from ..models.faq import FAQModel, FAQResponse, Notification, SuggestedFAQModel, SuggestedFAQResponse, FAQRequest
+from ..models.faq import FAQModel, FAQResponse, SuggestedFAQModel, SuggestedFAQResponse, FAQRequest
 from .auth import get_current_user, get_password_hash
 from ..models.location import LocationModel, LocationResponse, LocationUpdate
 from ..models.trending import TrendingQueryModel, TrendingQueryResponse, TrendingQueryUpdate
@@ -32,58 +32,7 @@ class UserCreate(pydantic.BaseModel):
     password: str
     role: str = "student"
 
-class NotificationCreate(pydantic.BaseModel):
-    title: str
-    message: str
 
-from ..utils.notifications import create_notification
-
-@router.get("/notifications", response_model=List[Notification])
-async def get_notifications(current_user: User = Depends(get_current_user)):
-    if database.notifications_db is None:
-        return []
-    
-    query = {
-        "$or": [
-            {"recipient_username": current_user.username}, 
-            {"recipient_role": current_user.role},
-            {"recipient_username": None, "recipient_role": None}
-        ]
-    }
-    cursor = database.notifications_db.find(query).sort("timestamp", -1).limit(10)
-    results = []
-    
-    for n in cursor:
-        results.append(Notification(
-            id=int(str(n["_id"])[-6:], 16), 
-            title=n.get("title", ""),
-            message=n.get("message", ""),
-            timestamp=n.get("timestamp", datetime.utcnow()),
-            recipient_username=n.get("recipient_username"),
-            recipient_role=n.get("recipient_role")
-        ))
-    return results
-
-@router.post("/admin/notifications", response_model=Notification)
-async def admin_create_notification(note: NotificationCreate, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-        
-    new_note = {
-        "title": note.title,
-        "message": note.message,
-        "timestamp": datetime.utcnow(),
-        "created_by": current_user.username
-    }
-    
-    result = database.notifications_db.insert_one(new_note)
-    
-    return Notification(
-        id=int(str(result.inserted_id)[-6:], 16),
-        title=new_note["title"],
-        message=new_note["message"],
-        timestamp=new_note["timestamp"]
-    )
 
 @router.get("/admin/faqs", response_model=List[FAQResponse])
 async def get_faqs():
@@ -164,11 +113,7 @@ async def suggest_faq(faq: SuggestedFAQModel):
     
     database.suggested_faqs_db.insert_one(new_suggestion)
     
-    await create_notification(
-        "New FAQ Suggestion", 
-        f"A student suggested: {faq.question[:50]}...", 
-        recipient_role="admin"
-    )
+
 
     return {"status": "success", "message": "FAQ suggestion submitted for review"}
 
@@ -215,12 +160,7 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
     result = database.faqs_db.insert_one(new_faq)
     new_faq_id = str(result.inserted_id)
 
-    if suggestion.get("suggested_by"):
-        await create_notification(
-            "Suggestion Approved", 
-            f"Your FAQ suggestion was approved: {new_faq['question'][:50]}...",
-            recipient_username=suggestion.get("suggested_by")
-        )
+
     
     try:
         from ..services.rag_service import ingest_text
@@ -242,12 +182,7 @@ async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(
     if not suggestion:
         raise HTTPException(status_code=404, detail="Suggestion not found")
 
-    if suggestion.get("suggested_by"):
-        await create_notification(
-            "Suggestion Rejected", 
-            f"Your FAQ suggestion was declined by the admin.",
-            recipient_username=suggestion.get("suggested_by")
-        )
+
 
     database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
     

@@ -64,12 +64,7 @@ async def add_calendar_event(event: CalendarEvent, current_user: User = Depends(
     res = database.calendar_db.insert_one(event_dict)
     event_dict["id"] = str(res.inserted_id)
     
-    from ..utils.notifications import create_notification
-    await create_notification(
-        title="New Calendar Event", 
-        message=f"A new event has been added: {event.title} ({event.from_date} to {event.to_date})",
-        recipient_role="student"
-    )
+
     return CalendarResponse(**event_dict)
 
 @router.put("/admin/calendar/{event_id}", response_model=CalendarResponse)

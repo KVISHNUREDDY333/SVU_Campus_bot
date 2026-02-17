@@ -41,7 +41,7 @@ function updateThemeUI(isDark) {
 // Auth State
 let ACCESS_TOKEN = sessionStorage.getItem('access_token');
 let USER_ROLE = sessionStorage.getItem('user_role');
-let notificationInterval = null;
+
 
 document.addEventListener("DOMContentLoaded", () => {
     // Load Theme Preference
@@ -88,7 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Check Auth first
     if (checkAuth()) {
-        startNotificationPolling();
+
         loadChatHistory();
         populateSidebarProfile();
     }
@@ -429,7 +429,7 @@ function saveSession(data) {
     }
 
     // Start notification polling
-    startNotificationPolling();
+
 
     // Reset chat to "New Chat" on login
     clearChat();
@@ -452,7 +452,6 @@ function logout() {
     document.body.classList.remove('dark-mode');
     updateThemeUI(false);
 
-    stopNotificationPolling();
 
     // Hide restricted links immediately
     const navAdmin = document.getElementById('nav-admin');
@@ -530,61 +529,7 @@ function showStatusPopup(message, duration = 2000) {
     }, duration);
 }
 
-async function checkNotifications() {
-    if (!ACCESS_TOKEN) return;
 
-    try {
-        const res = await fetch(`${API_URL}/notifications`, {
-            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
-        });
-
-        if (res.status === 401 || res.status === 403) {
-            console.warn("Notification Auth Failure. Stopping Polling.");
-            stopNotificationPolling();
-            return;
-        }
-
-        if (!res.ok) return;
-
-        const notifications = await res.json();
-
-        // If no lastSeenId exists, set it to the latest notification ID without showing toasts
-        if (!localStorage.getItem('last_notification_id')) {
-            const maxId = notifications.reduce((max, n) => Math.max(max, n.id), 0);
-            localStorage.setItem('last_notification_id', maxId.toString());
-            return;
-        }
-
-        const lastSeenId = parseInt(localStorage.getItem('last_notification_id') || '0');
-        let newLastSeenId = lastSeenId;
-
-        // Sort by timestamp or ID ascending to show in order
-        notifications.sort((a, b) => a.id - b.id).forEach(notif => {
-            if (notif.id > lastSeenId) {
-                showToast(notif.title, notif.message);
-                if (notif.id > newLastSeenId) newLastSeenId = notif.id;
-            }
-        });
-        localStorage.setItem('last_notification_id', newLastSeenId.toString());
-    } catch (e) {
-        // console.error("Notification Poll Error", e);
-    }
-}
-
-function startNotificationPolling() {
-    if (notificationInterval) clearInterval(notificationInterval);
-    // Poll every 60 seconds
-    notificationInterval = setInterval(checkNotifications, 60000);
-    // Also check immediately
-    checkNotifications();
-}
-
-function stopNotificationPolling() {
-    if (notificationInterval) {
-        clearInterval(notificationInterval);
-        notificationInterval = null;
-    }
-}
 
 async function loadTrendingQueries() {
     console.time("TrendingQueriesLoad");
@@ -619,67 +564,7 @@ async function loadTrendingQueries() {
     }
 }
 
-function showToast(title, message) {
-    // Create toast container if needed
-    let container = document.getElementById('toast-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'toast-container';
-        container.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 10001;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        `;
-        document.body.appendChild(container);
-    }
 
-    const toast = document.createElement('div');
-    toast.className = 'toast-notification';
-    toast.innerHTML = `
-        <div class="toast-header">
-            <strong class="me-auto">${title}</strong>
-            <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()">×</button>
-        </div>
-        <div class="toast-body">${message}</div>
-    `;
-
-    // Inline styles for toast (can move to css)
-    toast.style.cssText = `
-        background: white;
-        border-left: 4px solid #0f766e;
-        padding: 15px;
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        min-width: 250px;
-        animation: slideIn 0.3s ease-out;
-        color: #333;
-    `;
-
-    // Basic styling for internal elements
-    const header = toast.querySelector('.toast-header');
-    header.style.cssText = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; color: #0f766e;";
-
-    const btn = toast.querySelector('.btn-close');
-    btn.style.cssText = "background: none; border: none; font-size: 20px; cursor: pointer; color: #666; width:auto; border-radius:0;";
-
-    container.appendChild(toast);
-
-    // Auto remove
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transition = 'opacity 0.5s';
-        setTimeout(() => toast.remove(), 500);
-    }, 5000);
-
-    // Browser Notification
-    if (Notification.permission === 'granted') {
-        new Notification(title, { body: message, icon: '/static/images/svu_logo_final_v2.jpg' });
-    }
-}
 
 function showSection(section) {
     console.warn(`[DEBUG] showSection called for: ${section}`);

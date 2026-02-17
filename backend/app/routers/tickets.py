@@ -41,12 +41,7 @@ async def create_ticket(ticket: TicketCreate, current_user: User = Depends(get_c
     
     result = database.tickets_db.insert_one(new_ticket)
     
-    from ..utils.notifications import create_notification
-    await create_notification(
-        "New Support Ticket", 
-        f"A new ticket has been raised: {new_ticket['subject']}",
-        recipient_role="admin"
-    )
+
     
     return TicketResponse(
         id=str(result.inserted_id),
@@ -119,12 +114,7 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
                  except Exception as e:
                      print(f"RAG Sync Error: {e}")
 
-        from ..utils.notifications import create_notification
-        await create_notification(
-            "Ticket Updated", 
-            f"Your ticket '{ticket['subject']}' status is now: {update.status}",
-            recipient_username=ticket.get("created_by")
-        )
+
 
         return {"status": "success"}
     except:

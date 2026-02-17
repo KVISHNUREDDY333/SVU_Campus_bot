@@ -36,11 +36,4 @@ class SuggestedFAQModel(BaseModel):
 class SuggestedFAQResponse(SuggestedFAQModel):
     id: str
 
-class Notification(BaseModel):
-    id: int
-    title: str
-    message: str
-    timestamp: datetime
-    read: bool = False
-    recipient_username: Optional[str] = None
-    recipient_role: Optional[str] = None
+
