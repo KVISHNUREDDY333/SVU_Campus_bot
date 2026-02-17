@@ -858,6 +858,11 @@ async def add_trending_query(query: TrendingQueryModel, current_user: User = Dep
     
     if database.trending_queries_db is None:
         raise HTTPException(status_code=500, detail='Database not initialized')
+
+    # Check for maximum limit of 4 queries
+    count = database.trending_queries_db.count_documents({})
+    if count >= 4:
+        raise HTTPException(status_code=400, detail="Maximum of 4 trending queries allowed")
     
     new_query = query.dict()
     new_query['created_at'] = datetime.utcnow()

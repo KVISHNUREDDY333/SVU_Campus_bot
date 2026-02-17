@@ -1925,6 +1925,32 @@
             />
           </div>
 
+          <div class="form-group" style="margin-bottom: 20px">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-weight: 600;
+                color: var(--text-primary);
+                margin-bottom: 10px;
+              "
+            >
+              <i
+                class="fa-solid fa-map-location-dot"
+                style="color: var(--accent-color)"
+              ></i>
+              Location (Optional)
+            </label>
+            <input
+              type="text"
+              id="event-location"
+              class="search-input"
+              placeholder="e.g., Auditorium, Room 101"
+              style="padding: 14px; border-radius: 12px"
+            />
+          </div>
+
           <div class="form-group">
             <label
               style="
@@ -2554,7 +2580,7 @@
         </div>
 
         <!-- Login Form -->
-        <form id="login-form" onsubmit="handleLogin(event)">
+        <form id="login-form" onsubmit="handleLogin(event)" autocomplete="off">
           <div class="form-group">
             <label>Email Address</label>
             <input
@@ -2562,6 +2588,7 @@
               id="login-username"
               required
               placeholder="Enter your email"
+              autocomplete="new-password"
             />
           </div>
           <div class="form-group">
@@ -2571,6 +2598,7 @@
               id="login-password"
               required
               placeholder="********"
+              autocomplete="new-password"
             />
             <div style="text-align: right; margin-top: 5px">
               <a
@@ -2621,6 +2649,7 @@
           id="register-form"
           onsubmit="handleRegister(event)"
           style="display: none"
+          autocomplete="off"
         >
           <div class="form-group">
             <label>Email Address</label>
@@ -2629,6 +2658,7 @@
               id="reg-username"
               required
               placeholder="Enter your email"
+              autocomplete="new-password"
             />
           </div>
 
@@ -2639,6 +2669,7 @@
               id="reg-fullname"
               required
               placeholder="Enter your full name"
+              autocomplete="new-password"
             />
           </div>
           <div class="form-group">
@@ -2664,6 +2695,7 @@
               id="reg-password"
               required
               placeholder="Create password"
+              autocomplete="new-password"
             />
           </div>
           <button type="submit" class="btn-submit auth-btn">
@@ -2672,7 +2704,7 @@
         </form>
 
         <!-- Forgot Password Form -->
-        <form id="forgot-form" style="display: none">
+        <form id="forgot-form" style="display: none" autocomplete="off">
           <h3 style="text-align: center; margin-bottom: 20px; font-size: 18px">
             Reset Password
           </h3>
@@ -2684,6 +2716,7 @@
                 type="email"
                 id="forgot-email"
                 placeholder="vishwureddy@example.com"
+                autocomplete="new-password"
               />
             </div>
             <button
@@ -2710,6 +2743,7 @@
                 type="text"
                 id="forgot-otp"
                 placeholder="Enter 6-digit OTP"
+                autocomplete="off"
               />
             </div>
             <div class="form-group">
@@ -2718,6 +2752,7 @@
                 type="password"
                 id="forgot-new-password"
                 placeholder="New secure password"
+                autocomplete="new-password"
               />
             </div>
             <button

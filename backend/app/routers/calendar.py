@@ -13,6 +13,7 @@ class CalendarEvent(BaseModel):
     from_date: str  # ISO datetime: YYYY-MM-DDTHH:mm
     to_date: str    # ISO datetime: YYYY-MM-DDTHH:mm
     type: str  # Exam, Holiday, Event
+    location: Optional[str] = ""
     description: Optional[str] = ""
 
 class CalendarResponse(CalendarEvent):
@@ -63,11 +64,11 @@ async def add_calendar_event(event: CalendarEvent, current_user: User = Depends(
     res = database.calendar_db.insert_one(event_dict)
     event_dict["id"] = str(res.inserted_id)
     
-    from .admin import _add_notification
-    await _add_notification(
-        "New Calendar Event", 
-        f"A new event has been added: {event.title} ({event.from_date} to {event.to_date})",
-        recipient_username=None
+    from ..utils.notifications import create_notification
+    await create_notification(
+        title="New Calendar Event", 
+        message=f"A new event has been added: {event.title} ({event.from_date} to {event.to_date})",
+        recipient_role="student"
     )
     return CalendarResponse(**event_dict)
 

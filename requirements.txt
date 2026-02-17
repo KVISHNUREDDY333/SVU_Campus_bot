@@ -24,4 +24,8 @@ authlib
 itsdangerous
 httpx
 beautifulsoup4
-duckduckgo-searchcertifi
+duckduckgo-search
+certifi
+markdown
+xhtml2pdf
+python-docx

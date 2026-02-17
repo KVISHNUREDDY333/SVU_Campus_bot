@@ -120,3 +120,35 @@ async def generate_resume(req: ResumeGenerationRequest):
     except Exception as e:
         print(f"Resume Generation Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Generation Error: {str(e)}")
+
+from pydantic import BaseModel
+class ResumeDownloadRequest(BaseModel):
+    resume_text: str
+    format: str  # 'pdf' or 'docx'
+    
+from fastapi.responses import StreamingResponse
+from ..utils.resume_generator import generate_pdf, generate_docx
+
+@router.post("/download-resume")
+async def download_resume(req: ResumeDownloadRequest):
+    try:
+        if req.format == 'pdf':
+            pdf_file = generate_pdf(req.resume_text)
+            return StreamingResponse(
+                pdf_file, 
+                media_type="application/pdf", 
+                headers={"Content-Disposition": "attachment; filename=resume.pdf"}
+            )
+        elif req.format == 'docx':
+            docx_file = generate_docx(req.resume_text)
+            return StreamingResponse(
+                docx_file,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": "attachment; filename=resume.docx"}
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid format. Use 'pdf' or 'docx'.")
+            
+    except Exception as e:
+        print(f"Download Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Download Failed: {str(e)}")

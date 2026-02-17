@@ -24,7 +24,7 @@ function toggleTheme() {
     updateThemeUI(body.classList.contains('dark-mode'));
 
     // Save preference
-    localStorage.setItem('svu_theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
+    sessionStorage.setItem('svu_theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
 }
 
 function updateThemeUI(isDark) {
@@ -39,14 +39,14 @@ function updateThemeUI(isDark) {
 
 // Splash Screen Logic
 // Auth State
-let ACCESS_TOKEN = localStorage.getItem('access_token');
-let USER_ROLE = localStorage.getItem('user_role');
+let ACCESS_TOKEN = sessionStorage.getItem('access_token');
+let USER_ROLE = sessionStorage.getItem('user_role');
 let notificationInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
     // Load Theme Preference
-    const savedTheme = localStorage.getItem('svu_theme');
-    const hasSession = !!localStorage.getItem('access_token');
+    const savedTheme = sessionStorage.getItem('svu_theme');
+    const hasSession = !!sessionStorage.getItem('access_token');
 
     // Default to light unless there's an active session AND dark was saved
     if (hasSession && savedTheme === 'dark') {
@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateThemeUI(false);
         // If no session, ensure storage is also light
         if (!hasSession) {
-            localStorage.setItem('svu_theme', 'light');
+            sessionStorage.setItem('svu_theme', 'light');
         }
     }
 
@@ -135,7 +135,30 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
 
 
+    // Clear Auth Inputs on Load with delay to fight autofill
+    setTimeout(clearAuthInputs, 500);
+
+    // Also clear on page show (bfcache)
+    window.addEventListener('pageshow', () => {
+        setTimeout(clearAuthInputs, 500);
+    });
 });
+
+function clearAuthInputs() {
+    const ids = [
+        'login-username', 'login-password',
+        'reg-username', 'reg-fullname', 'reg-password',
+        'forgot-email', 'forgot-otp', 'forgot-new-password'
+    ];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    
+    // Reset Role to default
+    const roleSelect = document.getElementById('reg-role');
+    if (roleSelect) roleSelect.selectedIndex = 0;
+}
 
 
 
@@ -154,6 +177,9 @@ function checkAuth() {
 
 
 function switchAuthTab(tab) {
+    // Clear inputs when switching
+    clearAuthInputs();
+
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const forgotForm = document.getElementById('forgot-form'); // New
@@ -374,17 +400,18 @@ async function handleRegister(e) {
 }
 
 function saveSession(data) {
-    // Force Light Mode on New Session
-    localStorage.setItem('svu_theme', 'light');
+    // Force Light Mode on New Session (as per requirements)
+    // "change the theme to light only when user or admin is logged out or login"
+    sessionStorage.setItem('svu_theme', 'light');
     document.body.classList.remove('dark-mode');
     updateThemeUI(false);
 
     ACCESS_TOKEN = data.access_token;
     USER_ROLE = data.role;
-    localStorage.setItem('access_token', ACCESS_TOKEN);
-    localStorage.setItem('user_role', USER_ROLE);
-    localStorage.setItem('username', data.username);
-    localStorage.setItem('full_name', data.full_name || data.username);
+    sessionStorage.setItem('access_token', ACCESS_TOKEN);
+    sessionStorage.setItem('user_role', USER_ROLE);
+    sessionStorage.setItem('username', data.username);
+    sessionStorage.setItem('full_name', data.full_name || data.username);
 
     // Redirection: Hide auth overlay and show chat
     const authOverlay = document.getElementById('auth-overlay');
@@ -409,14 +436,19 @@ function saveSession(data) {
 }
 
 function logout() {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user_role');
-    localStorage.removeItem('username');
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('user_role');
+    sessionStorage.removeItem('username');
+    sessionStorage.removeItem('full_name');
+    sessionStorage.removeItem('svu_chat_history'); // Clear chat history on logout
+    sessionStorage.removeItem('chat_session_id');
+    localStorage.removeItem('last_notification_id'); // Optional: clear notifications too
+    
     ACCESS_TOKEN = null;
     USER_ROLE = null;
 
     // Reset to Light Mode on Logout
-    localStorage.setItem('svu_theme', 'light');
+    sessionStorage.setItem('svu_theme', 'light');
     document.body.classList.remove('dark-mode');
     updateThemeUI(false);
 
@@ -432,7 +464,7 @@ function logout() {
 }
 
 // Chat History State
-let chatHistory = JSON.parse(localStorage.getItem('svu_chat_history') || '[]');
+let chatHistory = JSON.parse(sessionStorage.getItem('svu_chat_history') || '[]');
 
 function loadChatHistory() {
     if (chatHistory.length > 0 && welcomeScreen) {
@@ -450,8 +482,8 @@ function loadChatHistory() {
 
 
 function populateSidebarProfile() {
-    const fullName = localStorage.getItem('full_name');
-    const role = localStorage.getItem('user_role');
+    const fullName = sessionStorage.getItem('full_name');
+    const role = sessionStorage.getItem('user_role');
     const profileEl = document.getElementById('sidebar-profile');
 
     if (ACCESS_TOKEN && fullName && profileEl) {
@@ -508,11 +540,7 @@ async function checkNotifications() {
 
         if (res.status === 401 || res.status === 403) {
             console.warn("Notification Auth Failure. Stopping Polling.");
-            // Clear local credentials to prevent restart
-            ACCESS_TOKEN = null;
-            localStorage.removeItem('access_token');
             stopNotificationPolling();
-            checkAuth(); // Update UI
             return;
         }
 
@@ -760,10 +788,10 @@ async function sendMessage() {
     scrollToBottom();
 
     // Get Session ID (if using session history)
-    let sessionId = localStorage.getItem('chat_session_id');
+    let sessionId = sessionStorage.getItem('chat_session_id');
     if (!sessionId) {
         sessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem('chat_session_id', sessionId);
+        sessionStorage.setItem('chat_session_id', sessionId);
     }
 
     try {
@@ -779,6 +807,12 @@ async function sendMessage() {
                 language: document.getElementById('lang-select')?.value || 'en'
             })
         });
+
+        if (response.status === 401) {
+            alert("Session expired. Please log in again.");
+            logout();
+            return;
+        }
 
         if (!response.ok) throw new Error('Backend unavailable');
         const data = await response.json();
@@ -1371,7 +1405,7 @@ if (userInput) {
 function appendMessage(text, sender, save = true) {
     if (save) {
         chatHistory.push({ text, sender });
-        localStorage.setItem('svu_chat_history', JSON.stringify(chatHistory));
+        sessionStorage.setItem('svu_chat_history', JSON.stringify(chatHistory));
     }
 
     const div = document.createElement('div');
@@ -1626,7 +1660,7 @@ function escapeHtml(text) {
 function clearChat() {
     // Clear History
     chatHistory = [];
-    localStorage.removeItem('svu_chat_history');
+    sessionStorage.removeItem('svu_chat_history');
 
     // Reset to welcome state
     // Remove all messages except welcome screen and typing indicator
@@ -2682,6 +2716,9 @@ function renderCalendar(events) {
                     <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
                          <i class="fa-regular fa-calendar"></i> ${dateRangeText}
                     </div>
+                    ${e.location ? `<div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
+                         <i class="fa-solid fa-map-pin"></i> ${escapeHtml(e.location)}
+                    </div>` : ''}
                     <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
                          <i class="fa-brands fa-google"></i> <span style="text-decoration: underline;">Add to Calendar</span>
                     </div>
@@ -2803,7 +2840,10 @@ function renderCalendarAdminTable(events, limit = null) {
         return `
         <tr>
             <td style="padding: 12px;">${dateDisplay}</td>
-            <td style="padding: 12px; font-weight: 500;">${e.title}</td>
+            <td style="padding: 12px; font-weight: 500;">
+                ${e.title}
+                ${e.location ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;"><i class="fa-solid fa-map-pin"></i> ${escapeHtml(e.location)}</div>` : ''}
+            </td>
             <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${e.type}</span></td>
             <td style="padding: 12px; text-align: right;">
                 <button onclick="editCalendarEvent('${e.id}')" style="color: #6366f1; background: none; border: none; cursor: pointer; margin-right: 8px;" title="Edit event">
@@ -2860,6 +2900,14 @@ function openCalendarModal(eventData = null) {
         document.getElementById('event-from-date').value = eventData.from_date;
         document.getElementById('event-to-date').value = eventData.to_date;
         
+        // Restrict to future dates (even for edit)
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        const minDateTime = now.toISOString().slice(0, 16);
+        
+        document.getElementById('event-from-date').min = minDateTime;
+        document.getElementById('event-to-date').min = minDateTime;
+
         // Check if it's a predefined type or custom
         const predefinedTypes = ['Event', 'Exam', 'Holiday'];
         if (predefinedTypes.includes(eventData.type)) {
@@ -2871,6 +2919,7 @@ function openCalendarModal(eventData = null) {
             document.getElementById('custom-event-type-container').style.display = 'block';
         }
         
+        document.getElementById('event-location').value = eventData.location || '';
         document.getElementById('event-desc').value = eventData.description || '';
     } else {
         // Create mode
@@ -2878,9 +2927,19 @@ function openCalendarModal(eventData = null) {
         document.getElementById('event-title').value = '';
         document.getElementById('event-from-date').value = '';
         document.getElementById('event-to-date').value = '';
+        
+        // Restrict to future dates
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        const minDateTime = now.toISOString().slice(0, 16);
+        
+        document.getElementById('event-from-date').min = minDateTime;
+        document.getElementById('event-to-date').min = minDateTime;
+
         document.getElementById('calendar-event-type').value = 'Event';
         document.getElementById('custom-event-type-container').style.display = 'none';
         document.getElementById('custom-event-type-input').value = '';
+        document.getElementById('event-location').value = '';
         document.getElementById('event-desc').value = '';
     }
     
@@ -2897,6 +2956,7 @@ async function saveCalendarEvent() {
     const fromDate = document.getElementById('event-from-date').value;
     const toDate = document.getElementById('event-to-date').value;
     let type = document.getElementById('calendar-event-type').value;
+    const location = document.getElementById('event-location').value;
     const desc = document.getElementById('event-desc').value;
     
     // If custom type is selected, use the custom input value
@@ -2930,7 +2990,7 @@ async function saveCalendarEvent() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${ACCESS_TOKEN}`
             },
-            body: JSON.stringify({ title, from_date: fromDate, to_date: toDate, type, description: desc })
+            body: JSON.stringify({ title, from_date: fromDate, to_date: toDate, type, location, description: desc })
         });
 
         if (res.ok) {
@@ -2938,7 +2998,8 @@ async function saveCalendarEvent() {
             loadAcademicCalendar();
             showStatusPopup(isEdit ? "Event updated successfully!" : "Event added successfully!");
         } else {
-            alert("Failed to save event");
+            const data = await res.json();
+            alert(`Failed to save event: ${data.detail || res.statusText}`);
         }
     } catch (e) {
         console.error(e);
@@ -4301,6 +4362,103 @@ function switchCareerTab(tab) {
 }
 window.switchCareerTab = switchCareerTab;
 
+// Store generated resume text globally for download
+let currentGeneratedResume = "";
+let currentAnalysisResult = "";
+
+async function downloadAnalysis(format) {
+    if (!currentAnalysisResult) {
+        alert("Please analyze a resume first.");
+        return;
+    }
+
+    const btn = document.getElementById(`btn-analysis-download-${format}`);
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_URL}/career/download-resume`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ 
+                resume_text: currentAnalysisResult,
+                format: format 
+            })
+        });
+
+        if (!response.ok) throw new Error("Download failed");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resume_analysis.${format === 'pdf' ? 'pdf' : 'docx'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+    } catch (e) {
+        console.error("Download Error:", e);
+        alert("Failed to download analysis. Please try again.");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+window.downloadAnalysis = downloadAnalysis;
+
+async function downloadResume(format) {
+    if (!currentGeneratedResume) {
+        alert("Please generate a resume first.");
+        return;
+    }
+
+    const btn = document.getElementById(`btn-download-${format}`);
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Downloading...`;
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_URL}/career/download-resume`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ 
+                resume_text: currentGeneratedResume,
+                format: format 
+            })
+        });
+
+        if (!response.ok) throw new Error("Download failed");
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `resume.${format === 'pdf' ? 'pdf' : 'docx'}`; // Correct extension
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+    } catch (e) {
+        console.error("Download Error:", e);
+        alert("Failed to download resume. Please try again.");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+window.downloadResume = downloadResume;
+
+// Updated generateResume to include download buttons
 async function generateResume() {
     // Collect Inputs
     const fullName = document.getElementById('maker-fullname').value.trim();
@@ -4358,18 +4516,45 @@ async function generateResume() {
         }
 
         const data = await res.json();
+        currentGeneratedResume = data.resume; // Store for download
         feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.resume)}</div>`;
         
-        // Add Copy Button
+        // Action Buttons Container
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.marginTop = '20px';
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '10px';
+        actionsDiv.style.flexWrap = 'wrap';
+
+        // Copy Button
         const copyBtn = document.createElement('button');
         copyBtn.className = 'btn-secondary';
-        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Markdown';
-        copyBtn.style.marginTop = '15px';
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Text';
         copyBtn.onclick = () => {
              navigator.clipboard.writeText(data.resume);
              showStatusPopup("Resume Copied to Clipboard!");
         };
-        feedbackEl.appendChild(copyBtn);
+
+        // Download PDF Button
+        const pdfBtn = document.createElement('button');
+        pdfBtn.id = 'btn-download-pdf';
+        pdfBtn.className = 'btn-primary';
+        pdfBtn.style.background = '#ef4444'; // Red for PDF
+        pdfBtn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Download PDF';
+        pdfBtn.onclick = () => downloadResume('pdf');
+
+        // Download Word Button
+        const docxBtn = document.createElement('button');
+        docxBtn.id = 'btn-download-docx';
+        docxBtn.className = 'btn-primary';
+        docxBtn.style.background = '#2563eb'; // Blue for Word
+        docxBtn.innerHTML = '<i class="fa-solid fa-file-word"></i> Download Word';
+        docxBtn.onclick = () => downloadResume('docx');
+
+        actionsDiv.appendChild(copyBtn);
+        actionsDiv.appendChild(pdfBtn);
+        actionsDiv.appendChild(docxBtn);
+        feedbackEl.appendChild(actionsDiv);
 
     } catch (e) {
         feedbackEl.innerHTML = `<p style="color: #ef4444;">Error: ${e.message}</p>`;
@@ -4410,7 +4595,45 @@ async function checkResume() {
         }
 
         const data = await res.json();
+        currentAnalysisResult = data.analysis;
         feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.analysis)}</div>`;
+
+        // Action Buttons Container
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.marginTop = '20px';
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '10px';
+        actionsDiv.style.flexWrap = 'wrap';
+
+        // Copy Button
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'btn-secondary';
+        copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Analysis';
+        copyBtn.onclick = () => {
+             navigator.clipboard.writeText(data.analysis);
+             showStatusPopup("Analysis Copied to Clipboard!");
+        };
+
+        // Download PDF Button
+        const pdfBtn = document.createElement('button');
+        pdfBtn.id = 'btn-analysis-download-pdf';
+        pdfBtn.className = 'btn-primary';
+        pdfBtn.style.background = '#ef4444'; // Red for PDF
+        pdfBtn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Download PDF';
+        pdfBtn.onclick = () => downloadAnalysis('pdf');
+
+        // Download Word Button
+        const docxBtn = document.createElement('button');
+        docxBtn.id = 'btn-analysis-download-docx';
+        docxBtn.className = 'btn-primary';
+        docxBtn.style.background = '#2563eb'; // Blue for Word
+        docxBtn.innerHTML = '<i class="fa-solid fa-file-word"></i> Download Word';
+        docxBtn.onclick = () => downloadAnalysis('docx');
+
+        actionsDiv.appendChild(copyBtn);
+        actionsDiv.appendChild(pdfBtn);
+        actionsDiv.appendChild(docxBtn);
+        feedbackEl.appendChild(actionsDiv);
     } catch (e) {
         feedbackEl.innerHTML = `<p style="color: #ef4444;">Analysis failed: ${e.message}</p>`;
         console.error(e);
@@ -4819,6 +5042,12 @@ function openAddTrendingModal(query = null) {
     const modal = document.getElementById('trending-modal');
     if (!modal) return;
 
+    // Check limit for new additions
+    if (!query && currentTrendingQueries.length >= 4) {
+        showStatusPopup("Maximum Queries reached", 1000);
+        return;
+    }
+
     // Reset or Populate
     const idInput = document.getElementById('trending-id');
     const textInput = document.getElementById('trending-text');
@@ -4877,6 +5106,21 @@ const TRENDING_ICONS = [
     'fa-solid fa-laptop-code', 'fa-solid fa-fire', 'fa-solid fa-star'
 ];
 
+const ICON_NAMES = {
+    'fa-solid fa-graduation-cap': 'Academics',
+    'fa-solid fa-book': 'Library/Study',
+    'fa-solid fa-calendar-days': 'Events/Calendar',
+    'fa-solid fa-map-location-dot': 'Campus Map',
+    'fa-solid fa-bus': 'Transport',
+    'fa-solid fa-building-columns': 'University/Dept',
+    'fa-solid fa-user-graduate': 'Student/Faculty',
+    'fa-solid fa-microscope': 'Research',
+    'fa-solid fa-flask': 'Science/Labs',
+    'fa-solid fa-laptop-code': 'IT/Tech',
+    'fa-solid fa-fire': 'Trending',
+    'fa-solid fa-star': 'Featured/Important'
+};
+
 function closeTrendingModal() {
     const modal = document.getElementById('trending-modal');
     if (!modal) return;
@@ -4893,6 +5137,7 @@ function renderSymbolPicker() {
     TRENDING_ICONS.forEach(icon => {
         const div = document.createElement('div');
         div.className = 'icon-option';
+        div.setAttribute('title', ICON_NAMES[icon] || 'Icon'); // Add Tooltip
         div.innerHTML = `<i class='${icon}'></i>`;
         
         if (hiddenInput.value === icon) {
