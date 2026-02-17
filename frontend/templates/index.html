@@ -147,6 +147,29 @@
                 align-items: center;
               "
             >
+              <div class="notification-wrapper">
+                <i
+                  class="fa-solid fa-bell"
+                  id="notification-bell"
+                  title="Notifications"
+                  onclick="toggleNotifications()"
+                  style="cursor: pointer; font-size: 18px"
+                ></i>
+                <span id="notification-badge" class="notification-badge" style="display: none">0</span>
+                <div id="notification-dropdown" class="notification-dropdown" style="display: none">
+                  <div class="notification-header">
+                    <h4>Notifications</h4>
+                    <div class="notif-header-actions">
+                      <span class="mark-all-read" onclick="markAllNotificationsAsRead()">Mark all read</span>
+                      <span class="clear-all-notif" onclick="clearAllNotifications()">Clear all</span>
+                    </div>
+                  </div>
+                  <div id="notification-items" class="notification-items">
+                    <!-- Notifications will be loaded here -->
+                    <div class="no-notifications">No new notifications</div>
+                  </div>
+                </div>
+              </div>
               <i
                 class="fa-solid fa-moon"
                 id="header-theme-icon"

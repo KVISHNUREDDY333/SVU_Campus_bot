@@ -19,7 +19,7 @@ sys.path.append(project_root)
 from backend.app.core.config import Config
 from backend.app.core.database import get_db_client, close_db_client
 from backend.app.services.rag_service import setup_rag_chain
-from backend.app.routers import auth, chat, admin, tickets, calendar, study_buddy, career
+from backend.app.routers import auth, chat, admin, tickets, calendar, study_buddy, career, notifications
 from backend.app.core.security import get_password_hash
 from backend.app.core import database
 from datetime import datetime
@@ -79,6 +79,9 @@ async def lifespan(app: FastAPI):
              database.faqs_db.create_index([("category", 1)])
         if database.suggested_faqs_db is not None:
              database.suggested_faqs_db.create_index([("created_at", -1)])
+        if database.notifications_db is not None:
+             database.notifications_db.create_index([("created_at", -1)])
+             database.notifications_db.create_index([("user_id", 1)])
     except Exception as e:
         logger.error(f"Failed to create indexes: {e}")
 
@@ -107,6 +110,7 @@ app.include_router(tickets.router)
 app.include_router(calendar.router)
 app.include_router(study_buddy.router)
 app.include_router(career.router)
+app.include_router(notifications.router)
 
 static_dir = os.path.join(project_root, "frontend", "static")
 if not os.path.exists(static_dir):

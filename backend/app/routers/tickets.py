@@ -6,6 +6,7 @@ from bson import ObjectId
 from ..core import database
 from ..models.user import User
 from .auth import get_current_user
+from ..services import notification_service
 
 router = APIRouter()
 
@@ -114,7 +115,15 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
                  except Exception as e:
                      print(f"RAG Sync Error: {e}")
 
-
+        # Trigger notification to the ticket owner
+        owner = ticket.get("created_by")
+        if owner:
+            await notification_service.create_notification(
+                title="Ticket Update",
+                message=f"Your ticket '{ticket.get('subject')[:30]}...' has been marked as '{update.status}'.",
+                user_id=owner,
+                notification_type="personal"
+            )
 
         return {"status": "success"}
     except:

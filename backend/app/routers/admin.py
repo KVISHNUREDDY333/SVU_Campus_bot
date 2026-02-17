@@ -14,6 +14,7 @@ import os
 import shutil
 from fastapi import UploadFile, File
 from ..services.rag_service import ingest_pdf
+from ..services import notification_service
 import pydantic
 
 router = APIRouter()
@@ -73,6 +74,13 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
         await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq["id"], "category": faq.category})
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
+    
+    # Trigger notification
+    await notification_service.create_notification(
+        title="New FAQ Added",
+        message=f"A new FAQ about '{faq.category}' has been added to the system.",
+        notification_type="common"
+    )
     
     return new_faq
 
@@ -169,6 +177,23 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
     
+    # Personal notification to the suggestor
+    suggestor = suggestion.get("suggested_by")
+    if suggestor:
+        await notification_service.create_notification(
+            title="FAQ Approved",
+            message=f"Your suggested FAQ '{suggestion.get('question')[:30]}...' has been approved.",
+            user_id=suggestor,
+            notification_type="personal"
+        )
+    
+    # Common notification
+    await notification_service.create_notification(
+        title="New Community FAQ",
+        message=f"A new FAQ suggested by the community has been added.",
+        notification_type="common"
+    )
+    
     database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
     
     return {"status": "success", "message": "FAQ approved and published"}
@@ -181,8 +206,15 @@ async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(
     suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
     if not suggestion:
         raise HTTPException(status_code=404, detail="Suggestion not found")
-
-
+    # Personal notification to the suggestor
+    suggestor = suggestion.get("suggested_by")
+    if suggestor:
+        await notification_service.create_notification(
+            title="FAQ Suggestion Update",
+            message=f"Your suggested FAQ '{suggestion.get('question')[:30]}...' has been rejected by the admin.",
+            user_id=suggestor,
+            notification_type="personal"
+        )
 
     database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
     
@@ -734,6 +766,14 @@ async def create_location(loc: LocationModel, current_user: User = Depends(get_c
     
     result = database.locations_db.insert_one(new_loc)
     new_loc["id"] = str(result.inserted_id)
+    
+    # Trigger notification
+    await notification_service.create_notification(
+        title="New Location Added",
+        message=f"New campus location '{loc.name}' is now available in the map.",
+        notification_type="common"
+    )
+    
     return new_loc
 
 @router.put("/admin/locations/{loc_id}", response_model=LocationResponse)
@@ -755,6 +795,14 @@ async def update_location(loc_id: str, loc_update: LocationUpdate, current_user:
         
     updated_loc = database.locations_db.find_one({"_id": ObjectId(loc_id)})
     updated_loc["id"] = str(updated_loc["_id"])
+    
+    # Trigger notification
+    await notification_service.create_notification(
+        title="Location Updated",
+        message=f"Campus location '{updated_loc.get('name')}' has been updated.",
+        notification_type="common"
+    )
+    
     return updated_loc
 
 @router.delete("/admin/locations/{loc_id}")
@@ -762,9 +810,15 @@ async def delete_location(loc_id: str, current_user: User = Depends(get_current_
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    result = database.locations_db.delete_one({"_id": ObjectId(loc_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Location not found")
+    # We might want to know the name before deleting for a better message, 
+    # but let's keep it simple for now.
+    
+    # Trigger notification
+    await notification_service.create_notification(
+        title="Location Removed",
+        message=f"A campus location has been removed from the map.",
+        notification_type="common"
+    )
         
     return {"status": "success", "message": "Location deleted"}
 
@@ -807,6 +861,13 @@ async def add_trending_query(query: TrendingQueryModel, current_user: User = Dep
     # Remove _id as it might interface with Pydantic validation if it's an ObjectId
     new_query.pop('_id', None)
     
+    # Trigger notification
+    await notification_service.create_notification(
+        title="Trending Today",
+        message=f"Check out the new trending query: '{query.text}'",
+        notification_type="common"
+    )
+    
     return TrendingQueryResponse(
         id=str(result.inserted_id),
         **new_query
@@ -838,6 +899,13 @@ async def update_trending_query(query_id: str, update: TrendingQueryUpdate, curr
     # Remove _id for Pydantic
     result.pop('_id', None)
     
+    # Trigger notification
+    await notification_service.create_notification(
+        title="Trending Queries Update",
+        message=f"The trending topics have been updated. Check them out!",
+        notification_type="common"
+    )
+    
     return TrendingQueryResponse(
         id=query_id,
         **result
@@ -854,6 +922,13 @@ async def delete_trending_query(query_id: str, current_user: User = Depends(get_
     result = database.trending_queries_db.delete_one({'_id': ObjectId(query_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail='Query not found')
+    
+    # Trigger notification
+    await notification_service.create_notification(
+        title="Trending Queries Update",
+        message=f"Trending queries have been refreshed.",
+        notification_type="common"
+    )
         
     return {'status': 'success', 'message': 'Query deleted'}
 

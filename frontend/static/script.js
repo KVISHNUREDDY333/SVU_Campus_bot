@@ -429,6 +429,7 @@ function saveSession(data) {
     }
 
     // Start notification polling
+    startNotificationPolling();
 
 
     // Reset chat to "New Chat" on login
@@ -5296,3 +5297,191 @@ window.sendZenMessage = sendZenMessage;
 window.newZenChat = newZenChat;
 window.refreshZenChat = refreshZenChat;
 window.startZenSTT = startZenSTT;
+
+// --- Notification Logic ---
+let notificationPollInterval = null;
+
+function toggleNotifications() {
+    const dropdown = document.getElementById('notification-dropdown');
+    if (!dropdown) return;
+    
+    if (dropdown.style.display === 'none') {
+        dropdown.style.display = 'flex';
+        fetchNotifications(); // Refresh when opening
+        
+        // Close on outside click
+        const closeDropdown = (e) => {
+            if (!dropdown.contains(e.target) && e.target.id !== 'notification-bell') {
+                dropdown.style.display = 'none';
+                document.removeEventListener('click', closeDropdown);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeDropdown), 10);
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+async function fetchNotifications() {
+    if (!ACCESS_TOKEN) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/notifications`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        
+        if (res.status === 401) {
+            console.warn("Session expired during notification poll");
+            stopNotificationPolling();
+            return;
+        }
+        
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
+        const data = await res.json();
+        renderNotifications(data.notifications, data.unread_count);
+    } catch (e) {
+        console.error("Failed to fetch notifications:", e);
+    }
+}
+
+function renderNotifications(notifications, unreadCount) {
+    const container = document.getElementById('notification-items');
+    const badge = document.getElementById('notification-badge');
+    
+    if (!container) return;
+    
+    // Update badge
+    if (unreadCount > 0) {
+        badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+    
+    if (!notifications || notifications.length === 0) {
+        container.innerHTML = '<div class="no-notifications">No notifications yet</div>';
+        return;
+    }
+    
+    container.innerHTML = notifications.map(notif => {
+        const timeStr = formatNotifTime(notif.created_at);
+        return `
+            <div class="notification-item ${notif.is_read ? '' : 'unread'}" onclick="handleNotifClick('${notif.id}', '${notif.link || ''}')">
+                <div class="notif-title">${notif.title}</div>
+                <div class="notif-msg">${notif.message}</div>
+                <div class="notif-time">${timeStr}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function formatNotifTime(dateStr) {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+    
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return date.toLocaleDateString();
+}
+
+async function handleNotifClick(id, link) {
+    // Mark as read
+    try {
+        await fetch(`${API_URL}/notifications/${id}/read`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        fetchNotifications(); // Refresh UI
+        
+        if (link) {
+            // If it's an internal route
+            if (link.startsWith('#')) {
+                const section = link.substring(1);
+                showSection(section);
+            } else {
+                window.open(link, '_blank');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to mark notification as read:", e);
+    }
+}
+
+async function markAllNotificationsAsRead() {
+    if (!ACCESS_TOKEN) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/notifications/read-all`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        
+        if (res.ok) {
+            fetchNotifications();
+            showStatusPopup("All notifications marked as read");
+        } else {
+            throw new Error("Failed to mark all as read");
+        }
+    } catch (e) {
+        console.error("Error marking all notifications as read:", e);
+        showStatusPopup("Failed to mark all as read");
+    }
+}
+
+async function clearAllNotifications() {
+    if (!ACCESS_TOKEN) return;
+    
+    if (!confirm("Are you sure you want to clear your notifications? This will delete your personal alerts.")) return;
+    
+    try {
+        const res = await fetch(`${API_URL}/notifications/clear-all`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        
+        if (res.ok) {
+            fetchNotifications();
+            showStatusPopup("Notifications cleared");
+        } else {
+            throw new Error("Failed to clear notifications");
+        }
+    } catch (e) {
+        console.error("Error clearing notifications:", e);
+        showStatusPopup("Failed to clear notifications");
+    }
+}
+
+function startNotificationPolling() {
+    if (notificationPollInterval) clearInterval(notificationPollInterval);
+    
+    // Initial fetch
+    fetchNotifications();
+    
+    // Poll every 30 seconds
+    notificationPollInterval = setInterval(fetchNotifications, 30000);
+}
+
+function stopNotificationPolling() {
+    if (notificationPollInterval) {
+        clearInterval(notificationPollInterval);
+        notificationPollInterval = null;
+    }
+}
+
+// Expose functions to window
+window.toggleNotifications = toggleNotifications;
+window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+window.clearAllNotifications = clearAllNotifications;
+window.handleNotifClick = handleNotifClick;
+
+// Initialize if already logged in
+if (ACCESS_TOKEN) {
+    startNotificationPolling();
+}
