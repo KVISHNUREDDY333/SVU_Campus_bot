@@ -618,9 +618,16 @@
                   <i class="fa-solid fa-brain"></i>
                 </div>
                 <h4>Train The Brain</h4>
-                <div style="margin-left: auto; display: flex; gap: 12px;">
-                    <button class="btn-primary" onclick="trainAllBrain()" style="background: var(--accent-color); font-size: 13px; padding: 8px 16px;">
-                        <i class="fa-solid fa-bolt"></i> Train Main Brain
+                <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
+                    <div class="admin-search-container" style="margin: 0; width: 220px">
+                        <input type="text" id="brain-search-input" placeholder="Search documents..." class="admin-search-input" oninput="filterTrainDocs()" style="padding: 8px 12px; font-size: 13px">
+                        <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                    </div>
+                    <button class="btn-primary" onclick="loadTrainStatus()" style="font-size: 12px; padding: 8px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.1);">
+                        <i class="fa-solid fa-rotate"></i> Refresh
+                    </button>
+                    <button class="btn-primary" onclick="trainAllBrain(event)" style="background: var(--accent-color); font-size: 13px; padding: 8px 16px;">
+                        <i class="fa-solid fa-brain"></i> Train Main Brain
                     </button>
                 </div>
               </div>

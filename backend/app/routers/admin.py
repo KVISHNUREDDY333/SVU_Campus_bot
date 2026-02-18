@@ -13,7 +13,7 @@ import random
 import os
 import shutil
 from fastapi import UploadFile, File
-from ..services.rag_service import ingest_pdf
+from ..services.rag_service import ingest_pdf, ingest_url, ingest_text, extract_faqs_from_text, refine_kb_data, ingest_faq
 from ..services import notification_service
 import pydantic
 
@@ -696,33 +696,144 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
     
     trained_count = 0
     now = datetime.utcnow()
+    
+    from ..services.rag_service import refine_kb_data, ingest_faq, ingest_url, ingest_pdf
+    
     for doc in untrained_docs:
-        # Simulate LLM Analysis/Training
-        # In this RAG context, training means metadata check and vector sync
-        # Since ingestion already handles vectors, this button is a 'Seal of Approval' 
-        # that the LLM has indexed the latest modifications.
+        doc_id = str(doc["_id"])
+        filename = doc.get("filename")
+        doc_type = doc.get("type", "pdf")
+        
+        # Thorough Training Logic (Simplified for bulk)
+        full_text = ""
+        try:
+            if doc_type == "url":
+                _, full_text = await ingest_url(filename, store_vectors=False)
+            elif doc_type == "pdf":
+                upload_dir = "backend/uploads"
+                file_path = os.path.join(upload_dir, filename)
+                if os.path.exists(file_path):
+                    _, full_text = await ingest_pdf(file_path, store_vectors=False)
+        except Exception as e:
+            print(f"Error fetching content for thorough training (Doc: {filename}): {e}")
+
+        # Refine FAQs if content available
+        faqs = list(database.faqs_db.find({"source_urls": filename}))
+        if faqs and full_text:
+            faqs_to_refine = [{
+                "question": f["question"],
+                "answer": f["answer"],
+                "category": f.get("category", "General"),
+                "keywords": f.get("keywords", [])
+            } for f in faqs]
+            
+            refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+            
+            for i, f in enumerate(faqs):
+                if i < len(refined_faqs):
+                    refined = refined_faqs[i]
+                    database.faqs_db.update_one(
+                        {"_id": f["_id"]},
+                        {"$set": {
+                            "question": refined.get("question", f["question"]),
+                            "answer": refined.get("answer", f["answer"]),
+                            "category": refined.get("category", f.get("category", "General")),
+                            "keywords": refined.get("keywords", f.get("keywords", [])),
+                            "last_verified": now
+                        }}
+                    )
+                    await ingest_faq(
+                        question=refined.get("question", f["question"]),
+                        answer=refined.get("answer", f["answer"]),
+                        source=filename,
+                        faq_id=str(f["_id"])
+                    )
+
         database.documents_db.update_one(
             {"_id": doc["_id"]},
             {"$set": {"is_trained": True, "last_trained": now}}
         )
         trained_count += 1
         
-    return {"status": "success", "trained_count": trained_count, "message": f"Successfully trained on {trained_count} items."}
+    return {"status": "success", "trained_count": trained_count, "message": f"Successfully trained and refined {trained_count} items."}
 
 @router.post("/admin/train/{doc_id}")
 async def train_specific_document(doc_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    from ..services.rag_service import refine_kb_data, ingest_faq
+    
+    doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    filename = doc.get("filename")
+    doc_type = doc.get("type", "pdf")
+    
+    # 1. Get full text context
+    full_text = ""
+    try:
+        if doc_type == "url":
+            from ..services.rag_service import ingest_url
+            _, full_text = await ingest_url(filename, store_vectors=False)
+        elif doc_type == "pdf":
+            upload_dir = "backend/uploads"
+            file_path = os.path.join(upload_dir, filename)
+            from ..services.rag_service import ingest_pdf
+            _, full_text = await ingest_pdf(file_path, store_vectors=False)
+        elif doc_type == "text":
+            # For text types, we might need to store the content in doc_record or find it elsewhere
+            # Assuming for now text-type docs have their content somehow available or we skip refinement
+            pass
+    except Exception as e:
+        print(f"Error fetching document content for refinement: {e}")
+
+    # 2. Get existing FAQs
+    faqs = list(database.faqs_db.find({"source_urls": filename}))
+    if faqs and full_text:
+        print(f"[THOROUGH-TRAIN] Refining {len(faqs)} FAQs for {filename}")
+        # Convert BSON to simple list of dicts for LLM
+        faqs_to_refine = []
+        for f in faqs:
+            faqs_to_refine.append({
+                "question": f["question"],
+                "answer": f["answer"],
+                "category": f.get("category", "General"),
+                "keywords": f.get("keywords", [])
+            })
+            
+        refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+        
+        # 3. Update DB and Re-ingest into Vector DB
+        for i, f in enumerate(faqs):
+            # Only update if we have a match (in case LLM returned different count, though we try batching)
+            if i < len(refined_faqs):
+                refined = refined_faqs[i]
+                database.faqs_db.update_one(
+                    {"_id": f["_id"]},
+                    {"$set": {
+                        "question": refined.get("question", f["question"]),
+                        "answer": refined.get("answer", f["answer"]),
+                        "category": refined.get("category", f.get("category", "General")),
+                        "keywords": refined.get("keywords", f.get("keywords", [])),
+                        "last_verified": datetime.utcnow()
+                    }}
+                )
+                # Re-ingest into Vector DB
+                await ingest_faq(
+                    question=refined.get("question", f["question"]),
+                    answer=refined.get("answer", f["answer"]),
+                    source=filename,
+                    faq_id=str(f["_id"])
+                )
+
     result = database.documents_db.update_one(
         {"_id": ObjectId(doc_id)},
         {"$set": {"is_trained": True, "last_trained": datetime.utcnow()}}
     )
     
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Document not found")
-        
-    return {"status": "success", "message": "Document training complete."}
+    return {"status": "success", "message": "Document training (thorough refinement) complete."}
 
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
 async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):
@@ -820,11 +931,17 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
         # Mark parent document as untrained
         updated_faq = database.faqs_db.find_one({"_id": ObjectId(faq_id)})
         if updated_faq and updated_faq.get("source_urls"):
-            source = updated_faq["source_urls"][0] # Usually first one is the doc
-            database.documents_db.update_one(
-                {"filename": source},
-                {"$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
-            )
+            sources = updated_faq["source_urls"]
+            # If it's a string (old format maybe?), treat as single item list
+            if isinstance(sources, str):
+                sources = [sources]
+            
+            if sources:
+                source = sources[0]
+                database.documents_db.update_one(
+                    {"filename": source},
+                    {"$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
+                )
             
         return {"status": "success", "message": "FAQ updated and document marked for retraining"}
     except Exception as e:

@@ -754,6 +754,78 @@ Generate AT LEAST 5-10 additional FAQs.
     logger.info(f"[MAX-FAQ] Total: {len(all_faqs)} raw → {len(unique_faqs)} unique FAQs after dedup")
     return unique_faqs
 
+async def refine_kb_data(faqs: list, context: str):
+    """
+    Refines existing FAQs by improving clarity, adding context, and ensuring they are student-friendly.
+    This corresponds to the 'Thorough Training' request.
+    """
+    if not llm or not faqs:
+        return faqs
+
+    import json
+    import re
+    
+    # Process in batches of 10 to avoid token limits and keep quality high
+    batch_size = 10
+    refined_faqs = []
+    
+    for i in range(0, len(faqs), batch_size):
+        batch = faqs[i : i + batch_size]
+        batch_json = json.dumps(batch, indent=2)
+        
+        refine_prompt = f"""
+        PHASE 4: KNOWLEDGE REFINEMENT (THOROUGH TRAINING)
+        
+        You are the University Information Architect. Your goal is to take extracted Q&A pairs and REFINE them into high-quality, professional, and student-centric information.
+        
+        **Source Context**:
+        {context[:10000]} # Limit context to avoid overflow, usually enough for refinement
+        
+        **Current Q&A Pairs**:
+        {batch_json}
+        
+        **Instructions**:
+        1. **Enhance Detail**: Add relevant context from the source text that might be missing.
+        2. **Clarity & Tone**: Ensure the answer is clear, polite, and authoritative.
+        3. **Accuracy**: Cross-reference each answer with the source context. Fix any subtle inaccuracies.
+        4. **Refined keywords**: Update keywords to be more descriptive for search.
+        
+        **Output Format**:
+        Return ONLY valid JSON in the exact same structure as the input:
+        {{
+            "faqs": [
+                {{
+                    "question": "Refined question",
+                    "answer": "Deeply refined, high-context answer.",
+                    "category": "Category",
+                    "keywords": ["key", "words"]
+                }}
+            ]
+        }}
+        """
+        
+        try:
+            response = await llm.ainvoke(refine_prompt)
+            content = response.content
+            
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+            if not json_match:
+                json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            
+            if json_match:
+                data = json.loads(json_match.group(0))
+                batch_refined = data.get("faqs", [])
+                # If LLM returned fewer or more, we should be careful, but usually it follows instructions
+                refined_faqs.extend(batch_refined)
+            else:
+                refined_faqs.extend(batch) # Fallback to original
+                
+        except Exception as e:
+            logger.error(f"Refinement Batch Error: {e}")
+            refined_faqs.extend(batch)
+            
+    return refined_faqs
+
 async def validate_faq_with_web(question: str, answer: str):
     """
     Validates the FAQ against the official SVU website.
