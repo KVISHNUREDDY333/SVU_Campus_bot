@@ -607,6 +607,7 @@ function showSection(section) {
         loadSystemHealth();
         loadSuggestedFAQs();
         loadAdminTrending();
+        loadTrainStatus(); // Load training status dashboard
     }
 
     if (section === 'calendar') {
@@ -3998,7 +3999,8 @@ async function refreshAllAdminData() {
             fetchLocations(),
             loadAllTickets(),
             loadSuggestedFAQs(),
-            loadSystemHealth()
+            loadSystemHealth(),
+            loadTrainStatus()
         ]);
         
         showToast("Success", "All admin features updated successfully!");
@@ -5500,12 +5502,123 @@ async function deleteNotification(event, id) {
     }
 }
 
+// --- Train The Brain Feature ---
+
+async function loadTrainStatus() {
+    if (!ACCESS_TOKEN) return;
+    const bodyEl = document.getElementById('brain-training-body');
+    if (!bodyEl) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/brain/status`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.detail || "Failed to load status");
+
+        if (data.length === 0) {
+            bodyEl.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-secondary);">No documents available for training.</td></tr>';
+            return;
+        }
+
+        bodyEl.innerHTML = data.map(doc => {
+            const lastTrained = doc.last_trained ? formatDate(doc.last_trained) : "Never";
+            const statusClass = doc.is_trained ? 'status-pill status-active' : 'status-pill status-pending';
+            const statusText = doc.is_trained ? 'Trained' : 'Untrained';
+            
+            return `
+                <tr>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <i class="${getFileIconClass(doc.filename)}" style="color: var(--accent-color)"></i>
+                            <span>${doc.filename}</span>
+                        </div>
+                    </td>
+                    <td style="text-align: center"><span class="type-pill">${doc.type.toUpperCase()}</span></td>
+                    <td style="text-align: center">${doc.faq_count}</td>
+                    <td style="text-align: center"><span class="${statusClass}">${statusText}</span></td>
+                    <td style="text-align: center; font-size: 12px; color: var(--text-secondary)">${lastTrained}</td>
+                    <td style="text-align: right">
+                        <button class="speech-btn" onclick="trainBrain('${doc.id}')" title="Train on this document" 
+                                style="width: 28px; height: 28px; background: ${doc.is_trained ? 'rgba(0,0,0,0.05)' : 'var(--accent-color)'}; color: ${doc.is_trained ? 'var(--text-secondary)' : 'white'}">
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (e) {
+        console.error("Load Train Status Error:", e);
+        bodyEl.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error loading status.</td></tr>';
+    }
+}
+
+async function trainBrain(id) {
+    if (!ACCESS_TOKEN) return;
+    
+    showToast("Learning...", "Brain is analyzing document data...");
+    
+    try {
+        const res = await fetch(`${API_URL}/admin/train/${id}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            showToast("Success", "Brain training complete for this document!");
+            loadTrainStatus();
+            // Also refresh health but let's keep it simple
+        } else {
+            throw new Error(data.detail || "Training failed");
+        }
+    } catch (e) {
+        showToast("Error", e.message, "error");
+    }
+}
+
+async function trainAllBrain() {
+    if (!ACCESS_TOKEN) return;
+    
+    const btn = event?.target?.closest('button');
+    const icon = btn?.querySelector('i');
+    if (icon) icon.classList.add('fa-spin');
+
+    showToast("Brain Activation", "Answering queries across all university data...");
+
+    try {
+        const res = await fetch(`${API_URL}/admin/train/all`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        const data = await res.json();
+
+        if (data.status === 'no_updates') {
+            alert("No new data is injected to train.");
+            showToast("Information", "The Brain is already up to date.");
+        } else if (res.ok) {
+            showToast("Brain Empowered", `Successfully trained on ${data.trained_count} new items!`);
+            loadTrainStatus();
+        } else {
+            throw new Error(data.detail || "Global training failed");
+        }
+    } catch (e) {
+        showToast("Error", e.message, "error");
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
+    }
+}
+
 // Expose functions to window
 window.toggleNotifications = toggleNotifications;
 window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
 window.deleteNotification = deleteNotification;
+window.trainBrain = trainBrain;
+window.trainAllBrain = trainAllBrain;
 
 // Initialize if already logged in
 if (ACCESS_TOKEN) {

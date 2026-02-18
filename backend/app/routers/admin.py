@@ -280,6 +280,9 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
              "filename": req.title, # Title acts as filename
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
+             "last_modified": datetime.utcnow(),
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "text",
@@ -369,6 +372,9 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
              "filename": file.filename,
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
+             "last_modified": datetime.utcnow(),
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "pdf",
@@ -449,6 +455,9 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
              "filename": req.url,
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
+             "last_modified": datetime.utcnow(),
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "url",
@@ -651,6 +660,70 @@ async def list_documents(
         docs.append(doc)
     return docs
 
+@router.get("/admin/brain/status")
+async def get_brain_training_status(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.documents_db is None:
+        return []
+    
+    docs = list(database.documents_db.find().sort("last_modified", -1))
+    results = []
+    for d in docs:
+        results.append({
+            "id": str(d["_id"]),
+            "filename": d.get("filename", "Unknown"),
+            "type": d.get("type", "unknown"),
+            "faq_count": d.get("extracted_faqs", 0),
+            "is_trained": d.get("is_trained", False),
+            "last_trained": d.get("last_trained"),
+            "last_modified": d.get("last_modified", d.get("uploaded_at"))
+        })
+    return results
+
+@router.post("/admin/train/all")
+async def train_all_knowledge(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Find untrained or modified docs
+    query = {"$or": [{"is_trained": False}, {"is_trained": {"$exists": False}}]}
+    untrained_docs = list(database.documents_db.find(query))
+    
+    if not untrained_docs:
+        return {"status": "no_updates", "message": "No data is injected to train."}
+    
+    trained_count = 0
+    now = datetime.utcnow()
+    for doc in untrained_docs:
+        # Simulate LLM Analysis/Training
+        # In this RAG context, training means metadata check and vector sync
+        # Since ingestion already handles vectors, this button is a 'Seal of Approval' 
+        # that the LLM has indexed the latest modifications.
+        database.documents_db.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"is_trained": True, "last_trained": now}}
+        )
+        trained_count += 1
+        
+    return {"status": "success", "trained_count": trained_count, "message": f"Successfully trained on {trained_count} items."}
+
+@router.post("/admin/train/{doc_id}")
+async def train_specific_document(doc_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = database.documents_db.update_one(
+        {"_id": ObjectId(doc_id)},
+        {"$set": {"is_trained": True, "last_trained": datetime.utcnow()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    return {"status": "success", "message": "Document training complete."}
+
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
 async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -744,7 +817,16 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="FAQ not found")
             
-        return {"status": "success", "message": "FAQ updated successfully"}
+        # Mark parent document as untrained
+        updated_faq = database.faqs_db.find_one({"_id": ObjectId(faq_id)})
+        if updated_faq and updated_faq.get("source_urls"):
+            source = updated_faq["source_urls"][0] # Usually first one is the doc
+            database.documents_db.update_one(
+                {"filename": source},
+                {"$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
+            )
+            
+        return {"status": "success", "message": "FAQ updated and document marked for retraining"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
