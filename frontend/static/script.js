@@ -5713,5 +5713,12 @@ window.loadTrainStatus = loadTrainStatus;
 
 // Initialize if already logged in
 if (ACCESS_TOKEN) {
-    startNotificationPolling();
+    if (typeof startNotificationPolling === 'function') startNotificationPolling();
 }
+
+// Window Resize Listener for Responsive Reset
+window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+        toggleSidebar(true); // Force close sidebar and overlay
+    }
+});

@@ -695,7 +695,6 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
         return {"status": "no_updates", "message": "No data is injected to train."}
     
     trained_count = 0
-    now = datetime.utcnow()
     
     from ..services.rag_service import refine_kb_data, ingest_faq, ingest_url, ingest_pdf
     
@@ -718,6 +717,7 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
             print(f"Error fetching content for thorough training (Doc: {filename}): {e}")
 
         # Refine FAQs if content available
+        now = datetime.utcnow()
         faqs = list(database.faqs_db.find({"source_urls": filename}))
         if faqs and full_text:
             faqs_to_refine = [{
