@@ -58,6 +58,7 @@
     </div>
 
     <div class="container">
+      <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
       <!-- Sidebar -->
       <aside class="sidebar" id="sidebar">
         <div class="logo">
@@ -136,7 +137,13 @@
         <section id="chat-section" class="content-section">
           <!-- Header -->
           <div class="header">
-            <div style="display: flex; align-items: center; gap: 16px"></div>
+            <div style="display: flex; align-items: center; gap: 16px">
+              <i
+                class="fa-solid fa-bars mobile-menu-btn"
+                id="mobile-menu-btn"
+                onclick="toggleSidebar()"
+              ></i>
+            </div>
 
             <div
               class="header-actions"

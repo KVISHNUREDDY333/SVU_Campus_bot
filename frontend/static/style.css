@@ -3684,3 +3684,229 @@ body.dark-mode .notification-item-wrapper:hover {
   color: var(--text-secondary);
   font-size: 14px;
 }
+
+/* --- Responsive Design Additions --- */
+
+.mobile-menu-btn {
+  display: none;
+  font-size: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.mobile-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--accent-color);
+}
+
+body.dark-mode .mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 15;
+  display: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.sidebar.active {
+  transform: translateX(0) !important;
+}
+
+.sidebar-overlay.active {
+  display: block;
+  opacity: 1;
+}
+
+/* Tablet Screens (up to 1024px) */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 250px;
+  }
+  .main-content {
+    width: calc(100% - 250px);
+  }
+  .grid-container {
+    grid-template-columns: 1fr !important;
+  }
+  .suggestions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 100%;
+  }
+}
+
+/* Mobile Screens (up to 768px) */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: block;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    width: 280px;
+    z-index: 100;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.1);
+  }
+
+  .main-content {
+    width: 100%;
+  }
+
+  .content-section {
+    padding: 20px;
+  }
+
+  .header {
+    padding: 12px 20px;
+  }
+
+  .chat-area {
+    padding: 15px 15px 130px 15px;
+  }
+
+  .welcome-text h1 {
+    font-size: 28px;
+  }
+
+  .welcome-text p {
+    font-size: 15px;
+    margin-bottom: 30px;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .input-area-wrapper {
+    padding: 12px 16px 20px 16px;
+  }
+
+  .input-container {
+    padding: 6px 8px 6px 20px;
+    border-radius: 28px;
+  }
+
+  .input-container input {
+    font-size: 14px;
+  }
+
+  .lang-select {
+    padding: 6px;
+    font-size: 12px;
+  }
+
+  .mic-btn, .send-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  /* Admin Section Optimizations */
+  .settings-card {
+    padding: 15px;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .card-header > div:last-child {
+    width: 100%;
+    margin-left: 0 !important;
+    flex-wrap: wrap;
+  }
+
+  .admin-search-container {
+    width: 100% !important;
+  }
+
+  .documents-list-container {
+    overflow-x: auto;
+  }
+
+  .documents-table {
+    min-width: 600px;
+  }
+  
+  .message-body {
+    max-width: 90%;
+  }
+
+  .welcome-logo {
+    width: 70px;
+    height: 70px;
+  }
+
+  .splash-title {
+    font-size: 24px;
+  }
+
+  .splash-quote {
+    font-size: 14px;
+    padding: 0 20px;
+  }
+
+  /* Notifications & Popups */
+  .notification-dropdown {
+    width: calc(100vw - 40px) !important;
+    right: -10px !important;
+    max-width: 350px;
+  }
+
+  .status-popup {
+    width: 90% !important;
+    left: 5% !important;
+    bottom: 20px !important;
+  }
+
+  /* Modal Responsiveness */
+  .premium-user-modal,
+  .premium-ticket-modal,
+  .premium-modal,
+  .modal-content {
+    max-width: 95% !important;
+    width: 95% !important;
+    margin: 10px;
+  }
+
+  .premium-modal-header,
+  .modal-header {
+    padding: 20px !important;
+  }
+
+  .premium-modal-body,
+  .modal-body {
+    padding: 20px !important;
+  }
+
+  .premium-modal-footer,
+  .modal-footer {
+    padding: 15px 20px !important;
+  }
+
+  .modal-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .modal-title {
+    font-size: 18px;
+  }
+}

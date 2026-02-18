@@ -9,6 +9,21 @@ const sendBtn = document.getElementById('send-btn');
 const welcomeScreen = document.getElementById('welcome-screen');
 const typingIndicator = document.getElementById('typing-indicator');
 
+// Mobile Sidebar Toggle
+function toggleSidebar(forceClose = null) {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    
+    if (forceClose === true) {
+        sidebar.classList.remove('active');
+        overlay.classList.remove('active');
+        return;
+    }
+
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
+}
+
 // Theme Logic
 function toggleTheme() {
     // Check if user is logged in
@@ -565,6 +580,11 @@ async function loadTrendingQueries() {
 
 function showSection(section) {
     console.warn(`[DEBUG] showSection called for: ${section}`);
+
+    // Auto-close sidebar on mobile
+    if (window.innerWidth <= 768) {
+        toggleSidebar(true);
+    }
     
     // Prevent non-admins from accessing restricted sections
     if ((section === 'admin' || section === 'dashboard') && USER_ROLE !== 'admin') {
