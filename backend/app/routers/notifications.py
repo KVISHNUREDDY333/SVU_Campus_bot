@@ -74,3 +74,13 @@ async def clear_all_notifications(current_user: User = Depends(get_current_user)
     if not success:
         raise HTTPException(status_code=400, detail="Failed to clear notifications")
     return {"message": "Notifications cleared"}
+
+@router.delete("/{notification_id}")
+async def delete_notification(notification_id: str, current_user: User = Depends(get_current_user)):
+    """
+    Delete a specific personal notification or hide a common one.
+    """
+    success = await notification_service.delete_notification(notification_id, current_user.username)
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to delete notification")
+    return {"message": "Notification deleted"}

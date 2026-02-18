@@ -154,10 +154,6 @@ function clearAuthInputs() {
         const el = document.getElementById(id);
         if (el) el.value = '';
     });
-    
-    // Reset Role to default
-    const roleSelect = document.getElementById('reg-role');
-    if (roleSelect) roleSelect.selectedIndex = 0;
 }
 
 
@@ -325,7 +321,7 @@ async function handleRegister(e) {
     e.preventDefault();
     const username = document.getElementById('reg-username').value;
     const fullName = document.getElementById('reg-fullname').value;
-    const role = document.getElementById('reg-role').value;
+    const role = "student";
     const password = document.getElementById('reg-password').value;
     const errorEl = document.getElementById('auth-error');
 
@@ -606,7 +602,8 @@ function showSection(section) {
         loadDocuments();
         loadAllTickets();
         loadAcademicCalendar(); // Load admin calendar management table
-        loadAllUsers();
+        loadUsers();
+        fetchLocations();
         loadSystemHealth();
         loadSuggestedFAQs();
         loadAdminTrending();
@@ -2128,7 +2125,7 @@ async function submitFAQSuggestion() {
     const question = document.getElementById('faq-question').value;
     const answer = document.getElementById('faq-answer').value;
     const category = document.getElementById('faq-category').value;
-    const suggested_by = localStorage.getItem('username') || "Anonymous";
+    const suggested_by = sessionStorage.getItem('username') || "Anonymous";
 
     if (!question || !answer) {
         alert("Please fill all fields.");
@@ -3993,6 +3990,7 @@ async function refreshAllAdminData() {
         
         // Run all refresh functions in parallel
         await Promise.all([
+            loadDashboard(),
             loadAdminTrending(),
             loadUsers(),
             loadDocuments(),
@@ -5364,16 +5362,24 @@ function renderNotifications(notifications, unreadCount) {
         return;
     }
     
-    container.innerHTML = notifications.map(notif => {
+    const html = notifications.map(notif => {
         const timeStr = formatNotifTime(notif.created_at);
         return `
-            <div class="notification-item ${notif.is_read ? '' : 'unread'}" onclick="handleNotifClick('${notif.id}', '${notif.link || ''}')">
-                <div class="notif-title">${notif.title}</div>
-                <div class="notif-msg">${notif.message}</div>
-                <div class="notif-time">${timeStr}</div>
+            <div class="notification-item-wrapper ${notif.is_read ? '' : 'unread'}">
+                <div class="notification-item" onclick="handleNotifClick('${notif.id}', '${notif.link || ''}')">
+                    <div class="notif-title">${notif.title}</div>
+                    <div class="notif-msg">${notif.message}</div>
+                    <div class="notif-time">${timeStr}</div>
+                </div>
+                <button class="notif-delete-btn" onclick="deleteNotification(event, '${notif.id}')" title="Delete notification">
+                    <i class="fa-solid fa-x"></i>
+                </button>
             </div>
         `;
     }).join('');
+    
+    console.log("Rendering notifications. First item HTML:", notifications.length > 0 ? html.substring(0, 200) : "empty");
+    container.innerHTML = html;
 }
 
 function formatNotifTime(dateStr) {
@@ -5475,11 +5481,31 @@ function stopNotificationPolling() {
     }
 }
 
+async function deleteNotification(event, id) {
+    if (event) event.stopPropagation(); // Prevent notification click trigger
+    
+    try {
+        const res = await fetch(`${API_URL}/notifications/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        
+        if (res.ok) {
+            fetchNotifications(); // Refresh list
+        } else {
+            console.error("Failed to delete notification");
+        }
+    } catch (e) {
+        console.error("Error deleting notification:", e);
+    }
+}
+
 // Expose functions to window
 window.toggleNotifications = toggleNotifications;
 window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
+window.deleteNotification = deleteNotification;
 
 // Initialize if already logged in
 if (ACCESS_TOKEN) {

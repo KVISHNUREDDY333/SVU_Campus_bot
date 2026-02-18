@@ -115,12 +115,12 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
                  except Exception as e:
                      print(f"RAG Sync Error: {e}")
 
-        # Trigger notification to the ticket owner
+        # Trigger notification to the ticket owner (notify on any status change)
         owner = ticket.get("created_by")
         if owner:
             await notification_service.create_notification(
-                title="Ticket Update",
-                message=f"Your ticket '{ticket.get('subject')[:30]}...' has been marked as '{update.status}'.",
+                title=f"Ticket {update.status.capitalize()}",
+                message=f"Your ticket '{ticket.get('subject')[:30]}...' is now '{update.status}'.",
                 user_id=owner,
                 notification_type="personal"
             )

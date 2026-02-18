@@ -12,6 +12,7 @@ class NotificationModel(BaseModel):
     link: Optional[str] = None
     is_read: bool = False
     read_by: List[str] = Field(default_factory=list) # List of usernames for common notifications
+    cleared_by: List[str] = Field(default_factory=list) # List of usernames who cleared/hid this common notif
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class NotificationResponse(BaseModel):

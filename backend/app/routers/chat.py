@@ -7,12 +7,18 @@ from ..core import database
 import logging
 from datetime import datetime
 
+from ..services.moderation import ModerationService
+
 router = APIRouter(prefix="/chat", tags=["Chat"])
 logger = logging.getLogger("uvicorn")
 
 @router.post("")
 async def chat_endpoint(request: ChatRequest, current_user: User = Depends(get_current_user)):
     try:
+        # Check content restrictions
+        if not await ModerationService.check_content(request.message):
+            return {"status": "success", "response": ModerationService.get_rejection_message()}
+
         start_time = datetime.now()
         current_time_str = start_time.strftime("%A, %b %d, %Y at %I:%M %p")
         

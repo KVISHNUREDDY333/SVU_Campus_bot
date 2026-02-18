@@ -1,4 +1,4 @@
-const CACHE_NAME = 'svu-campus-bot-v2';
+const CACHE_NAME = 'svu-campus-bot-v3';
 const ASSETS = [
     '/',
     '/static/style.css',

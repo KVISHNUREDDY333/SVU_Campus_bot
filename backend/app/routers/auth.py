@@ -98,7 +98,7 @@ async def register_user(user_data: RegisterRequest):
             "username": user_data.email,
             "password_hash": hashed_password,
             "full_name": user_data.full_name,
-            "role": user_data.role, 
+            "role": "student", 
             "created_at": datetime.utcnow()
         }
         database.users_db.insert_one(user_dict)

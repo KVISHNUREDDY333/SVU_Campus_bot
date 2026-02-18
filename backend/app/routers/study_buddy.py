@@ -8,6 +8,7 @@ from ..routers.auth import get_current_user
 from ..services import rag_service
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
+from ..services.moderation import ModerationService
 
 from ..models.academic import StudyBuddyChatRequest, ZenRequest
 import shutil
@@ -38,6 +39,10 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
     material = database.study_materials_db.find_one({"_id": ObjectId(req.material_id), "user_id": current_user.username})
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
+    
+    # Check content restrictions
+    if not await ModerationService.check_content(req.query):
+        return {"response": ModerationService.get_rejection_message(), "context_used": False}
     
     try:
         # from ..services.rag_service import rag_service (Removed: module already imported)
@@ -99,6 +104,10 @@ async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user
     History is managed in-memory (sent by client).
     """
     try:
+        # Check content restrictions
+        if not await ModerationService.check_content(req.query):
+            return {"response": ModerationService.get_rejection_message()}
+
         if not rag_service.llm:
             rag_service.setup_rag_chain()
         

@@ -187,13 +187,6 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
             notification_type="personal"
         )
     
-    # Common notification
-    await notification_service.create_notification(
-        title="New Community FAQ",
-        message=f"A new FAQ suggested by the community has been added.",
-        notification_type="common"
-    )
-    
     database.suggested_faqs_db.delete_one({"_id": ObjectId(suggestion_id)})
     
     return {"status": "success", "message": "FAQ approved and published"}
@@ -295,6 +288,13 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
         }
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
+        
+        # Trigger common notification for KB update
+        await notification_service.create_notification(
+            title="Knowledge Base Updated",
+            message=f"A new text document '{req.title}' has been added to our knowledge base.",
+            notification_type="common"
+        )
              
         return {
             "status": "success", 
@@ -377,6 +377,13 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
         
+        # Trigger common notification for KB update
+        await notification_service.create_notification(
+            title="Knowledge Base Updated",
+            message=f"New document '{file.filename}' has been uploaded and processed.",
+            notification_type="common"
+        )
+        
         return {
             "status": "success", 
             "message": f"Ingested {num_chunks} chunks from {file.filename}",
@@ -449,6 +456,13 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         }
         if database.documents_db is not None:
              database.documents_db.insert_one(doc_record)
+        
+        # Trigger common notification for KB update
+        await notification_service.create_notification(
+            title="Knowledge Base Updated",
+            message=f"New information from '{req.url}' has been added to the knowledge base.",
+            notification_type="common"
+        )
              
         return {
             "status": "success", 

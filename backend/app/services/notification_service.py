@@ -46,7 +46,7 @@ async def get_user_notifications(username: str) -> List[dict]:
     try:
         query = {
             "$or": [
-                {"type": "common"},
+                {"type": "common", "cleared_by": {"$ne": username}},
                 {"type": "personal", "user_id": username}
             ]
         }
@@ -109,23 +109,43 @@ async def mark_all_as_read(username: str):
         logger.error(f"Failed to mark all notifications as read for {username}: {e}")
         return False
 
-async def delete_notification(notification_id: str):
+async def delete_notification(notification_id: str, username: str):
+    """
+    Deletes a personal notification or hides a common one for the user.
+    """
     try:
-        database.notifications_db.delete_one({"id": notification_id})
+        notif = database.notifications_db.find_one({"id": notification_id})
+        if not notif:
+            return False
+            
+        if notif.get("type") == "personal":
+            # Real delete for personal
+            database.notifications_db.delete_one({"id": notification_id, "user_id": username})
+        else:
+            # Hide for common
+            database.notifications_db.update_one(
+                {"id": notification_id},
+                {"$addToSet": {"cleared_by": username}}
+            )
         return True
     except Exception as e:
-        logger.error(f"Failed to delete notification {notification_id}: {e}")
+        logger.error(f"Failed to delete/hide notification {notification_id} for {username}: {e}")
         return False
 
 async def clear_all_notifications(username: str):
     """
     For 'personal' notifications, we delete them.
-    For 'common' notifications, we can't delete them for everyone, 
-    so 'clear all' for common notifications usually means marking them as read 
-    or just hiding them (not implemented here for simplicity).
+    For 'common' notifications, we add the user to cleared_by to hide them.
     """
     try:
+        # 1. Delete personal
         database.notifications_db.delete_many({"type": "personal", "user_id": username})
+        
+        # 2. Hide common ones that exist currently
+        database.notifications_db.update_many(
+            {"type": "common", "cleared_by": {"$ne": username}},
+            {"$addToSet": {"cleared_by": username}}
+        )
         return True
     except Exception as e:
         logger.error(f"Failed to clear notifications for {username}: {e}")
