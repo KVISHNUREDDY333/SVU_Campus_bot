@@ -19,7 +19,7 @@ sys.path.append(project_root)
 from backend.app.core.config import Config
 from backend.app.core.database import get_db_client, close_db_client
 from backend.app.services.rag_service import setup_rag_chain
-from backend.app.routers import auth, chat, admin, tickets, calendar, study_buddy, career, notifications
+from backend.app.routers import auth, chat, admin, tickets, calendar, study_buddy, career, notifications, locations
 from backend.app.core.security import get_password_hash
 from backend.app.core import database
 from datetime import datetime
@@ -111,6 +111,7 @@ app.include_router(calendar.router)
 app.include_router(study_buddy.router)
 app.include_router(career.router)
 app.include_router(notifications.router)
+app.include_router(locations.router)
 
 static_dir = os.path.join(project_root, "frontend", "static")
 if not os.path.exists(static_dir):

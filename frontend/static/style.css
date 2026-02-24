@@ -3735,6 +3735,17 @@ body.dark-mode .mobile-menu-btn:hover {
   .main-content {
     width: calc(100% - 250px);
   }
+  
+  /* Study Buddy Alignment */
+  #study-notes-view {
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+  
+  .study-main, .study-sidebar {
+    width: 100% !important;
+  }
+
   .grid-container {
     grid-template-columns: 1fr !important;
   }
@@ -3778,26 +3789,27 @@ body.dark-mode .mobile-menu-btn:hover {
   }
 
   .welcome-text h1 {
-    font-size: 28px;
+    font-size: 24px;
+    margin-bottom: 8px;
   }
 
   .welcome-text p {
-    font-size: 15px;
-    margin-bottom: 30px;
+    font-size: 14px;
+    margin-bottom: 25px;
   }
 
   .suggestions-grid {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 10px;
   }
 
   .input-area-wrapper {
-    padding: 12px 16px 20px 16px;
+    padding: 10px 12px 16px 12px;
   }
 
   .input-container {
-    padding: 6px 8px 6px 20px;
-    border-radius: 28px;
+    padding: 4px 6px 4px 15px;
+    border-radius: 24px;
   }
 
   .input-container input {
@@ -3805,52 +3817,80 @@ body.dark-mode .mobile-menu-btn:hover {
   }
 
   .lang-select {
-    padding: 6px;
-    font-size: 12px;
+    padding: 4px;
+    font-size: 11px;
+    max-width: 60px;
   }
 
   .mic-btn, .send-btn {
-    width: 32px;
-    height: 32px;
-    font-size: 14px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
   }
 
   /* Admin Section Optimizations */
   .settings-card {
-    padding: 15px;
+    padding: 12px;
+    margin-bottom: 15px;
   }
 
   .card-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .card-header h4 {
+    font-size: 16px;
   }
 
   .card-header > div:last-child {
     width: 100%;
     margin-left: 0 !important;
+    display: flex;
     flex-wrap: wrap;
+    gap: 8px;
   }
 
   .admin-search-container {
     width: 100% !important;
+    margin-bottom: 5px;
+  }
+  
+  .btn-primary, .btn-secondary {
+    padding: 6px 12px;
+    font-size: 12px;
   }
 
   .documents-list-container {
     overflow-x: auto;
+    border-radius: 8px;
+    margin-top: 10px;
   }
 
   .documents-table {
-    min-width: 600px;
+    min-width: 500px;
+    font-size: 12px;
   }
   
+  /* Hide non-essential table columns on very small screens */
+  @media (max-width: 480px) {
+    .documents-table th:nth-child(2),
+    .documents-table td:nth-child(2),
+    .documents-table th:nth-child(5),
+    .documents-table td:nth-child(5) {
+      display: none;
+    }
+  }
+
   .message-body {
-    max-width: 90%;
+    max-width: 95%;
+    font-size: 14px;
   }
 
   .welcome-logo {
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
   }
 
   .splash-title {
@@ -3908,5 +3948,64 @@ body.dark-mode .mobile-menu-btn:hover {
 
   .modal-title {
     font-size: 18px;
+  }
+
+  /* Locations Alignment */
+  .locations-category-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  .location-item {
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+  }
+
+  .locations-search-container {
+      margin: 15px 0 !important;
+  }
+
+  /* Career Center Alignment */
+  .career-container {
+    padding: 15px !important;
+  }
+
+  .auth-tabs {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .auth-tab {
+    flex: 1;
+    text-align: center;
+    min-width: 120px;
+    font-size: 13px !important;
+    padding: 10px !important;
+  }
+
+  #resume-text-input {
+    height: 180px !important;
+    font-size: 13px !important;
+  }
+
+  /* Zen Assistant Mobile Refinement */
+  #study-zen-view {
+    padding: 10px 15px !important;
+    height: calc(100vh - 100px) !important;
+  }
+
+  .zen-input-area input {
+    font-size: 13px !important;
+    padding: 10px 15px !important;
+  }
+
+  /* Study Buddy Sidebar content */
+  #material-summary-content {
+    font-size: 13px !important;
+    min-height: 150px !important;
+  }
+
+  #document-chat-card {
+    height: 300px !important;
   }
 }

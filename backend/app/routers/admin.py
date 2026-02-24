@@ -949,26 +949,6 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
 
 # --- Location Management Endpoints ---
 
-@router.get("/admin/locations", response_model=List[LocationResponse])
-async def get_all_locations(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    if database.locations_db is None:
-        return []
-    
-    cursor = database.locations_db.find().sort("name", 1)
-    results = []
-    for loc in cursor:
-        results.append(LocationResponse(
-            id=str(loc["_id"]),
-            name=loc["name"],
-            category=loc["category"],
-            description=loc.get("description"),
-            created_at=loc.get("created_at", datetime.utcnow())
-        ))
-    return results
-
 @router.post("/admin/locations", response_model=LocationResponse)
 async def create_location(loc: LocationModel, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":

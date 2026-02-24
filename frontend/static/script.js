@@ -637,7 +637,7 @@ function showSection(section) {
         loadStudyBuddy();
     }
     if (section === 'locations') {
-        renderLocations(); // Ensure locations are rendered
+        fetchLocations(); // Fetch and render locations
     }
     if (section === 'career') {
         loadCareerCenter();
@@ -4647,7 +4647,7 @@ function askLocation(locationName) {
 
 async function fetchLocations() {
     try {
-        const res = await fetch(`${API_URL}/admin/locations`, {
+        const res = await fetch(`${API_URL}/locations`, {
             headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
         });
         if (res.ok) {
