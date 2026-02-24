@@ -582,8 +582,8 @@ function showSection(section) {
     console.warn(`[DEBUG] showSection called for: ${section}`);
 
     // Auto-close sidebar on mobile
-    if (window.innerWidth <= 768) {
-        toggleSidebar(true);
+    if (window.innerWidth <= 1024) {
+        toggleSidebar(false); // Close it
     }
     
     // Prevent non-admins from accessing restricted sections
@@ -595,6 +595,29 @@ function showSection(section) {
 
     const sections = ['chat', 'admin', 'dashboard', 'calendar', 'locations', 'study', 'career'];
 
+    // Mapping for user-friendly titles
+    const titles = {
+        'chat': 'SVU Campus Assistant',
+        'admin': 'Admin Settings',
+        'dashboard': 'System Dashboard',
+        'calendar': 'Academic Calendar',
+        'locations': 'Campus Locations',
+        'study': 'Study Buddy',
+        'career': 'Career Center'
+    };
+
+    // Update Global Title
+    const pageTitleEl = document.getElementById('page-title');
+    if (pageTitleEl) {
+        pageTitleEl.textContent = titles[section] || 'SVU CampusConnect';
+    }
+
+    // Toggle Header Actions (Show only on Chat Home)
+    const headerActions = document.getElementById('header-actions');
+    if (headerActions) {
+        headerActions.style.display = (section === 'chat') ? 'flex' : 'none';
+    }
+
     sections.forEach(s => {
         const el = document.getElementById(`${s}-section`);
         if (el) el.style.display = 'none';
@@ -605,46 +628,30 @@ function showSection(section) {
 
     const activeSection = document.getElementById(`${section}-section`);
     if (activeSection) {
-        // We use flex for chat and locations sections to maintain layout, block for others
         activeSection.style.display = (section === 'chat' || section === 'locations') ? 'flex' : 'block';
     }
 
     const activeNav = document.getElementById(`nav-${section}`);
     if (activeNav) activeNav.classList.add('active');
 
-    // Trigger specific loaders
-    if (section === 'dashboard') {
-        console.warn("[DEBUG] Triggering loadDashboard from showSection");
-        loadDashboard();
-    }
+    // Trigger specific loaders...
+    if (section === 'dashboard') loadDashboard();
     if (section === 'admin') {
-        loadDashboard(); // Ensure dashboard stats/charts are loaded
+        loadDashboard();
         loadDocuments();
         loadAllTickets();
-        loadAcademicCalendar(); // Load admin calendar management table
+        loadAcademicCalendar();
         loadUsers();
         fetchLocations();
         loadSystemHealth();
         loadSuggestedFAQs();
         loadAdminTrending();
-        loadTrainStatus(); // Load training status dashboard
+        loadTrainStatus();
     }
-
-    if (section === 'calendar') {
-        loadCalendar(); // Load student calendar view
-    }
-    if (section === 'study') {
-        loadStudyBuddy();
-    }
-    if (section === 'locations') {
-        fetchLocations(); // Fetch and render locations
-    }
-    if (section === 'career') {
-        loadCareerCenter();
-    }
-    if (section === 'chat') {
-        // Countdown widget removed
-    }
+    if (section === 'calendar') loadCalendar();
+    if (section === 'study') loadStudyBuddy();
+    if (section === 'locations') fetchLocations();
+    if (section === 'career') loadCareerCenter();
 }
 
 async function appendQuick(text, preDefinedResponse = null) {
@@ -2026,7 +2033,7 @@ let allFAQs = [];
 
 async function loadFAQs() {
     try {
-        const res = await fetch(`${API_URL}/faqs`);
+        const res = await fetch(`${API_URL}/admin/faqs`);
         if (!res.ok) return;
         allFAQs = await res.json();
         renderFAQs(allFAQs);

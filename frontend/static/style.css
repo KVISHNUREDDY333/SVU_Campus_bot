@@ -20,7 +20,7 @@
   --border-color: #cbd5e1;
 
   --bg-base: #f8fafc;
-  --sidebar-bg: rgba(255, 255, 255, 0.85);
+  --sidebar-bg: #ffffff;
 
   --text-primary: #0f172a;
   --text-secondary: #64748b;
@@ -51,7 +51,7 @@
 
 body.dark-mode {
   --bg-base: #0f172a;
-  --sidebar-bg: rgba(15, 23, 42, 0.85);
+  --sidebar-bg: #1e293b;
 
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
@@ -104,8 +104,6 @@ body.dark-mode {
   display: flex;
   width: 100%;
   height: 100%;
-  -webkit-backdrop-filter: blur(0px);
-  backdrop-filter: blur(0px);
   z-index: 1;
 }
 
@@ -116,8 +114,6 @@ body.dark-mode {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
   z-index: 20;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.03);
   transition: transform var(--transition-speed);
@@ -332,9 +328,7 @@ body.dark-mode .main-content {
   justify-content: space-between;
   align-items: center;
   padding: 16px 32px;
-  background: rgba(255, 255, 255, 0.7);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.95);
   border-bottom: 1px solid var(--glass-border);
   z-index: 100;
 }
@@ -765,8 +759,8 @@ body.dark-mode .incognito-badge {
   width: 100%;
   max-width: 800px;
   background: var(--input-bg);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: 1px solid var(--glass-border);
   box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.12);
   border-radius: 36px;
@@ -956,12 +950,13 @@ body.dark-mode .send-btn:hover {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  z-index: 15;
+  z-index: 9999;
   opacity: 0;
   transition: opacity 0.3s;
   pointer-events: none;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
 }
 
 .sidebar-overlay.active {
@@ -978,7 +973,11 @@ body.dark-mode .send-btn:hover {
     position: fixed;
     transform: translateX(-105%);
     width: 280px;
+    z-index: 10000;
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.2);
+    background: #ffffff !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   .sidebar.active {
@@ -1012,8 +1011,8 @@ body.dark-mode .send-btn:hover {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1039,8 +1038,8 @@ body.dark-mode .send-btn:hover {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.4);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   z-index: 10002;
   display: none;
   align-items: center;
@@ -1107,8 +1106,8 @@ body.dark-mode .send-btn:hover {
   border-radius: 20px;
   border: 1px solid var(--border-color);
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   color: var(--text-primary);
   font-size: 16px;
   outline: none;
@@ -1375,8 +1374,8 @@ body.dark-mode .btn-upload-url:hover {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.8);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -1397,8 +1396,8 @@ body.dark-mode .btn-upload-url:hover {
   padding: 48px;
   border-radius: 32px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: 1px solid rgba(255, 255, 255, 0.4);
   display: flex;
   flex-direction: column;
@@ -2082,8 +2081,8 @@ body.dark-mode .icon-btn:hover {
 .settings-card,
 .stat-card {
   background: rgba(255, 255, 255, 0.85);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -2272,8 +2271,8 @@ nav li:not(.active):hover {
 .modal-content.premium-modal {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.95);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: 1px solid rgba(255, 255, 255, 0.5);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
@@ -2397,8 +2396,8 @@ body.dark-mode .btn-ghost:hover {
   box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.2),
     0 10px 10px -5px rgba(0, 0, 0, 0.1);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   z-index: 10005;
   font-size: 14px;
   font-weight: 500;
@@ -2916,8 +2915,8 @@ body.dark-mode .placement-record-item:hover {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.75);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   z-index: 9999;
   display: none;
   align-items: center;
@@ -2947,8 +2946,8 @@ body.dark-mode .placement-record-item:hover {
   max-width: 520px;
   width: 90%;
   background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border-radius: 24px;
   border: 1px solid var(--border-color);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
@@ -3006,8 +3005,8 @@ body.dark-mode .placement-record-item:hover {
   width: 52px;
   height: 52px;
   background: rgba(255, 255, 255, 0.2);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -3516,8 +3515,8 @@ body.dark-mode tr:hover td {
   right: -10px;
   width: 320px;
   background: var(--input-bg);
-  -webkit-backdrop-filter: blur(20px);
-  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   border-radius: 16px;
@@ -3685,6 +3684,50 @@ body.dark-mode .notification-item-wrapper:hover {
   font-size: 14px;
 }
 
+/* --- Career Center Page Styles --- */
+
+.career-page-header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.career-page-title {
+  font-size: 28px;
+  font-weight: 800;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.career-page-title i {
+  -webkit-text-fill-color: var(--accent-color);
+}
+
+.career-page-desc {
+  color: var(--text-secondary);
+  font-size: 15px;
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.career-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+}
+
+.career-grid-2col-wide {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 15px;
+}
+
 /* --- Responsive Design Additions --- */
 
 .mobile-menu-btn {
@@ -3710,12 +3753,13 @@ body.dark-mode .mobile-menu-btn:hover {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  z-index: 15;
+  z-index: 9999;
   display: none;
   opacity: 0;
   transition: opacity 0.3s;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
 }
 
 .sidebar.active {
@@ -3727,38 +3771,23 @@ body.dark-mode .mobile-menu-btn:hover {
   opacity: 1;
 }
 
-/* Tablet Screens (up to 1024px) */
+/* --- Responsive Optimization & Performance --- */
+
 @media (max-width: 1024px) {
-  .sidebar {
-    width: 250px;
-  }
-  .main-content {
-    width: calc(100% - 250px);
-  }
-  
-  /* Study Buddy Alignment */
-  #study-notes-view {
-    flex-direction: column !important;
-    gap: 20px !important;
-  }
-  
-  .study-main, .study-sidebar {
-    width: 100% !important;
+  /* Reduce blur intensity for performance on mobile */
+  .header, .modal-content, .auth-card, .notification-dropdown {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
-  .grid-container {
-    grid-template-columns: 1fr !important;
-  }
-  .suggestions-grid {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 100%;
-  }
-}
-
-/* Mobile Screens (up to 768px) */
-@media (max-width: 768px) {
   .mobile-menu-btn {
-    display: block;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 12px;
+    cursor: pointer;
   }
 
   .sidebar {
@@ -3768,14 +3797,80 @@ body.dark-mode .mobile-menu-btn:hover {
     bottom: 0;
     transform: translateX(-100%);
     width: 280px;
-    z-index: 100;
+    z-index: 10000; /* Above everything including header */
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.1);
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: #ffffff !important;
   }
 
   .main-content {
-    width: 100%;
+    width: 100% !important;
+    padding-top: 70px; /* Space for the persistent global header */
+  }
+  
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 150;
+    background: var(--sidebar-bg);
+    border-bottom: 1px solid var(--border-color);
   }
 
+  .header-title {
+    font-size: 1.1rem !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Stack stats and dashboard elements on tablet/mobile */
+  #study-notes-view {
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+  
+  .study-main, .study-sidebar {
+    width: 100% !important;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid-container {
+    grid-template-columns: 1fr !important;
+  }
+
+  .suggestions-grid {
+    grid-template-columns: repeat(2, 1fr);
+    max-width: 100%;
+  }
+}
+
+@media (min-width: 1025px) {
+  .mobile-menu-btn {
+    display: none !important;
+  }
+  .sidebar {
+    transform: translateX(0) !important;
+    position: relative;
+    z-index: 20;
+  }
+  .main-content {
+    width: calc(100% - 290px);
+  }
+}
+
+
+/* Mobile Screens (up to 768px) - Micro UX Polish */
+@media (max-width: 768px) {
   .content-section {
     padding: 20px;
   }
@@ -3968,6 +4063,11 @@ body.dark-mode .mobile-menu-btn:hover {
   /* Career Center Alignment */
   .career-container {
     padding: 15px !important;
+  }
+
+  .career-grid-2col,
+  .career-grid-2col-wide {
+    grid-template-columns: 1fr !important;
   }
 
   .auth-tabs {

@@ -1,0 +1,89 @@
+<!-- Chat Interface -->
+<section id="chat-section" class="content-section">
+  <!-- Header (This will be moved to index.html in the SPA version, but I'll keep the inner part here for now if needed) -->
+  
+  <!-- Chat Area -->
+  <div id="chat-area-container" class="chat-area-container">
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="welcome-screen">
+        <div class="welcome-badge">AI POWERED CAMPUS CONNECT</div>
+        <img src="/static/images/svu_logo_final_v2.jpg" alt="SVU Logo" class="welcome-logo">
+        <div class="welcome-text">
+            <h1>Hello! How can I help you today?</h1>
+            <p>Your intelligent companion for all things SVU. Ask me about admissions, exams, campus life, or anything else!</p>
+        </div>
+        
+        <div class="suggestions-grid" id="trending-queries-container">
+            <!-- Dynamically populated -->
+        </div>
+    </div>
+
+    <!-- Chat Message Area -->
+    <div id="chat-box" class="chat-area" style="display: none;">
+        <!-- Messages will be appended here -->
+    </div>
+
+    <!-- Typing Indicator -->
+    <div id="typing-indicator" class="typing-indicator" style="display: none;">
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+        <div class="typing-dot"></div>
+    </div>
+  </div>
+
+  <!-- Floating Input Area -->
+  <div class="input-area-wrapper">
+    <div class="input-container">
+      <!-- Trap for browser autofill -->
+      <input
+        type="text"
+        style="display: none; opacity: 0; height: 0; width: 0; position: absolute;"
+        tabindex="-1"
+      />
+      <input
+        type="password"
+        style="display: none; opacity: 0; height: 0; width: 0; position: absolute;"
+        tabindex="-1"
+      />
+
+      <i class="fa-solid fa-language lang-select-icon"></i>
+      <select id="language-select" class="lang-select" title="Select Chat Language">
+          <option value="en">English</option>
+          <option value="te">Telugu</option>
+          <option value="hi">Hindi</option>
+      </select>
+      
+      <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+      
+      <button id="voice-btn" class="mic-btn" title="Voice Input">
+          <i class="fa-solid fa-microphone"></i>
+      </button>
+      <button id="send-btn" class="send-btn" title="Send Message">
+          <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- Modals specific to Home -->
+<div id="ticket-modal" class="modal">
+  <div class="modal-content premium-modal">
+    <div class="modal-header" style="background: linear-gradient(135deg, #10b981, #059669); padding: 25px 30px; border-bottom: none;">
+      <h3 style="color: white; margin: 0; font-size: 20px; font-weight: 700;">🎫 Help Ticket</h3>
+    </div>
+    <div class="modal-body" style="padding: 30px;">
+      <div class="form-group">
+        <label>Subject</label>
+        <input type="text" id="ticket-subject" placeholder="What do you need help with?" />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="ticket-desc" rows="4" placeholder="Provide more details..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 20px 30px; background: rgba(0,0,0,0.02); border-top: 1px solid var(--border-color);">
+      <button class="btn-ghost" onclick="closeTicketModal()">Cancel</button>
+      <button class="btn-primary" onclick="submitTicket()">Submit Ticket</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,273 @@
+<section id="admin-section" class="content-section" style="display: none">
+  <div class="header">
+    <h3 class="header-title">System Administration</h3>
+    <div class="header-actions">
+      <button id="admin-refresh-all" class="btn-primary" onclick="refreshAllAdminData()">
+        <i class="fa-solid fa-rotate"></i> Refresh All
+      </button>
+    </div>
+  </div>
+
+  <div class="admin-content" style="padding: 24px 0;">
+    <!-- Top Row: Config & Health -->
+    <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));">
+      <!-- System Health -->
+      <div class="settings-card">
+        <div class="card-header">
+          <div class="card-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+            <i class="fa-solid fa-heart-pulse"></i>
+          </div>
+          <h4>System Health</h4>
+          <button class="btn-ghost" style="margin-left: auto; color: #ef4444; border-color: #ef4444;" onclick="clearCache()">
+            <i class="fa-solid fa-trash-can"></i> Cache
+          </button>
+        </div>
+        <div class="card-body" style="padding: 24px;">
+          <div class="health-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="health-item">
+              <span>API Gateway</span>
+              <span class="badge success" id="health-api">Healthy</span>
+            </div>
+            <div class="health-item">
+              <span>Vector DB</span>
+              <span class="badge success" id="health-vector">Connected</span>
+            </div>
+            <div class="health-item">
+              <span>LLM Service</span>
+              <span class="badge success" id="health-llm">Online</span>
+            </div>
+            <div class="health-item">
+              <span>Database</span>
+              <span class="badge success" id="health-mongo">Connected</span>
+            </div>
+          </div>
+          <button class="btn-ghost" style="width: 100%; margin-top: 24px;" onclick="reindexData()">
+            <i class="fa-solid fa-sync"></i> Re-index Knowledge Base
+          </button>
+        </div>
+      </div>
+
+      <!-- Trending Queries -->
+      <div class="settings-card">
+        <div class="card-header">
+          <div class="card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+            <i class="fa-solid fa-fire"></i>
+          </div>
+          <h4>Trending Queries</h4>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button class="btn-ghost" onclick="loadAdminTrending()" title="Refresh">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <button class="btn-primary" onclick="openAddTrendingModal()">
+              <i class="fa-solid fa-plus"></i> Add
+            </button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="trending-list" id="admin-trending-list">
+            <!-- Dynamic Content -->
+          </div>
+          <div id="trending-view-more" style="text-align: center; padding: 16px; display: none;">
+            <span class="text-link" onclick="toggleTrendingView()" style="cursor: pointer; color: var(--accent-color); font-weight: 600;">View All</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Management -->
+    <div class="settings-card" style="margin-top: 24px;">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #ec4899, #db2777);">
+          <i class="fa-solid fa-users-gear"></i>
+        </div>
+        <h4>User Management</h4>
+        <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
+          <div class="admin-search-container" style="position: relative;">
+            <input type="text" id="user-search-input" placeholder="Search users..." class="admin-search-input" oninput="filterAdminUsers()">
+            <i class="fa-solid fa-magnifying-glass admin-search-icon"></i>
+          </div>
+          <button class="btn-primary" onclick="openAddUserModal()">
+            <i class="fa-solid fa-user-plus"></i> Add User
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="overflow-x: auto;">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Joined</th>
+              <th style="text-align: right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr><td colspan="4" style="text-align: center; padding: 32px">Loading Users...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Knowledge Base -->
+    <div class="settings-card" style="margin-top: 24px;">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+          <i class="fa-solid fa-book-open"></i>
+        </div>
+        <h4>Knowledge Base</h4>
+        <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
+          <div class="admin-search-container" style="position: relative;">
+            <input type="text" id="admin-search-input" placeholder="Search docs..." class="admin-search-input">
+            <i class="fa-solid fa-magnifying-glass admin-search-icon"></i>
+          </div>
+          <button class="btn-primary" onclick="openUploadModal()" style="background: #ef4444;">
+            <i class="fa-solid fa-file-pdf"></i> PDF
+          </button>
+          <button class="btn-primary" onclick="openUrlModal()" style="background: #3b82f6;">
+            <i class="fa-solid fa-link"></i> URL
+          </button>
+          <button class="btn-ghost" onclick="openAllFaqsModal()">
+            <i class="fa-solid fa-list-check"></i> All FAQs
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="overflow-x: auto;">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>Document Name</th>
+              <th>Type</th>
+              <th style="text-align: center">Chunks</th>
+              <th style="text-align: center">FAQs</th>
+              <th style="text-align: center">Uploader</th>
+              <th style="text-align: right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="documents-table-body">
+            <tr><td colspan="6" style="text-align: center; padding: 32px;">Loading knowledge base...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Brain Training -->
+    <div class="settings-card" style="margin-top: 24px;">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+          <i class="fa-solid fa-brain"></i>
+        </div>
+        <h4>Brain Training</h4>
+        <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
+          <button class="btn-primary" onclick="trainAllBrain(event)">
+            <i class="fa-solid fa-bolt-lightning"></i> Train Main Brain
+          </button>
+        </div>
+      </div>
+      <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th style="text-align: center">Status</th>
+              <th style="text-align: center">Last Trained</th>
+              <th style="text-align: right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="brain-training-body">
+            <tr><td colspan="4" style="text-align: center; padding: 32px;">Initializing Brain Station...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Student Support -->
+    <div class="settings-card" style="margin-top: 24px;">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #f97316, #ea580c);">
+          <i class="fa-solid fa-ticket"></i>
+        </div>
+        <h4>Support Tickets</h4>
+        <button class="btn-ghost" onclick="loadAllTickets()" style="margin-left: auto;">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+      </div>
+      <div class="card-body" style="overflow-x: auto;">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Subject</th>
+              <th>User</th>
+              <th style="text-align: center">Status</th>
+              <th style="text-align: right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="tickets-table-body">
+            <tr><td colspan="5" style="text-align: center; padding: 32px">Loading Tickets...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Community Contributions -->
+    <div class="settings-card" style="margin-top: 24px;">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #fbbf24, #d97706);">
+          <i class="fa-solid fa-lightbulb"></i>
+        </div>
+        <h4>Community FAQs</h4>
+      </div>
+      <div class="card-body" style="overflow-x: auto;">
+        <table class="documents-table">
+          <thead>
+            <tr>
+              <th>Suggested Content</th>
+              <th>Contributor</th>
+              <th style="text-align: right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="suggested-faqs-table-body">
+            <tr><td colspan="3" style="text-align: center; padding: 48px; color: var(--text-muted);">
+              <i class="fa-solid fa-circle-check" style="font-size: 32px; opacity: 0.3; margin-bottom: 12px; display: block;"></i>
+              No pending suggestions.
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Admin Modals - Re-styled as needed -->
+<div id="add-user-modal" class="modal">
+  <div class="premium-modal">
+    <div class="modal-header">
+      <h3>Add New User</h3>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="new-user-name" placeholder="Enter name">
+      </div>
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" id="new-user-email" placeholder="Enter email">
+      </div>
+      <div class="form-group">
+        <label>Role</label>
+        <select id="new-user-role" title="Select User Role">
+          <option value="student">Student</option>
+          <option value="admin">Administrator</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="new-user-pass" placeholder="Enter temporary password">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('add-user-modal')">Cancel</button>
+      <button class="btn-submit" onclick="addUser()">Save User</button>
+    </div>
+  </div>
+</div>

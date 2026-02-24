@@ -1,0 +1,24 @@
+<section id="career-section" class="content-section" style="display: none">
+  <div class="header">
+    <div class="header-info" style="display: flex; align-items: center; gap: 16px;">
+      <div class="card-icon" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+        <i class="fa-solid fa-briefcase"></i>
+      </div>
+      <div>
+        <h3 class="header-title" style="margin: 0;">Career Center</h3>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">AI-Powered Professional Growth</p>
+      </div>
+    </div>
+    
+    <div class="header-actions">
+      <div class="tool-switcher" style="display: flex; background: var(--glass-bg); padding: 4px; border-radius: 12px; border: 1px solid var(--border-color);">
+          <button id="switch-resume-checker" class="btn-tool active" onclick="switchCareerTool('checker')" title="Resume Checker">Checker</button>
+          <button id="switch-resume-maker" class="btn-tool" onclick="switchCareerTool('maker')" title="Resume Maker">Maker</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="career-tool-container" class="career-grid" style="margin-top: 24px;">
+    <!-- Active Career Tool Content -->
+  </div>
+</section>

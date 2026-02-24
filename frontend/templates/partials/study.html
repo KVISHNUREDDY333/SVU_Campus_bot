@@ -1,0 +1,60 @@
+<section id="study-section" class="content-section" style="display: none">
+  <div class="header">
+    <h3 class="header-title">Study Buddy</h3>
+    <div class="header-actions">
+      <button class="btn-ghost" onclick="window.open('/static/notes_template.pdf', '_blank')" title="Download Template">
+        <i class="fa-solid fa-download"></i> Notes Template
+      </button>
+      <button class="btn-primary" onclick="initStudyBuddy()" title="Reset View">
+        <i class="fa-solid fa-rotate"></i> Reset
+      </button>
+    </div>
+  </div>
+  
+  <div class="stats-grid" style="margin-top: 24px;">
+    <!-- Course Selector & Resources -->
+    <div class="settings-card">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #10b981, #3b82f6);">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <h4>Course Resources</h4>
+      </div>
+      <div class="card-body" style="padding: 24px;">
+        <div class="form-group">
+          <label>Select Semester</label>
+          <select class="custom-select" id="study-semester-select" title="Select Semester">
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
+            <option value="3">Semester 3</option>
+          </select>
+        </div>
+        <div id="study-resource-list" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+          <!-- Dynamically loaded resources -->
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Study Tools -->
+    <div class="settings-card">
+      <div class="card-header">
+        <div class="card-icon" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);">
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+        </div>
+        <h4>AI Study Suite</h4>
+      </div>
+      <div class="card-body" style="padding: 24px;">
+        <div class="tools-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div class="tool-item" onclick="openStudyNoteTool('summarize')" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 16px; cursor: pointer; text-align: center; transition: all 0.3s ease; background: var(--glass-bg);">
+            <i class="fa-solid fa-compress" style="font-size: 28px; color: #8b5cf6; margin-bottom: 12px; display: block;"></i>
+            <span style="font-weight: 600; font-size: 14px;">Summarize</span>
+          </div>
+          <div class="tool-item" onclick="openStudyNoteTool('quiz')" style="padding: 24px; border: 1px solid var(--border-color); border-radius: 16px; cursor: pointer; text-align: center; transition: all 0.3s ease; background: var(--glass-bg);">
+            <i class="fa-solid fa-vial-circle-check" style="font-size: 28px; color: #ec4899; margin-bottom: 12px; display: block;"></i>
+            <span style="font-weight: 600; font-size: 14px;">Mock Quiz</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
