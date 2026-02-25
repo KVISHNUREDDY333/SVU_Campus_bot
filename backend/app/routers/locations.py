@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["locations"]
 )
 
-@router.get("/", response_model=List[LocationResponse])
+@router.get("")
 async def get_all_locations(current_user: User = Depends(get_current_user)):
     """
     Public endpoint to fetch all university locations.

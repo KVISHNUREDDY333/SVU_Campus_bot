@@ -13,6 +13,7 @@ from ..core import database
 from ..models.user import User, Token, RegisterRequest, ForgotPasswordRequest, VerifyOTPRequest
 from ..services.email_service import send_otp_email
 from jose import JWTError, jwt
+from ..services.logging_service import log_event
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
@@ -79,6 +80,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     access_token = create_access_token(
         data={"sub": user['username'], "role": user['role']}, expires_delta=access_token_expires
     )
+    log_event("INFO", f"User login: {user['username']}")
     return {"access_token": access_token, "token_type": "bearer", "role": user['role'], "username": user['username']}
 
 @router.post("/register", response_model=Token)
@@ -102,6 +104,7 @@ async def register_user(user_data: RegisterRequest):
             "created_at": datetime.utcnow()
         }
         database.users_db.insert_one(user_dict)
+        log_event("SUCCESS", f"New user registered: {user_data.email}")
         
         access_token = create_access_token(data={"sub": user_data.email, "role": user_data.role})
         return {"access_token": access_token, "token_type": "bearer", "role": user_data.role, "username": user_data.email}

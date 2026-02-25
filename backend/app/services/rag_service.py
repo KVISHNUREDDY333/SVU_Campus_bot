@@ -17,6 +17,7 @@ import os
 from datetime import datetime
 from ..core.config import Config
 from ..core import database
+from .logging_service import log_event
 
 logger = logging.getLogger("uvicorn")
 
@@ -251,8 +252,9 @@ except Exception as e:
 smart_llm = None
 fast_llm = None
 
-def setup_rag_chain():
+def setup_rag_chain(force_reload: bool = False):
     global vector_db, smart_llm, fast_llm, retrieval_chain, llm
+    log_event("INFO", "Starting RAG Pipeline init...")
     try:
         logger.info(f"Initializing Groq Models: Smart={Config.GROQ_MODEL_ID}, Fast={Config.GROQ_FAST_MODEL_ID}")
         smart_llm = ChatGroq(
@@ -273,17 +275,19 @@ def setup_rag_chain():
 
         if not database.mongo_client:
             logger.warning("MongoDB client not initialized yet. Skipping Vector DB setup.")
+            log_event("WARN", "MongoDB client not ready for RAG setup.")
             return
 
         logger.info("Initializing Embeddings and Vector DB...")
         
-        if not vector_db:
+        if not vector_db or force_reload:
              vector_db = MongoDBAtlasVectorSearch(
                 collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
                 embedding=embeddings,
                 index_name="vector_index",
                 relevance_score_fn="cosine",
-            )
+             )
+             log_event("SUCCESS", "Connected to MongoDB Atlas Vector Store.")
         
         contextualize_q_system_prompt = """Given a chat history and the latest user question 
         which might reference context in the chat history, formulate a standalone question 

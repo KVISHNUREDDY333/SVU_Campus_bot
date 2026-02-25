@@ -5,6 +5,14 @@ from ..services import rag_service
 
 logger = logging.getLogger("uvicorn")
 
+# List of common offensive/bad words (expanded for better coverage)
+# Note: In a real production app, this would be much larger or use a dedicated library.
+BAD_WORDS = [
+    "damn", "hell", "stupid", "idiot", "nonsense", "useless", "garbage", 
+    "abuse", "hate", "kill", "die", "murder", "explicit", "porn", "sexy",
+    "dirty", "shutup", "f@ck", "s*it", "b*tch" # Standard censorship patterns
+]
+
 UNIVERSITY_TOPICS = [
     "university", "svu", "college", "degree", "exam", "admission", "fees", 
     "campus", "hostel", "placement", "research", "faculty", "science", 
@@ -14,35 +22,17 @@ UNIVERSITY_TOPICS = [
 
 class ModerationService:
     @staticmethod
-    async def is_profane(text: str) -> bool:
-        """LLM-based check for profanity, slurs, and inappropriate language."""
-        if not text:
-            return False
-            
-        if not rag_service.fast_llm:
-            rag_service.setup_rag_chain()
+    def is_profane(text: str) -> bool:
+        """Simple keyword-based profanity check."""
+        text_lower = text.lower()
+        # Remove special characters to catch variations like "f.u.c.k"
+        clean_text = re.sub(r'[^a-zA-Z\s]', '', text_lower)
         
-        prompt = f"""
-        Safety Check: Does the following user query contain any of the following?
-        1. Profanity or obscenity
-        2. Hate speech or slurs
-        3. Highly offensive or inappropriate language
-        4. Sexually explicit content
-        
-        QUERY: "{text}"
-        
-        Output EXACTLY "SAFE" or "UNSAFE".
-        """
-        try:
-            response = await rag_service.fast_llm.ainvoke(prompt)
-            result = response.content.strip().upper()
-            if "UNSAFE" in result:
-                logger.warning(f"Profanity/Inappropriate content detected in: {text[:20]}...")
+        for word in BAD_WORDS:
+            if word in clean_text or word in text_lower:
+                logger.warning(f"Profanity detected: {word}")
                 return True
-            return False
-        except Exception as e:
-            logger.error(f"Profanity Check LLM Error: {e}")
-            return False # Fail open on system error
+        return False
 
     @staticmethod
     async def is_on_topic(text: str) -> bool:
@@ -85,7 +75,7 @@ class ModerationService:
         if not text:
             return True
             
-        if await cls.is_profane(text):
+        if cls.is_profane(text):
             return False
             
         if not await cls.is_on_topic(text):

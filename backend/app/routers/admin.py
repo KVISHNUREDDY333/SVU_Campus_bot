@@ -15,6 +15,7 @@ import shutil
 from fastapi import UploadFile, File
 from ..services.rag_service import ingest_pdf, ingest_url, ingest_text, extract_faqs_from_text, refine_kb_data, ingest_faq
 from ..services import notification_service
+from ..services.logging_service import get_recent_logs, log_event
 import pydantic
 
 router = APIRouter()
@@ -535,9 +536,10 @@ async def get_system_health(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    database.get_db_client() # Try to refresh client if disconnected
     mongo_status = "connected" if database.mongo_client else "disconnected"
     from ..services import rag_service
-    vector_status = "active" if rag_service.vector_db else "initializing"
+    vector_status = "active" if rag_service.vector_db else "offline"
     
     return {
         "api_status": "healthy",
@@ -629,6 +631,23 @@ async def clear_system_cache(current_user: User = Depends(get_current_user)):
     rag_service.store = {}
     return {"status": "success", "message": "System cache (session history) cleared."}
 
+@router.get("/admin/system-logs")
+async def get_admin_system_logs(limit: int = 50, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    logs = get_recent_logs(limit)
+    # Convert ObjectId to string and format timestamp
+    formatted_logs = []
+    for log in logs:
+        formatted_logs.append({
+            "level": log["level"],
+            "message": log["message"],
+            "details": log.get("details"),
+            "timestamp": log["timestamp"].strftime("%Y-%m-%d %H:%M:%S")
+        })
+    return formatted_logs
+
 @router.post("/admin/reindex")
 async def reindex_knowledge_base(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -636,7 +655,10 @@ async def reindex_knowledge_base(current_user: User = Depends(get_current_user))
     
     from ..services import rag_service
     try:
-        rag_service.setup_rag_chain()
+        # Re-initialize DB client first
+        database.get_db_client()
+        # Force re-index/reload of the vector DB connection
+        rag_service.setup_rag_chain(force_reload=True)
         return {"status": "success", "message": "Knowledge base connection refreshed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -948,6 +970,31 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
         raise HTTPException(status_code=400, detail=str(e))
 
 # --- Location Management Endpoints ---
+
+@router.get("/locations", response_model=List[LocationResponse])
+async def get_public_locations(current_user: User = Depends(get_current_user)):
+    """Public endpoint to fetch locations for all authenticated users."""
+    if database.locations_db is None:
+        return []
+    
+    cursor = database.locations_db.find().sort("name", 1)
+    results = []
+    for loc in cursor:
+        results.append(LocationResponse(
+            id=str(loc["_id"]),
+            name=loc["name"],
+            category=loc["category"],
+            description=loc.get("description"),
+            created_at=loc.get("created_at", datetime.utcnow())
+        ))
+    return results
+
+@router.get("/admin/locations", response_model=List[LocationResponse])
+async def get_all_locations(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return await get_public_locations(current_user)
 
 @router.post("/admin/locations", response_model=LocationResponse)
 async def create_location(loc: LocationModel, current_user: User = Depends(get_current_user)):

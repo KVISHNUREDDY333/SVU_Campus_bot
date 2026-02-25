@@ -8,7 +8,7 @@
       content="Official AI Assistant for Sri Venkateswara University (SVU). Get instant answers about admissions, courses, campus facilities, and more."
     />
     <title>SVU Campus Connect | AI Assistant</title>
-    <link rel="stylesheet" href="/static/style.css?v=30" />
+    <link rel="stylesheet" href="/static/style.css?v=25" />
 
     <link
       rel="stylesheet"
@@ -89,6 +89,7 @@
             >
               <i class="fa-solid fa-chart-line"></i> Dashboard
             </li>
+
             <li id="nav-calendar" onclick="showSection('calendar')">
               <i class="fa-solid fa-calendar-days"></i> Calendar
             </li>
@@ -125,99 +126,93 @@
 
       <!-- Main Content -->
       <main class="main-content">
-        <!-- Global Persistent Header -->
-        <header class="header">
-          <div style="display: flex; align-items: center; gap: 16px">
-            <i
-              class="fa-solid fa-bars mobile-menu-btn"
-              id="mobile-menu-btn"
-              onclick="toggleSidebar()"
-            ></i>
-            <h2 id="page-title" class="header-title">SVU Campus Assistant</h2>
-          </div>
-
-          <div
-            id="header-actions"
-            class="header-actions"
-            style="
-              display: flex;
-              gap: 16px;
-              color: var(--text-secondary);
-              align-items: center;
-            "
-          >
-            <div class="notification-wrapper">
-              <i
-                class="fa-solid fa-bell"
-                id="notification-bell"
-                title="Notifications"
-                onclick="toggleNotifications()"
-                style="cursor: pointer; font-size: 18px"
-              ></i>
-              <span id="notification-badge" class="notification-badge" style="display: none">0</span>
-              <div id="notification-dropdown" class="notification-dropdown" style="display: none">
-                <div class="notification-header">
-                  <h4>Notifications</h4>
-                  <div class="notif-header-actions">
-                    <span class="mark-all-read" onclick="markAllNotificationsAsRead()">Mark all read</span>
-                    <span class="clear-all-notif" onclick="clearAllNotifications()">Clear all</span>
-                  </div>
-                </div>
-                <div id="notification-items" class="notification-items">
-                  <!-- Notifications will be loaded here -->
-                  <div class="no-notifications">No new notifications</div>
-                </div>
-              </div>
+        <!-- Chat Interface -->
+        <section id="chat-section" class="content-section">
+          <!-- Header -->
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Campus Assistant</h3>
             </div>
-            <i
-              class="fa-solid fa-moon"
-              id="header-theme-icon"
-              title="Toggle Theme"
-              onclick="toggleTheme()"
-              style="cursor: pointer; font-size: 18px"
-            ></i>
-            <a
-              href="https://svuniversity.edu.in/"
-              target="_blank"
-              rel="noopener"
-              title="Official Website"
-              style="color: inherit; text-decoration: none;"
-            >
-              <i class="fa-solid fa-globe" style="cursor: pointer; font-size: 18px"></i>
-            </a>
-            <i
-              class="fa-solid fa-lightbulb"
-              title="Suggest FAQ"
-              onclick="openSuggestModal()"
-              style="cursor: pointer; font-size: 18px"
-            ></i>
-            <button
-              id="new-chat-btn"
-              onclick="clearChat()"
+
+            <div
+              class="header-actions"
               style="
-                background: none;
-                border: none;
-                font-size: 0.9rem;
+                display: flex;
+                gap: 16px;
                 color: var(--text-secondary);
-                cursor: pointer;
-                margin-right: 8px;
-                font-weight: 500;
+                align-items: center;
               "
             >
-              New Chat
-            </button>
-            <i
-              class="fa-solid fa-rotate-right"
-              title="Refresh"
-              onclick="window.location.reload()"
-              style="cursor: pointer; font-size: 18px"
-            ></i>
+              <div class="notification-wrapper">
+                <i
+                  class="fa-solid fa-bell"
+                  id="notification-bell"
+                  title="Notifications"
+                  onclick="toggleNotifications()"
+                  style="cursor: pointer; font-size: 18px"
+                ></i>
+                <span id="notification-badge" class="notification-badge" style="display: none">0</span>
+                <div id="notification-dropdown" class="notification-dropdown" style="display: none">
+                  <div class="notification-header">
+                    <h4>Notifications</h4>
+                    <div class="notif-header-actions">
+                      <span class="mark-all-read" onclick="markAllNotificationsAsRead()">Mark all read</span>
+                      <span class="clear-all-notif" onclick="clearAllNotifications()">Clear all</span>
+                    </div>
+                  </div>
+                  <div id="notification-items" class="notification-items">
+                    <!-- Notifications will be loaded here -->
+                    <div class="no-notifications">No new notifications</div>
+                  </div>
+                </div>
+              </div>
+              <i
+                class="fa-solid fa-moon"
+                id="header-theme-icon"
+                title="Toggle Theme"
+                onclick="toggleTheme()"
+                style="cursor: pointer; font-size: 18px"
+              ></i>
+              <a
+                href="https://svuniversity.edu.in/"
+                target="_blank"
+                rel="noopener"
+                title="Official Website"
+                style="color: var(--text-secondary); text-decoration: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; transition: all 0.2s;"
+                onmouseover="this.style.background='rgba(0,0,0,0.05)'; this.style.color='var(--accent-color)'"
+                onmouseout="this.style.background='none'; this.style.color='var(--text-secondary)'"
+              >
+                <i class="fa-solid fa-globe" style="font-size: 18px"></i>
+              </a>
+              <i
+                class="fa-solid fa-lightbulb"
+                title="Suggest FAQ"
+                onclick="openSuggestModal()"
+                style="cursor: pointer; font-size: 18px"
+              ></i>
+              <button
+                onclick="clearChat()"
+                style="
+                  background: none;
+                  border: none;
+                  font-size: 0.9rem;
+                  color: var(--text-secondary);
+                  cursor: pointer;
+                  margin-right: 8px;
+                  font-weight: 500;
+                "
+              >
+                New Chat
+              </button>
+              <i
+                class="fa-solid fa-rotate-right"
+                title="Refresh"
+                onclick="window.location.reload()"
+                style="cursor: pointer; font-size: 18px"
+              ></i>
+            </div>
           </div>
-        </header>
-
-        <div id="sections-container" style="position: relative; flex: 1; overflow-y: auto;">
-          <!-- Chat Interface -->
-          <section id="chat-section" class="content-section">
 
           <!-- Chat Area -->
           <div class="chat-area" id="chat-box">
@@ -324,6 +319,15 @@
           class="content-section"
           style="display: none"
         >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">System Configuration</h3>
+            </div>
+            <button id="admin-refresh-all" class="btn-primary" onclick="refreshAllAdminData()" style="padding: 8px 16px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+          </div>
           <div class="admin-content">
             <!-- Top Row: Config & Health -->
             <div
@@ -418,7 +422,7 @@
                   <i class="fa-solid fa-fire" style="color: white; font-size: 20px;"></i>
                 </div>
                 <div class="setting-info" style="flex: 1;">
-                  <h3 style="margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);">Trending Queries Setup</h3>
+                  <h3 style="margin: 0;">Trending Queries Setup</h3>
                 </div>
                 <div style="display: flex; gap: 12px;">
                     <button class="btn-secondary" onclick="loadAdminTrending()" title="Refresh List" style="padding: 10px 18px; border-radius: 10px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
@@ -429,8 +433,10 @@
                     </button>
                 </div>
               </div>
-              <div class="trending-list" id="admin-trending-list">
-                <!-- Dynamic Content -->
+              <div class="responsive-scroll-container">
+                <div class="trending-list" id="admin-trending-list" style="min-width: 600px;">
+                  <!-- Dynamic Content -->
+                </div>
               </div>
               <div id="trending-view-more" style="text-align: center; margin-top: 10px; display: none;">
                   <span class="text-link" onclick="toggleTrendingView()" style="cursor: pointer; color: var(--accent-color); font-weight: 500;">View All</span>
@@ -463,26 +469,28 @@
                   </button>
                 </div>
               </div>
-              <table
-                class="documents-table"
-                style="width: 100%; border-collapse: collapse"
-              >
-                <thead>
-                  <tr>
-                    <th style="padding: 12px; text-align: left">User</th>
-                    <th style="padding: 12px; text-align: left">Role</th>
-                    <th style="padding: 12px; text-align: left">Joined</th>
-                    <th style="padding: 12px; text-align: right">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="users-table-body">
-                  <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px">
-                      Loading users...
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table"
+                  style="width: 100%; border-collapse: collapse; min-width: 600px;"
+                >
+                  <thead>
+                    <tr>
+                      <th style="padding: 12px; text-align: left">User</th>
+                      <th style="padding: 12px; text-align: left">Role</th>
+                      <th style="padding: 12px; text-align: left">Joined</th>
+                      <th style="padding: 12px; text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body">
+                    <tr>
+                      <td colspan="4" style="text-align: center; padding: 20px">
+                        Loading users...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <!-- Knowledge Base Management -->
@@ -584,7 +592,7 @@
                 </div>
               </div>
 
-              <div class="documents-list-container">
+              <div class="documents-list-container responsive-scroll-container">
                 <table class="documents-table">
                   <thead>
                     <tr>
@@ -599,7 +607,7 @@
                   <tbody id="documents-table-body">
                     <tr>
                       <td
-                        colspan="5"
+                        colspan="6"
                         style="
                           text-align: center;
                           padding: 30px;
@@ -630,7 +638,7 @@
                         <input type="text" id="brain-search-input" placeholder="Search documents..." class="admin-search-input" oninput="filterTrainDocs()" style="padding: 8px 12px; font-size: 13px">
                         <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
                     </div>
-                    <button class="btn-primary" onclick="loadTrainStatus()" style="font-size: 12px; padding: 8px 16px; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                    <button class="btn-primary" onclick="loadTrainStatus()" style="font-size: 12px; padding: 8px 16px; background: #6366f1; border: 1px solid #4f46e5; color: white;">
                         <i class="fa-solid fa-rotate"></i> Refresh
                     </button>
                     <button class="btn-primary" onclick="trainAllBrain(event)" style="background: var(--accent-color); font-size: 13px; padding: 8px 16px;">
@@ -642,7 +650,7 @@
                 Consolidate Knowledge Base data into the LLM's active reasoning. Train only on new or modified data.
               </p>
 
-              <div class="documents-list-container" style="max-height: 400px; overflow-y: auto;">
+              <div class="documents-list-container responsive-scroll-container" style="max-height: 400px; overflow-y: auto;">
                 <table class="documents-table">
                   <thead>
                     <tr>
@@ -680,40 +688,22 @@
                 <h4>System Logs</h4>
               </div>
               <div
+                id="system-logs-container"
                 style="
                   background: #1e293b;
                   color: #cbd5e1;
                   padding: 16px;
                   border-radius: 12px;
                   font-family: &quot;Fira Code&quot;, monospace;
-                  font-size: 12px;
-                  height: 150px;
+                  font-size: 11px;
+                  height: 180px;
                   overflow-y: auto;
+                  white-space: pre-wrap;
+                  line-height: 1.5;
                 "
               >
-                <div style="margin-bottom: 4px">
-                  <span style="color: #6366f1">[INFO]</span> Starting RAG
-                  Pipeline init...
-                </div>
-                <div style="margin-bottom: 4px">
-                  <span style="color: #10b981">[SUCCESS]</span> Connected to
-                  MongoDB Atlas.
-                </div>
-                <div style="margin-bottom: 4px">
-                  <span style="color: #10b981">[SUCCESS]</span> Loaded 12
-                  documents into vector store.
-                </div>
-                <div style="margin-bottom: 4px">
-                  <span style="color: #6366f1">[INFO]</span> Server listening on
-                  port 8000.
-                </div>
-                <div style="margin-bottom: 4px">
-                  <span style="color: #f59e0b">[WARN]</span> High latency
-                  detected on /chat endpoint (124ms).
-                </div>
-                <div>
-                  <span style="color: #6366f1">[INFO]</span> User login:
-                  admin@svu.edu.in
+                <div style="color: #64748b; text-align: center; padding-top: 60px;">
+                  Waiting for system events...
                 </div>
               </div>
             </div>
@@ -742,11 +732,11 @@
                 </div>
               </div>
               <div
-                class="calendar-admin-list"
+                class="calendar-admin-list responsive-scroll-container"
                 id="calendar-admin-list"
                 style="margin-top: 20px"
               >
-                <table class="documents-table">
+                <table class="documents-table" style="min-width: 600px;">
                   <thead>
                     <tr>
                       <th style="text-align: left">Date</th>
@@ -786,8 +776,8 @@
                   </button>
                 </div>
               </div>
-              <div class="documents-list-container" style="margin-top: 20px">
-                <table class="documents-table">
+              <div class="documents-list-container responsive-scroll-container" style="margin-top: 20px">
+                <table class="documents-table" style="min-width: 600px;">
                   <thead>
                     <tr>
                       <th style="text-align: left">Location Name</th>
@@ -829,28 +819,30 @@
                   </button>
                 </div>
               </div>
-              <table
-                class="documents-table"
-                style="width: 100%; border-collapse: collapse; margin-top: 15px"
-              >
-                <thead>
-                  <tr>
-                    <th style="text-align: left; padding: 12px">ID</th>
-                    <th style="text-align: left; padding: 12px">Subject</th>
-                    <th style="text-align: left; padding: 12px">Category</th>
-                    <th style="text-align: left; padding: 12px">User</th>
-                    <th style="text-align: center; padding: 12px">Status</th>
-                    <th style="text-align: right; padding: 12px">Action</th>
-                  </tr>
-                </thead>
-                <tbody id="tickets-table-body">
-                  <tr>
-                    <td colspan="6" style="text-align: center; padding: 20px">
-                      Loading tickets...
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table"
+                  style="width: 100%; border-collapse: collapse; margin-top: 15px; min-width: 700px;"
+                >
+                  <thead>
+                    <tr>
+                      <th style="text-align: left; padding: 12px">ID</th>
+                      <th style="text-align: left; padding: 12px">Subject</th>
+                      <th style="text-align: left; padding: 12px">Category</th>
+                      <th style="text-align: left; padding: 12px">User</th>
+                      <th style="text-align: center; padding: 12px">Status</th>
+                      <th style="text-align: right; padding: 12px">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tickets-table-body">
+                    <tr>
+                      <td colspan="6" style="text-align: center; padding: 20px">
+                        Loading tickets...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <!-- Suggested FAQs Section -->
@@ -877,8 +869,8 @@
                   </button>
                 </div>
               </div>
-              <div class="documents-list-container">
-                <table class="documents-table">
+              <div class="documents-list-container responsive-scroll-container">
+                <table class="documents-table" style="min-width: 600px;">
                   <thead>
                     <tr>
                       <th style="text-align: left">Suggested Content</th>
@@ -922,6 +914,12 @@
           class="content-section"
           style="display: none"
         >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Analytics Dashboard</h3>
+            </div>
+          </div>
           <div class="admin-content">
             <div class="stats-grid">
               <div class="stat-card">
@@ -971,7 +969,7 @@
               class="dashboard-grid"
               style="
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
                 gap: 24px;
                 margin-top: 32px;
               "
@@ -1043,12 +1041,31 @@
           class="content-section"
           style="display: none"
         >
+          <div
+            class="calendar-header"
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 24px;
+            "
+          >
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <div>
+                <h2 style="margin: 0;">Academic Calendar</h2>
+                <p style="color: var(--text-secondary); margin: 0; font-size: 0.9rem;">
+                  Important dates and upcoming events
+                </p>
+              </div>
+            </div>
+          </div>
 
           <div
             id="calendar-list"
             style="
               display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+              grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
               gap: 20px;
             "
           >
@@ -1062,9 +1079,15 @@
           class="content-section"
           style="display: none"
         >
-          <div class="auth-tabs" style="margin-top: 10px; margin-bottom: 20px; justify-content: flex-start; border-bottom: none;">
-            <button id="tab-study-notes" class="auth-tab active" onclick="switchStudyTab('notes')">Lecture Notes</button>
-            <button id="tab-study-zen" class="auth-tab" onclick="switchStudyTab('zen')">Zen AI</button>
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Study Buddy AI</h3>
+            </div>
+            <div class="auth-tabs" style="margin-bottom: 0; justify-content: flex-start; border-bottom: none;">
+              <button id="tab-study-notes" class="auth-tab active" onclick="switchStudyTab('notes')">Lecture Notes</button>
+              <button id="tab-study-zen" class="auth-tab" onclick="switchStudyTab('zen')">Zen AI</button>
+            </div>
           </div>
             <div id="study-notes-view" style="display: flex; flex-direction: column; gap: 24px;">
                 <div class="study-main">
@@ -1248,21 +1271,33 @@
         <!-- Locations Section -->
         <section id="locations-section" class="content-section" style="display: none;">
           <div class="locations-container">
-            <!-- University Locations Header -->
-            <h1 class="locations-title"><i class="fa-solid fa-map-location-dot" style="margin-right: 10px;"></i> University Locations</h1>
-            <p class="locations-desc">Explore departments, blocks, and facilities across Sri Venkateswara University campus.</p>
-
-            <!-- Single Search Box -->
-            <div class="locations-search-container" style="margin-bottom: 24px;">
-              <i class="fa-solid fa-magnifying-glass"></i>
-              <input 
-                type="text" 
-                id="locations-search" 
-                class="locations-search-input"
-                placeholder="Search for departments, blocks, or facilities..." 
-                oninput="filterLocations(this.value)"
-              />
+            <div class="header">
+              <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+                <div>
+                  <h2 class="locations-title" style="margin: 0;">
+                    <i class="fa-solid fa-location-dot" style="margin-right: 12px; font-size: 0.9em; background: var(--gradient-primary); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                    University Locations
+                  </h2>
+                  <p class="locations-desc" style="margin: 0; font-size: 0.9rem;">
+                    Select a facility or department to ask for location.
+                  </p>
+                </div>
+              </div>
             </div>
+
+              <!-- Search Box -->
+              <div class="locations-search-container">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input 
+                  type="text" 
+                  id="locations-search" 
+                  class="locations-search-input"
+                  placeholder="Search for departments, blocks, or facilities..." 
+                  oninput="filterLocations(this.value)"
+                />
+              </div>
+            
 
             <div class="locations-card">
               <div class="locations-header">
@@ -1283,16 +1318,16 @@
           class="content-section"
           style="display: none"
         >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Career & Placement Hub</h3>
+            </div>
+          </div>
           <div
             class="career-container"
-            style="padding: 24px; width: 100%; margin: 0 auto"
+            style="padding: 24px; max-width: 900px; margin: 0 auto"
           >
-            <!-- Career Center Header -->
-            <div class="career-page-header">
-              <h1 class="career-page-title"><i class="fa-solid fa-briefcase"></i> Career Center</h1>
-              <p class="career-page-desc">AI-powered tools to build and polish your resume for success.</p>
-            </div>
-
             <!-- Career Tabs -->
             <div
               class="auth-tabs"
@@ -1416,7 +1451,9 @@
                 resume prototype.
               </p>
 
-              <div class="career-grid-2col">
+              <div
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px"
+              >
                 <div class="form-group">
                   <label>Full Name</label>
                   <input
@@ -1455,7 +1492,14 @@
                 </div>
               </div>
 
-              <div class="career-grid-2col-wide" style="margin-top: 15px;">
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 2fr 1fr;
+                  gap: 15px;
+                  margin-top: 15px;
+                "
+              >
                 <div class="form-group">
                   <label>Highest Qualification</label>
                   <input
@@ -3308,7 +3352,7 @@
       </div>
     </div>
 
-    <script src="/static/script.js?v=36"></script>
+    <script src="/static/script.js?v=35"></script>
     <!-- Location Modal -->
     <div id="location-modal" class="modal">
       <div class="modal-content premium-modal" style="max-width: 500px">
@@ -3346,9 +3390,6 @@
         </div>
       </div>
     </div>
-
-  </body>
-</html>
 
     <!-- Add Trending Query Modal -->
     <div id="trending-modal" class="modal">
@@ -3390,4 +3431,7 @@
         </div>
       </div>
     </div>
+
+  </body>
+</html>
 

@@ -14,14 +14,18 @@ function toggleSidebar(forceClose = null) {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebar-overlay');
     
+    // Safety check: if overlay doesn't exist in DOM, look for it or skip it
+    // The CSS/HTML should have it, but we can be resilient
+    const currentOverlay = overlay || document.querySelector('.sidebar-overlay');
+
     if (forceClose === true) {
-        sidebar.classList.remove('active');
-        overlay.classList.remove('active');
+        if (sidebar) sidebar.classList.remove('active');
+        if (currentOverlay) currentOverlay.classList.remove('active');
         return;
     }
 
-    sidebar.classList.toggle('active');
-    overlay.classList.toggle('active');
+    if (sidebar) sidebar.classList.toggle('active');
+    if (currentOverlay) currentOverlay.classList.toggle('active');
 }
 
 // Theme Logic
@@ -582,8 +586,10 @@ function showSection(section) {
     console.warn(`[DEBUG] showSection called for: ${section}`);
 
     // Auto-close sidebar on mobile
-    if (window.innerWidth <= 1024) {
-        toggleSidebar(false); // Close it
+    if (window.innerWidth <= 768) {
+        if (typeof toggleSidebar === 'function') {
+            toggleSidebar(true);
+        }
     }
     
     // Prevent non-admins from accessing restricted sections
@@ -595,29 +601,6 @@ function showSection(section) {
 
     const sections = ['chat', 'admin', 'dashboard', 'calendar', 'locations', 'study', 'career'];
 
-    // Mapping for user-friendly titles
-    const titles = {
-        'chat': 'SVU Campus Assistant',
-        'admin': 'Admin Settings',
-        'dashboard': 'System Dashboard',
-        'calendar': 'Academic Calendar',
-        'locations': 'Campus Locations',
-        'study': 'Study Buddy',
-        'career': 'Career Center'
-    };
-
-    // Update Global Title
-    const pageTitleEl = document.getElementById('page-title');
-    if (pageTitleEl) {
-        pageTitleEl.textContent = titles[section] || 'SVU CampusConnect';
-    }
-
-    // Toggle Header Actions (Show only on Chat Home)
-    const headerActions = document.getElementById('header-actions');
-    if (headerActions) {
-        headerActions.style.display = (section === 'chat') ? 'flex' : 'none';
-    }
-
     sections.forEach(s => {
         const el = document.getElementById(`${s}-section`);
         if (el) el.style.display = 'none';
@@ -628,30 +611,46 @@ function showSection(section) {
 
     const activeSection = document.getElementById(`${section}-section`);
     if (activeSection) {
+        // We use flex for chat and locations sections to maintain layout, block for others
         activeSection.style.display = (section === 'chat' || section === 'locations') ? 'flex' : 'block';
     }
 
     const activeNav = document.getElementById(`nav-${section}`);
     if (activeNav) activeNav.classList.add('active');
 
-    // Trigger specific loaders...
-    if (section === 'dashboard') loadDashboard();
-    if (section === 'admin') {
+    // Trigger specific loaders
+    if (section === 'dashboard') {
+        console.warn("[DEBUG] Triggering loadDashboard from showSection");
         loadDashboard();
+    }
+    if (section === 'admin') {
+        loadDashboard(); // Ensure dashboard stats/charts are loaded
         loadDocuments();
         loadAllTickets();
-        loadAcademicCalendar();
+        loadAcademicCalendar(); // Load admin calendar management table
         loadUsers();
         fetchLocations();
         loadSystemHealth();
         loadSuggestedFAQs();
         loadAdminTrending();
-        loadTrainStatus();
+        loadTrainStatus(); // Load training status dashboard
     }
-    if (section === 'calendar') loadCalendar();
-    if (section === 'study') loadStudyBuddy();
-    if (section === 'locations') fetchLocations();
-    if (section === 'career') loadCareerCenter();
+
+    if (section === 'calendar') {
+        loadCalendar(); // Load student calendar view
+    }
+    if (section === 'study') {
+        loadStudyBuddy();
+    }
+    if (section === 'locations') {
+        fetchLocations(); // Fetch locations for all users
+    }
+    if (section === 'career') {
+        loadCareerCenter();
+    }
+    if (section === 'chat') {
+        // Countdown widget removed
+    }
 }
 
 async function appendQuick(text, preDefinedResponse = null) {
@@ -1556,7 +1555,6 @@ function formatText(text) {
         .replace(/\n/g, '<br>')
         .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
         .replace(/\*(.*?)\*/g, '<i>$1</i>') // Italic
-    return safeText
         .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
 }
 
@@ -2033,7 +2031,7 @@ let allFAQs = [];
 
 async function loadFAQs() {
     try {
-        const res = await fetch(`${API_URL}/admin/faqs`);
+        const res = await fetch(`${API_URL}/faqs`);
         if (!res.ok) return;
         allFAQs = await res.json();
         renderFAQs(allFAQs);
@@ -2579,6 +2577,12 @@ function renderCalendar(events) {
         const fromDateTime = new Date(fromDate);
         const toDateTime = new Date(toDate);
         
+        // Validation check for dates
+        if (isNaN(fromDateTime.getTime()) || isNaN(toDateTime.getTime())) {
+            console.warn("Invalid date found in calendar event:", e);
+            return ''; // Skip this invalid card
+        }
+        
         // Extract date parts for comparison
         const fromDateOnly = fromDateTime.toISOString().split('T')[0];
         const toDateOnly = toDateTime.toISOString().split('T')[0];
@@ -2614,8 +2618,12 @@ function renderCalendar(events) {
         if (e.type === 'Exam') colorClass = 'event-exam';
         if (e.type === 'Event') colorClass = 'event-general';
 
+        // Escaping for JS string literals in onclick
+        const escapedTitle = escapeHtml(e.title).replace(/'/g, "\\'");
+        const escapedDesc = escapeHtml(e.description || '').replace(/'/g, "\\'");
+
         return `
-            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapeHtml(e.title)}', '${fromDate}', '${toDate}', '${escapeHtml(e.description || '')}')" style="cursor: pointer;" title="Add to Google Calendar">
+            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapedTitle}', '${fromDate}', '${toDate}', '${escapedDesc}')" style="cursor: pointer;" title="Add to Google Calendar">
                 <div class="calendar-date">
                     <span class="day">${day}</span>
                     <span class="month">${month}</span>
@@ -2721,6 +2729,12 @@ function renderCalendarAdminTable(events, limit = null) {
         const fromDateTime = new Date(fromDate);
         const toDateTime = new Date(toDate);
         
+        // Validation check for dates
+        if (isNaN(fromDateTime.getTime()) || isNaN(toDateTime.getTime())) {
+            console.warn("Invalid date found in admin calendar event:", e);
+            return ''; // Skip this invalid row
+        }
+        
         // Extract date parts for comparison
         const fromDateOnly = fromDateTime.toISOString().split('T')[0];
         const toDateOnly = toDateTime.toISOString().split('T')[0];
@@ -2748,19 +2762,22 @@ function renderCalendarAdminTable(events, limit = null) {
             dateDisplay = `${fromFormatted} ${startTime} → ${toFormatted} ${endTime}`;
         }
         
+        // Escaping ID for literal safety
+        const escapedId = (e.id || '').replace(/'/g, "\\'");
+        
         return `
         <tr>
             <td style="padding: 12px;">${dateDisplay}</td>
             <td style="padding: 12px; font-weight: 500;">
-                ${e.title}
+                ${escapeHtml(e.title)}
                 ${e.location ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;"><i class="fa-solid fa-map-pin"></i> ${escapeHtml(e.location)}</div>` : ''}
             </td>
-            <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${e.type}</span></td>
+            <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${escapeHtml(e.type)}</span></td>
             <td style="padding: 12px; text-align: right;">
-                <button onclick="editCalendarEvent('${e.id}')" style="color: #6366f1; background: none; border: none; cursor: pointer; margin-right: 8px;" title="Edit event">
+                <button onclick="editCalendarEvent('${escapedId}')" style="color: #6366f1; background: none; border: none; cursor: pointer; margin-right: 8px;" title="Edit event">
                     <i class="fa-solid fa-pen-to-square"></i>
                 </button>
-                <button onclick="deleteCalendarEvent('${e.id}')" style="color: #ef4444; background: none; border: none; cursor: pointer;" title="Delete event">
+                <button onclick="deleteCalendarEvent('${escapedId}')" style="color: #ef4444; background: none; border: none; cursor: pointer;" title="Delete event">
                     <i class="fa-solid fa-trash-can"></i>
                 </button>
             </td>
@@ -3552,24 +3569,7 @@ function openLocationMap(name) {
     window.open(url, '_blank');
 }
 
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
 
-    sidebar.classList.toggle('active');
-
-    // Create overlay if it doesn't exist
-    if (!overlay && sidebar.classList.contains('active')) {
-        const div = document.createElement('div');
-        div.className = 'sidebar-overlay';
-        div.onclick = toggleSidebar;
-        document.body.appendChild(div);
-        setTimeout(() => div.classList.add('active'), 10);
-    } else if (overlay) {
-        overlay.classList.remove('active');
-        setTimeout(() => overlay.remove(), 300);
-    }
-}
 
 // --- Rich UI Interactions ---
 
@@ -3952,8 +3952,49 @@ async function loadSystemHealth() {
             llmBadge.className = `badge ${data.llm_service === 'online' ? 'success' : 'error'}`;
         }
 
+        // Also fetch system logs
+        fetchSystemLogs();
+
     } catch (e) {
-        console.error("Error checking notifications:", e);
+        console.error("Error checking system health:", e);
+    }
+}
+
+async function fetchSystemLogs() {
+    if (!ACCESS_TOKEN) return;
+    const container = document.getElementById('system-logs-container');
+    if (!container) return;
+
+    try {
+        const res = await fetch(`${API_URL}/admin/system-logs?limit=50`, {
+            headers: { 'Authorization': `Bearer ${ACCESS_TOKEN}` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch logs");
+        const logs = await res.json();
+
+        if (logs.length === 0) {
+            container.innerHTML = '<div style="color: #64748b; text-align: center; padding-top: 60px;">No logs available yet.</div>';
+            return;
+        }
+
+        container.innerHTML = logs.map(log => {
+            let color = '#cbd5e1'; // Default INFO
+            if (log.level === 'SUCCESS') color = '#10b981';
+            if (log.level === 'WARN') color = '#f59e0b';
+            if (log.level === 'ERROR') color = '#ef4444';
+
+            return `<div style="margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 4px;">
+                <span style="color: #64748b; font-size: 10px;">[${log.timestamp}]</span>
+                <span style="color: ${color}; font-weight: 600;">[${log.level}]</span>
+                <span>${log.message}</span>
+                ${log.details ? `<div style="color: #94a3b8; font-size: 10px; margin-left: 20px;">${log.details}</div>` : ''}
+            </div>`;
+        }).join('');
+        
+        // Auto-scroll to top if it's already at top (newest first)
+        // or just keep it simple. The backend returns sorted -1 (newest first).
+    } catch (e) {
+        console.error("Error fetching system logs:", e);
     }
 }
 
