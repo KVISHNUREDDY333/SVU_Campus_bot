@@ -306,46 +306,44 @@ def setup_rag_chain(force_reload: bool = False):
             ]
         )
         
-        def get_dynamic_retriever(user_username: str):
-            pre_filter = {
-                "$or": [
-                    {"user_id": {"$exists": False}},  # Legacy/Admin docs
-                    {"user_id": "public"},           # Explicitly public docs
-                    {"user_id": user_username}       # User's own lecture notes
-                ]
-            }
-            return vector_db.as_retriever(
-                search_type="similarity",
-                search_kwargs={
-                    "k": 5,  # Let LLM filter relevance instead of strict threshold
-                    "pre_filter": pre_filter
-                }
-            )
+        base_retriever = vector_db.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 5}
+        )
 
         history_aware_retriever = (
             RunnablePassthrough.assign(
                 rephrased_query=contextualize_q_prompt | fast_llm | StrOutputParser()
             )
-            | (lambda x: get_dynamic_retriever(x.get("user_username", "guest")).invoke(x["rephrased_query"]))
+            | (lambda x: base_retriever.invoke(x["rephrased_query"]))
         )
 
         qa_system_prompt = """You are SVU CampusConnect AI.
-        
-Context:
+
+Language Instruction: {language_instruction}
+Current Time: {current_time}
+User Context: {user_context}
+Known Entities: {entities}
+
+Retrieved Context:
 {context}
 
 User Question:
 {input}
 
-Strict Rules:
-1. **Context-Only**: Answer strictly using the provided context. If the answer is not in the context, do NOT guess.
-2. **Relevance Check**: If the retrieved context is irrelevant to the user's question, or if it is empty, YOU MUST RESPOND WITH EXACTLY:
+Rules:
+1. **Use the Context**: Answer using the provided retrieved context. Extract and present the relevant information clearly.
+2. **Empty Context Only**: ONLY if the retrieved context is completely empty or contains absolutely no information related to the question, respond with:
    "No relevant information was found in the university database."
-3. **No Hallucinations**: Do not use external knowledge.
-4. **Professional Tone**: Be helpful and clear.
+3. **Be Thorough**: If the context contains ANY information related to the question — even partial — use it to construct a helpful answer.
+4. **No Hallucinations**: Do not add facts that are not present in the context.
+5. **Professional Tone**: Be helpful, clear, and student-friendly.
+6. **Language**: Follow the Language Instruction above for your response language.
+7. **Structure**: Present key facts using bullet points or numbered lists where appropriate.
 
 Instructions:
-- Provide a structured answer based ONLY on the context.
+- Synthesize a well-structured answer from the context above.
+- If the context has partial info, provide what's available and note what's missing.
 """
         
         qa_prompt = ChatPromptTemplate.from_messages(
@@ -361,13 +359,18 @@ Instructions:
                 return ""
             return "\n\n".join(doc.page_content for doc in docs)
 
-        def safe_rag_chain(input_dict):
+        async def safe_rag_chain(input_dict):
             context_str = input_dict["context"]
             
+            logger.info(f"[RAG] Context length: {len(context_str)} chars for query: {input_dict.get('input', '')[:80]}")
+            if context_str.strip():
+                logger.info(f"[RAG] Context preview: {context_str[:200]}...")
+            
             if len(context_str.strip()) < 20:
+                logger.warning("[RAG] Context too short, returning no-info message")
                 return "No relevant information was found in the university database."
             
-            return (qa_prompt | smart_llm | StrOutputParser()).invoke(input_dict)
+            return await (qa_prompt | smart_llm | StrOutputParser()).ainvoke(input_dict)
 
         question_answer_chain = (
             {
@@ -394,6 +397,81 @@ Instructions:
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
+def _search_faqs_directly(query: str, limit: int = 5):
+    """Fallback: search FAQs collection using in-memory keyword matching.
+    Atlas Vector Search collections don't support $regex queries, so we fetch
+    a batch of docs and filter in-memory by keyword relevance."""
+    if database.faqs_db is None:
+        return ""
+    try:
+        stop_words = {"the", "and", "for", "are", "was", "were", "has", "have", "had",
+                      "been", "will", "can", "may", "this", "that", "what", "which",
+                      "how", "who", "when", "where", "does", "with", "from", "about",
+                      "they", "them", "their", "there", "here", "also", "than", "then",
+                      "into", "over", "some", "such", "only", "very", "just", "more",
+                      "most", "other", "each", "every", "both", "few", "all", "any",
+                      "tell", "please", "could", "would", "should"}
+        keywords = list(set(
+            w.lower() for w in query.split()
+            if len(w) > 2 and w.lower() not in stop_words
+        ))
+        if not keywords:
+            return ""
+        
+        # Fetch a larger batch and filter in-memory (Atlas doesn't support $regex)
+        batch = list(database.faqs_db.find().limit(500))
+        
+        if not batch:
+            return ""
+        
+        # Score each FAQ by keyword match count
+        scored = []
+        for faq in batch:
+            q_text = faq.get('question', '').lower()
+            a_text = faq.get('answer', '').lower()
+            combined = q_text + ' ' + a_text
+            score = sum(1 for kw in keywords if kw in combined)
+            if score > 0:
+                scored.append((score, faq))
+        
+        # Sort by relevance score, take top results
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_results = [faq for _, faq in scored[:limit]]
+        
+        if not top_results:
+            return ""
+        
+        faq_context = "\n\n".join(
+            f"Question: {r['question']}\nAnswer: {r['answer']}" for r in top_results
+        )
+        logger.info(f"FAQ fallback found {len(top_results)} results for query: {query[:50]}")
+        return faq_context
+    except Exception as e:
+        logger.error(f"FAQ fallback search error: {e}")
+        return ""
+
+def _search_vectors_directly(query: str, limit: int = 10):
+    """Search svu_vectors collection using embedding-based similarity search.
+    Uses the already-initialized vector_db (MongoDBAtlasVectorSearch) to perform
+    semantic search across the full 6700+ doc knowledge base."""
+    global vector_db
+    if not vector_db:
+        return ""
+    try:
+        # Use LangChain's similarity_search which handles embedding + Atlas query
+        results = vector_db.similarity_search(query, k=limit)
+        
+        if not results:
+            return ""
+        
+        context = "\n\n".join(doc.page_content for doc in results if doc.page_content)
+        logger.info(f"Vectors similarity search found {len(results)} results for query: {query[:50]}")
+        return context
+    except Exception as e:
+        logger.error(f"Vectors similarity search error: {e}")
+        return ""
+
+
 async def generate_response(message: str, session_id: str, user_role: str, current_time: str, language: str = "en"):
     if not retrieval_chain:
         return "System initializing, please try again in a moment."
@@ -406,7 +484,7 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         for k, v in personal_info.items():
             personal_context_str += f"{k.title()}: {v}\n"
     else:
-            personal_context_str = "No specific personal data."
+        personal_context_str = "No specific personal data."
 
     if language == "te":
         lang_instruction = "The user wants to converse in Telugu. Even if they type in English or Transliterated Telugu (e.g. 'ekkada'), understanding their intent and responding in proper Telugu script is mandatory."
@@ -435,29 +513,110 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
                 },
                 config={"configurable": {"session_id": session_id}}
             )
+            
+            # Ensure we always return a plain string
+            if isinstance(response_text, dict):
+                response_text = response_text.get("output", response_text.get("answer", str(response_text)))
+            if hasattr(response_text, 'content'):
+                response_text = response_text.content
+            response_text = str(response_text)
+            
+            # If RAG returned the "no relevant info" fallback, try direct search on both collections
+            no_info_phrases = ["no relevant information", "not officially available", "not available at the moment", "no information was found"]
+            is_no_info = any(phrase in response_text.lower() for phrase in no_info_phrases) or len(response_text.strip()) < 20
+            
+            if is_no_info:
+                # Search svu_vectors first (larger, richer dataset: 6700+ docs)
+                vector_context = _search_vectors_directly(message, limit=8)
+                # Also search faqs collection (2500+ docs)
+                faq_context = _search_faqs_directly(message, limit=5)
+                # Merge results from both sources
+                combined_context = "\n\n".join(filter(None, [vector_context, faq_context]))
+                
+                if combined_context and len(combined_context.strip()) > 20:
+                    logger.info(f"RAG returned no context. Using combined fallback (vectors: {len(vector_context)} chars, faqs: {len(faq_context)} chars).")
+                    fallback_prompt = f"""You are SVU CampusConnect AI, the official assistant for Sri Venkateswara University.
+
+Language: {lang_instruction}
+
+The following FAQ entries were retrieved from the university knowledge base:
+---
+{combined_context}
+---
+
+User Question: {message}
+
+Instructions:
+1. Identify which FAQ entries above are MOST relevant to the user's question.
+2. Synthesize a clear, well-structured, and student-friendly answer from the relevant entries.
+3. If multiple FAQs partially answer the question, combine their information into one coherent response.
+4. Present key facts using bullet points or numbered lists where appropriate.
+5. If none of the FAQs contain relevant information, respond with: "This information is not officially available on the Sri Venkateswara University website at the moment."
+6. Do NOT add any information beyond what is provided in the FAQ data above.
+7. Be concise, accurate, and professional."""
+                    try:
+                        fallback_response = await smart_llm.ainvoke(fallback_prompt)
+                        if hasattr(fallback_response, 'content'):
+                            return fallback_response.content
+                        return str(fallback_response)
+                    except Exception as fb_err:
+                        logger.error(f"Combined fallback LLM error: {fb_err}")
+            
             return response_text
+            
         except Exception as e:
             error_str = str(e).lower()
             if "413" in error_str or "429" in error_str or "rate limit" in error_str or "too large" in error_str:
-                logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history and fast model...")
-                trim_session_history(session_id, limit=2) 
-                
-                # Fallback to fast model if not already using it
-                # We need to temporarily swap llm if we want retrieval_chain to use it
-                # Or invoke the chain manually with a specific LLM if possible (but retrieval_chain is pre-built)
-                # Since retrieval_chain uses 'smart_llm' internally via the lambda, we can't easily swap without rebuilding.
-                # However, for the chat, we can just try a direct call if RAG fails, or accept that RAG uses smart_llm.
-                # Actually, in safe_rag_chain, it uses smart_llm. 
-                # Let's just return a helpful error for now or try to be smarter.
-                
-                # If it's a 429, we should definitely try to use the faster model if possible.
-                # But the RAG chain is already tied to smart_llm.
-                return "The system is currently experiencing high demand from the AI provider (Rate Limit). Please try again in a few minutes, or try a simpler question."
+                logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history...")
+                trim_session_history(session_id, limit=2)
+                return "The system is currently experiencing high demand. Please try again in a few minutes."
             else:
-                raise e # Re-raise if not a rate limit issue
+                raise e
     except Exception as e:
         import traceback
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
+        raise e
+
+async def train_on_all_faqs():
+    """Bulk-ingest ALL FAQs from the faqs collection into the vector store."""
+    if not vector_db:
+        setup_rag_chain()
+        if not vector_db:
+            raise Exception("Vector DB not initialized")
+    
+    if database.faqs_db is None:
+        return {"trained": 0, "message": "No FAQ database available"}
+    
+    from langchain.schema import Document
+    
+    all_faqs = list(database.faqs_db.find())
+    if not all_faqs:
+        return {"trained": 0, "message": "No FAQs found"}
+    
+    docs_to_ingest = []
+    for faq in all_faqs:
+        content = f"Question: {faq['question']}\nAnswer: {faq['answer']}"
+        metadata = {
+            "source": faq.get("source_urls", "manual") if isinstance(faq.get("source_urls"), str) else "manual",
+            "type": "faq",
+            "faq_id": str(faq["_id"]),
+            "category": faq.get("category", "General")
+        }
+        docs_to_ingest.append(Document(page_content=content, metadata=metadata))
+    
+    try:
+        batch_size = 50
+        total_ingested = 0
+        for i in range(0, len(docs_to_ingest), batch_size):
+            batch = docs_to_ingest[i:i + batch_size]
+            vector_db.add_documents(batch)
+            total_ingested += len(batch)
+            logger.info(f"Ingested FAQ batch {i//batch_size + 1}: {len(batch)} docs")
+        
+        logger.info(f"Successfully ingested {total_ingested} FAQs into vector store")
+        return {"trained": total_ingested, "message": f"Ingested {total_ingested} FAQs"}
+    except Exception as e:
+        logger.error(f"Bulk FAQ ingestion error: {e}")
         raise e
 
 async def ingest_url(url: str, store_vectors: bool = True):

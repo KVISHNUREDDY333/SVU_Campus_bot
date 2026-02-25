@@ -709,23 +709,19 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    from ..services.rag_service import refine_kb_data, ingest_faq, ingest_url, ingest_pdf, train_on_all_faqs
+    
     # Find untrained or modified docs
     query = {"$or": [{"is_trained": False}, {"is_trained": {"$exists": False}}]}
     untrained_docs = list(database.documents_db.find(query))
     
-    if not untrained_docs:
-        return {"status": "no_updates", "message": "No data is injected to train."}
-    
     trained_count = 0
-    
-    from ..services.rag_service import refine_kb_data, ingest_faq, ingest_url, ingest_pdf
     
     for doc in untrained_docs:
         doc_id = str(doc["_id"])
         filename = doc.get("filename")
         doc_type = doc.get("type", "pdf")
         
-        # Thorough Training Logic (Simplified for bulk)
         full_text = ""
         try:
             if doc_type == "url":
@@ -736,9 +732,8 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
                 if os.path.exists(file_path):
                     _, full_text = await ingest_pdf(file_path, store_vectors=False)
         except Exception as e:
-            print(f"Error fetching content for thorough training (Doc: {filename}): {e}")
+            print(f"Error fetching content for training (Doc: {filename}): {e}")
 
-        # Refine FAQs if content available
         now = datetime.utcnow()
         faqs = list(database.faqs_db.find({"source_urls": filename}))
         if faqs and full_text:
@@ -764,27 +759,37 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
                             "last_verified": now
                         }}
                     )
-                    await ingest_faq(
-                        question=refined.get("question", f["question"]),
-                        answer=refined.get("answer", f["answer"]),
-                        source=filename,
-                        faq_id=str(f["_id"])
-                    )
 
         database.documents_db.update_one(
             {"_id": doc["_id"]},
             {"$set": {"is_trained": True, "last_trained": now}}
         )
         trained_count += 1
-        
-    return {"status": "success", "trained_count": trained_count, "message": f"Successfully trained and refined {trained_count} items."}
+    
+    # Always bulk-ingest ALL FAQs into the vector store for comprehensive retrieval
+    try:
+        result = await train_on_all_faqs()
+        faq_count = result.get("trained", 0)
+    except Exception as e:
+        print(f"Error during bulk FAQ ingestion: {e}")
+        faq_count = 0
+    
+    if trained_count == 0 and faq_count == 0:
+        return {"status": "no_updates", "message": "No data is injected to train."}
+    
+    return {
+        "status": "success", 
+        "trained_count": trained_count, 
+        "faq_count": faq_count,
+        "message": f"Trained {trained_count} document(s) and ingested {faq_count} FAQs into vector store."
+    }
 
 @router.post("/admin/train/{doc_id}")
 async def train_specific_document(doc_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    from ..services.rag_service import refine_kb_data, ingest_faq
+    from ..services.rag_service import refine_kb_data, ingest_faq, train_on_all_faqs
     
     doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
     if not doc:
@@ -793,7 +798,6 @@ async def train_specific_document(doc_id: str, current_user: User = Depends(get_
     filename = doc.get("filename")
     doc_type = doc.get("type", "pdf")
     
-    # 1. Get full text context
     full_text = ""
     try:
         if doc_type == "url":
@@ -804,32 +808,22 @@ async def train_specific_document(doc_id: str, current_user: User = Depends(get_
             file_path = os.path.join(upload_dir, filename)
             from ..services.rag_service import ingest_pdf
             _, full_text = await ingest_pdf(file_path, store_vectors=False)
-        elif doc_type == "text":
-            # For text types, we might need to store the content in doc_record or find it elsewhere
-            # Assuming for now text-type docs have their content somehow available or we skip refinement
-            pass
     except Exception as e:
         print(f"Error fetching document content for refinement: {e}")
 
-    # 2. Get existing FAQs
     faqs = list(database.faqs_db.find({"source_urls": filename}))
     if faqs and full_text:
-        print(f"[THOROUGH-TRAIN] Refining {len(faqs)} FAQs for {filename}")
-        # Convert BSON to simple list of dicts for LLM
-        faqs_to_refine = []
-        for f in faqs:
-            faqs_to_refine.append({
-                "question": f["question"],
-                "answer": f["answer"],
-                "category": f.get("category", "General"),
-                "keywords": f.get("keywords", [])
-            })
+        print(f"[TRAIN] Refining {len(faqs)} FAQs for {filename}")
+        faqs_to_refine = [{
+            "question": f["question"],
+            "answer": f["answer"],
+            "category": f.get("category", "General"),
+            "keywords": f.get("keywords", [])
+        } for f in faqs]
             
         refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
         
-        # 3. Update DB and Re-ingest into Vector DB
         for i, f in enumerate(faqs):
-            # Only update if we have a match (in case LLM returned different count, though we try batching)
             if i < len(refined_faqs):
                 refined = refined_faqs[i]
                 database.faqs_db.update_one(
@@ -842,20 +836,19 @@ async def train_specific_document(doc_id: str, current_user: User = Depends(get_
                         "last_verified": datetime.utcnow()
                     }}
                 )
-                # Re-ingest into Vector DB
-                await ingest_faq(
-                    question=refined.get("question", f["question"]),
-                    answer=refined.get("answer", f["answer"]),
-                    source=filename,
-                    faq_id=str(f["_id"])
-                )
 
-    result = database.documents_db.update_one(
+    database.documents_db.update_one(
         {"_id": ObjectId(doc_id)},
         {"$set": {"is_trained": True, "last_trained": datetime.utcnow()}}
     )
     
-    return {"status": "success", "message": "Document training (thorough refinement) complete."}
+    # Ingest all FAQs into vector store for this document
+    try:
+        await train_on_all_faqs()
+    except Exception as e:
+        print(f"Error ingesting FAQs into vector store: {e}")
+    
+    return {"status": "success", "message": "Document training complete and FAQs ingested into vector store."}
 
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
 async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):

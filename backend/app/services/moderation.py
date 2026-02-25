@@ -17,7 +17,14 @@ UNIVERSITY_TOPICS = [
     "university", "svu", "college", "degree", "exam", "admission", "fees", 
     "campus", "hostel", "placement", "research", "faculty", "science", 
     "education", "course", "syllabus", "result", "scholarship", "internship",
-    "lecture", "note", "study", "academic", "career", "department", "professor"
+    "lecture", "note", "study", "academic", "career", "department", "professor",
+    "library", "lab", "semester", "grade", "gpa", "mark", "attendance",
+    "class", "timetable", "schedule", "bus", "transport", "cafeteria",
+    "sports", "gym", "wifi", "login", "portal", "register", "enroll",
+    "convocation", "certificate", "transcript", "dean", "vc", "hod",
+    "btech", "mtech", "mba", "mca", "phd", "bsc", "msc", "ba", "ma",
+    "tirupati", "sri venkateswara", "venkateswara", "hello", "hi", "hey",
+    "help", "what", "how", "where", "when", "who", "tell", "explain"
 ]
 
 class ModerationService:
@@ -49,10 +56,12 @@ class ModerationService:
         Classification Task: Is the following user query relevant to a University, Education, or Science context?
         
         RULES:
-        - University context: Campus life, exams, SVU departments, admissions, hostels, results, etc.
-        - Education context: Learning, courses, study tips, academic concepts.
+        - University context: Campus life, exams, SVU departments, admissions, hostels, results, greetings, general questions, etc.
+        - Education context: Learning, courses, study tips, academic concepts, any knowledge-seeking query.
         - Science context: Physics, chemistry, technology, research, mathematics, etc.
-        - Irrelevant context: Cooking, sports (unless university sports), entertainment, politics, general chat, shopping, etc.
+        - Greetings and general conversation starters ("hi", "hello", "help me") should be considered RELEVANT.
+        - If in doubt, classify as YES.
+        - ONLY classify as NO for clearly inappropriate content like shopping, recipes, entertainment gossip, or explicit content.
 
         QUERY: "{text}"
         
