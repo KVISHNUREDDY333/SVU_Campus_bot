@@ -17,7 +17,9 @@ from ..services.rag_service import ingest_pdf, ingest_url, ingest_text, extract_
 from ..services import notification_service
 from ..services.logging_service import get_recent_logs, log_event
 import pydantic
+import logging
 
+logger = logging.getLogger("uvicorn")
 router = APIRouter()
 
 VALID_MODELS = ["llama-3.3-70b-versatile"]
@@ -38,18 +40,31 @@ class UserCreate(pydantic.BaseModel):
 
 @router.get("/admin/faqs", response_model=List[FAQResponse])
 async def get_faqs():
-    if database.faqs_db is None:
+    if database.svu_vectors_db is None:
         return []
-    faqs = list(database.faqs_db.find().sort("created_at", -1))
+    # Query svu_vectors for FAQ-type documents
+    faqs = list(database.svu_vectors_db.find({"type": "faq"}).sort("created_at", -1).limit(500))
     results = []
     for f in faqs:
+        text = f.get("text", "")
+        # Parse Question/Answer from the text field format "Question: ...\nAnswer: ..."
+        question = ""
+        answer = ""
+        if "Question:" in text and "Answer:" in text:
+            parts = text.split("Answer:", 1)
+            question = parts[0].replace("Question:", "").strip()
+            answer = parts[1].strip()
+        else:
+            question = text[:100] if text else "No question"
+            answer = text
+        
         results.append(FAQResponse(
             id=str(f["_id"]),
-            question=f["question"],
-            answer=f["answer"],
-            category=f.get("category", "General"),
+            question=question,
+            answer=answer,
+            category=f.get("category", f.get("metadata", {}).get("category", "General")),
             created_at=f.get("created_at", datetime.utcnow()),
-            source_urls=f.get("source_urls", []),
+            source_urls=f.get("source_urls", [f.get("source", "")]),
             verified=f.get("verified", False)
         ))
     return results
@@ -58,23 +73,24 @@ async def get_faqs():
 async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-        
-    new_faq = {
-        "question": faq.question,
-        "answer": faq.answer,
-        "category": faq.category,
-        "created_at": datetime.utcnow()
-    }
     
-    result = database.faqs_db.insert_one(new_faq)
-    new_faq["id"] = str(result.inserted_id)
+    # Insert directly into svu_vectors via ingest_faq
+    from ..services.rag_service import ingest_faq as rag_ingest_faq
+    
+    # Create a unique ID for the FAQ
+    faq_id = str(ObjectId())
     
     try:
-        from ..services.rag_service import ingest_text
-        faq_text = f"Question: {faq.question}\nAnswer: {faq.answer}\nCategory: {faq.category}"
-        await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq["id"], "category": faq.category})
+        await rag_ingest_faq(
+            question=faq.question,
+            answer=faq.answer,
+            category=faq.category,
+            source="admin_manual",
+            faq_id=faq_id
+        )
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create FAQ: {e}")
     
     # Trigger notification
     await notification_service.create_notification(
@@ -83,7 +99,15 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
         notification_type="common"
     )
     
-    return new_faq
+    return FAQResponse(
+        id=faq_id,
+        question=faq.question,
+        answer=faq.answer,
+        category=faq.category,
+        created_at=datetime.utcnow(),
+        source_urls=[],
+        verified=False
+    )
 
 @router.delete("/admin/faqs/{faq_id}")
 async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)):
@@ -91,18 +115,21 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=403, detail="Admin access required")
         
     try:
-        from ..core.config import Config
+        if database.svu_vectors_db is None:
+            raise HTTPException(status_code=503, detail="Database not available")
         
-        result = database.faqs_db.delete_one({"_id": ObjectId(faq_id)})
+        # Delete from svu_vectors by _id or by top-level faq_id
+        result = database.svu_vectors_db.delete_one({"_id": ObjectId(faq_id)})
+        if result.deleted_count == 0:
+            # Try by top-level faq_id
+            result = database.svu_vectors_db.delete_one({"faq_id": faq_id})
+        
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="FAQ not found")
-            
-        vector_collection_name = Config.COLLECTION_NAME or "documents"
-        vector_collection = database.mongo_client[Config.DB_NAME][vector_collection_name]
         
-        vector_collection.delete_many({"metadata.faq_id": faq_id})
-        
-        return {"status": "success", "message": "FAQ and associated vector deleted"}
+        return {"status": "success", "message": "FAQ deleted from knowledge base"}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Delete FAQ Error: {e}")
         raise HTTPException(status_code=400, detail="Failed to delete FAQ")
@@ -151,7 +178,7 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    if database.suggested_faqs_db is None or database.faqs_db is None:
+    if database.suggested_faqs_db is None or database.svu_vectors_db is None:
         raise HTTPException(status_code=503, detail="Database not available")
     
     suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
@@ -166,15 +193,18 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
         "suggested_by": suggestion.get("suggested_by")
     }
     
-    result = database.faqs_db.insert_one(new_faq)
-    new_faq_id = str(result.inserted_id)
-
-
+    # Insert directly into svu_vectors via ingest_faq (no more faqs_db)
+    from ..services.rag_service import ingest_faq as rag_ingest_faq
+    faq_id = str(ObjectId())
     
     try:
-        from ..services.rag_service import ingest_text
-        faq_text = f"Question: {new_faq['question']}\nAnswer: {new_faq['answer']}\nCategory: {new_faq['category']}"
-        await ingest_text(faq_text, metadata={"source": "faq", "faq_id": new_faq_id, "category": new_faq["category"]})
+        await rag_ingest_faq(
+            question=new_faq['question'],
+            answer=new_faq['answer'],
+            category=new_faq['category'],
+            source="community_suggestion",
+            faq_id=faq_id
+        )
     except Exception as e:
         print(f"Failed to ingest FAQ into vector DB: {e}")
     
@@ -243,35 +273,18 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
             
             inserted_count = 0
             for faq in extracted_faqs:
-                status = "MANUAL_ENTRY"
-                score = 1.0
-                source_url = ""
-                
-                new_faq = {
-                    "question": faq.get("question"),
-                    "answer": faq.get("answer"),
-                    "category": faq.get("category", "General"),
-                    "keywords": faq.get("keywords", []),
-                    "created_at": datetime.utcnow(),
-                    "source_urls": [req.title], # Use title as source reference
-                    "verified": True,
-                    "verification_status": status,
-                    "verification_source": "Admin Manual Entry",
-                    "confidence_score": score,
-                    "last_verified": datetime.utcnow()
-                }
-                
-                if database.faqs_db is not None:
-                     res = database.faqs_db.insert_one(new_faq)
-                     new_faq_id = str(res.inserted_id)
-                     inserted_count += 1
-                     
-                     await ingest_faq(
-                         question=new_faq["question"], 
-                         answer=new_faq["answer"], 
-                         source=req.title, 
-                         faq_id=new_faq_id
-                     )
+                faq_id = str(ObjectId())
+                try:
+                    await ingest_faq(
+                        question=faq.get("question"),
+                        answer=faq.get("answer"),
+                        category=faq.get("category", "General"),
+                        source=req.title,
+                        faq_id=faq_id
+                    )
+                    inserted_count += 1
+                except Exception as faq_err:
+                    print(f"Error ingesting FAQ: {faq_err}")
             print(f"[DEBUG] Text Entry FAQ Insertion Complete. Total inserted: {inserted_count}")
                     
         except Exception as e:
@@ -334,36 +347,18 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
             
             inserted_count = 0
             for faq in extracted_faqs:
-                status = "MANUAL_ENTRY"
-                score = 1.0
-                source_url = ""
-                
-                new_faq = {
-                    "question": faq.get("question"),
-                    "answer": faq.get("answer"),
-                    "category": faq.get("category", "General"),
-                    "keywords": faq.get("keywords", []),
-                    "created_at": datetime.utcnow(),
-                    "source_urls": [file.filename],
-                    "verified": True,
-                    "verification_status": status, 
-                    "verification_source": "Admin Upload",
-                    "confidence_score": score,
-                    "last_verified": datetime.utcnow()
-                }
-                
-                if database.faqs_db is not None:
-                     res = database.faqs_db.insert_one(new_faq)
-                     new_faq_id = str(res.inserted_id)
-                     inserted_count += 1
-                     print(f"[DEBUG] Inserted FAQ ID: {new_faq_id}")
-                     
-                     await ingest_faq(
-                         question=new_faq["question"], 
-                         answer=new_faq["answer"], 
-                         source=file.filename, 
-                         faq_id=new_faq_id
-                     )
+                faq_id = str(ObjectId())
+                try:
+                    await ingest_faq(
+                        question=faq.get("question"),
+                        answer=faq.get("answer"),
+                        category=faq.get("category", "General"),
+                        source=file.filename,
+                        faq_id=faq_id
+                    )
+                    inserted_count += 1
+                except Exception as faq_err:
+                    print(f"Error ingesting FAQ: {faq_err}")
             print(f"[DEBUG] PDF FAQ Insertion Complete. Total inserted: {inserted_count}")
 
         except Exception as e:
@@ -417,36 +412,18 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
              
              inserted_count = 0
              for faq in extracted_faqs:
-                status = "MANUAL_ENTRY"
-                score = 1.0
-                source_url = req.url
-                
-                new_faq = {
-                    "question": faq.get("question"),
-                    "answer": faq.get("answer"),
-                    "category": faq.get("category", "General"),
-                    "keywords": faq.get("keywords", []),
-                    "created_at": datetime.utcnow(),
-                    "source_urls": [req.url], 
-                    "verified": True,
-                    "verification_status": status,
-                    "verification_source": "Admin URL",
-                    "confidence_score": score,
-                    "last_verified": datetime.utcnow()
-                }
-                
-                if database.faqs_db is not None:
-                     res = database.faqs_db.insert_one(new_faq)
-                     new_faq_id = str(res.inserted_id)
-                     inserted_count += 1
-                     print(f"[DEBUG] Inserted FAQ ID: {new_faq_id}")
-                     
-                     await ingest_faq(
-                         question=new_faq["question"], 
-                         answer=new_faq["answer"], 
-                         source=req.url, 
-                         faq_id=new_faq_id
-                     )
+                faq_id = str(ObjectId())
+                try:
+                    await ingest_faq(
+                        question=faq.get("question"),
+                        answer=faq.get("answer"),
+                        category=faq.get("category", "General"),
+                        source=req.url,
+                        faq_id=faq_id
+                    )
+                    inserted_count += 1
+                except Exception as faq_err:
+                    print(f"Error ingesting FAQ: {faq_err}")
              print(f"[DEBUG] URL FAQ Insertion Complete. Total inserted: {inserted_count}")
                      
         except Exception as e:
@@ -735,29 +712,52 @@ async def train_all_knowledge(current_user: User = Depends(get_current_user)):
             print(f"Error fetching content for training (Doc: {filename}): {e}")
 
         now = datetime.utcnow()
-        faqs = list(database.faqs_db.find({"source_urls": filename}))
+        # Query svu_vectors for FAQ-type documents matching this source
+        faqs = list(database.svu_vectors_db.find({"type": "faq", "source": filename}))
+        
         if faqs and full_text:
-            faqs_to_refine = [{
-                "question": f["question"],
-                "answer": f["answer"],
-                "category": f.get("category", "General"),
-                "keywords": f.get("keywords", [])
-            } for f in faqs]
+            faqs_to_refine = []
+            for f in faqs:
+                text = f.get("text", "")
+                question = ""
+                answer = ""
+                if "Question:" in text and "Answer:" in text:
+                    parts = text.split("Answer:", 1)
+                    question = parts[0].replace("Question:", "").strip()
+                    answer = parts[1].strip()
+                else:
+                    question = text[:100]
+                    answer = text
+
+                faqs_to_refine.append({
+                    "question": question,
+                    "answer": answer,
+                    "category": f.get("category", "General"),
+                    "keywords": f.get("keywords", [])
+                })
             
             refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+            from ..services.rag_service import embeddings
             
             for i, f in enumerate(faqs):
                 if i < len(refined_faqs):
                     refined = refined_faqs[i]
-                    database.faqs_db.update_one(
+                    formatted_text = f"Question: {refined.get('question', '')}\nAnswer: {refined.get('answer', '')}"
+                    update_data = {
+                        "text": formatted_text,
+                        "category": refined.get("category", f.get("category", "General")),
+                        "keywords": refined.get("keywords", f.get("keywords", [])),
+                        "last_verified": now
+                    }
+                    try:
+                        if embeddings:
+                            update_data["embedding"] = embeddings.embed_query(formatted_text)
+                    except Exception as e:
+                        print(f"Error embedding refined FAQ: {e}")
+                    
+                    database.svu_vectors_db.update_one(
                         {"_id": f["_id"]},
-                        {"$set": {
-                            "question": refined.get("question", f["question"]),
-                            "answer": refined.get("answer", f["answer"]),
-                            "category": refined.get("category", f.get("category", "General")),
-                            "keywords": refined.get("keywords", f.get("keywords", [])),
-                            "last_verified": now
-                        }}
+                        {"$set": update_data}
                     )
 
         database.documents_db.update_one(
@@ -811,30 +811,53 @@ async def train_specific_document(doc_id: str, current_user: User = Depends(get_
     except Exception as e:
         print(f"Error fetching document content for refinement: {e}")
 
-    faqs = list(database.faqs_db.find({"source_urls": filename}))
+    # Query svu_vectors for FAQ-type documents matching this source
+    faqs = list(database.svu_vectors_db.find({"type": "faq", "source": filename}))
+    
     if faqs and full_text:
         print(f"[TRAIN] Refining {len(faqs)} FAQs for {filename}")
-        faqs_to_refine = [{
-            "question": f["question"],
-            "answer": f["answer"],
-            "category": f.get("category", "General"),
-            "keywords": f.get("keywords", [])
-        } for f in faqs]
+        faqs_to_refine = []
+        for f in faqs:
+            text = f.get("text", "")
+            question = ""
+            answer = ""
+            if "Question:" in text and "Answer:" in text:
+                parts = text.split("Answer:", 1)
+                question = parts[0].replace("Question:", "").strip()
+                answer = parts[1].strip()
+            else:
+                question = text[:100]
+                answer = text
+
+            faqs_to_refine.append({
+                "question": question,
+                "answer": answer,
+                "category": f.get("category", "General"),
+                "keywords": f.get("keywords", [])
+            })
             
         refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+        from ..services.rag_service import embeddings
         
         for i, f in enumerate(faqs):
             if i < len(refined_faqs):
                 refined = refined_faqs[i]
-                database.faqs_db.update_one(
+                formatted_text = f"Question: {refined.get('question', '')}\nAnswer: {refined.get('answer', '')}"
+                update_data = {
+                    "text": formatted_text,
+                    "category": refined.get("category", f.get("category", "General")),
+                    "keywords": refined.get("keywords", f.get("keywords", [])),
+                    "last_verified": datetime.utcnow()
+                }
+                try:
+                    if embeddings:
+                        update_data["embedding"] = embeddings.embed_query(formatted_text)
+                except Exception as e:
+                    print(f"Error embedding refined FAQ: {e}")
+                
+                database.svu_vectors_db.update_one(
                     {"_id": f["_id"]},
-                    {"$set": {
-                        "question": refined.get("question", f["question"]),
-                        "answer": refined.get("answer", f["answer"]),
-                        "category": refined.get("category", f.get("category", "General")),
-                        "keywords": refined.get("keywords", f.get("keywords", [])),
-                        "last_verified": datetime.utcnow()
-                    }}
+                    {"$set": update_data}
                 )
 
     database.documents_db.update_one(
@@ -855,7 +878,7 @@ async def get_document_faqs(doc_id: str, current_user: User = Depends(get_curren
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    if database.documents_db is None or database.faqs_db is None:
+    if database.documents_db is None or database.svu_vectors_db is None:
         raise HTTPException(status_code=500, detail="Database not available")
     
     from bson import ObjectId
@@ -868,10 +891,40 @@ async def get_document_faqs(doc_id: str, current_user: User = Depends(get_curren
         if not identifier:
             return []
             
-        faqs = list(database.faqs_db.find({"source_urls": identifier}))
+        # Query svu_vectors for FAQs belonging to this document
+        faqs_raw = list(database.svu_vectors_db.find({"type": "faq", "source": identifier}))
         
-        for f in faqs:
-            f["id"] = str(f["_id"])
+        # Resiliency Fallback: If no FAQs found with type='faq', check for any docs containing "Question:" for this source
+        if not faqs_raw:
+            logger.info(f"No type='faq' docs found for {identifier}, trying lenient search...")
+            faqs_raw = list(database.svu_vectors_db.find({
+                "source": identifier,
+                "text": {"$regex": "Question:", "$options": "i"}
+            }))
+        
+        faqs = []
+        for f in faqs_raw:
+            text = f.get("text", "")
+            question = ""
+            answer = ""
+            if "Question:" in text and "Answer:" in text:
+                parts = text.split("Answer:", 1)
+                question = parts[0].replace("Question:", "").strip()
+                answer = parts[1].strip()
+            else:
+                # Catch-all for non-standard formats
+                question = text[:100]
+                answer = text
+
+            faqs.append(FAQResponse(
+                id=str(f["_id"]),
+                question=question,
+                answer=answer,
+                category=f.get("category", "General"),
+                created_at=f.get("created_at", datetime.utcnow()),
+                source_urls=f.get("source_urls", [f.get("source", identifier)]),
+                verified=f.get("verified", False)
+            ))
             
         return faqs
     except Exception as e:
@@ -899,15 +952,18 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
 
         database.documents_db.delete_one({"_id": ObjectId(doc_id)})
         
-        if database.faqs_db is not None:
-            delete_result = database.faqs_db.delete_many({"source_urls": filename})
+        if database.svu_vectors_db is not None:
+            # Cascade delete FAQs from svu_vectors
+            delete_result = database.svu_vectors_db.delete_many({"type": "faq", "source": filename})
             print(f"Deleted {delete_result.deleted_count} FAQs associated with {filename}")
 
-        vector_collection_name = Config.COLLECTION_NAME or "documents"
-        vector_collection = database.mongo_client[Config.DB_NAME][vector_collection_name]
-        
-        vector_delete_result = vector_collection.delete_many({"metadata.source": filename})
-        print(f"Deleted {vector_delete_result.deleted_count} vector chunks for {filename}")
+        if database.mongo_client is not None:
+            vector_collection_name = Config.COLLECTION_NAME or "documents"
+            vector_collection = database.mongo_client[Config.DB_NAME][vector_collection_name]
+            
+            # Delete general vector chunks (flat structure)
+            vector_delete_result = vector_collection.delete_many({"source": filename})
+            print(f"Deleted {vector_delete_result.deleted_count} vector chunks for {filename}")
         
         return {"status": "success", "message": f"Document and associated data deleted for {filename}"}
 
@@ -922,20 +978,20 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    if database.faqs_db is None:
+    if database.svu_vectors_db is None:
         raise HTTPException(status_code=500, detail="Database not available")
         
     from bson import ObjectId
     try:
+        formatted_text = f"Question: {faq.question}\nAnswer: {faq.answer}"
         update_data = {
-            "question": faq.question,
-            "answer": faq.answer,
+            "text": formatted_text,
             "category": faq.category,
             "updated_at": datetime.utcnow(),
             "updated_by": current_user.username
         }
         
-        result = database.faqs_db.update_one(
+        result = database.svu_vectors_db.update_one(
             {"_id": ObjectId(faq_id)},
             {"$set": update_data}
         )
@@ -944,15 +1000,10 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
             raise HTTPException(status_code=404, detail="FAQ not found")
             
         # Mark parent document as untrained
-        updated_faq = database.faqs_db.find_one({"_id": ObjectId(faq_id)})
-        if updated_faq and updated_faq.get("source_urls"):
-            sources = updated_faq["source_urls"]
-            # If it's a string (old format maybe?), treat as single item list
-            if isinstance(sources, str):
-                sources = [sources]
-            
-            if sources:
-                source = sources[0]
+        updated_faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
+        if updated_faq:
+            source = updated_faq.get("source")
+            if source:
                 database.documents_db.update_one(
                     {"filename": source},
                     {"$set": {"is_trained": False, "last_modified": datetime.utcnow()}}

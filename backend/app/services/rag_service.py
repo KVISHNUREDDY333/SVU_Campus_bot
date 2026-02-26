@@ -397,75 +397,59 @@ Instructions:
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
-def _search_faqs_directly(query: str, limit: int = 5):
-    """Fallback: search FAQs collection using in-memory keyword matching.
-    Atlas Vector Search collections don't support $regex queries, so we fetch
-    a batch of docs and filter in-memory by keyword relevance."""
-    if database.faqs_db is None:
+# Removed _search_faqs_directly as faqs collection is consolidated into svu_vectors.
+# Fallback search is now handled by _search_vectors_directly which searches the primary collection.
+
+def _search_keywords_directly(query: str, limit: int = 5):
+    """Fallback keyword search using MongoDB raw queries."""
+    if database.svu_vectors_db is None:
         return ""
     try:
-        stop_words = {"the", "and", "for", "are", "was", "were", "has", "have", "had",
-                      "been", "will", "can", "may", "this", "that", "what", "which",
-                      "how", "who", "when", "where", "does", "with", "from", "about",
-                      "they", "them", "their", "there", "here", "also", "than", "then",
-                      "into", "over", "some", "such", "only", "very", "just", "more",
-                      "most", "other", "each", "every", "both", "few", "all", "any",
-                      "tell", "please", "could", "would", "should"}
-        keywords = list(set(
-            w.lower() for w in query.split()
-            if len(w) > 2 and w.lower() not in stop_words
-        ))
-        if not keywords:
+        import re
+        words = [w for w in query.split() if len(w) > 3]
+        if not words:
             return ""
         
-        # Fetch a larger batch and filter in-memory (Atlas doesn't support $regex)
-        batch = list(database.faqs_db.find().limit(500))
+        regex_pattern = "|".join(re.escape(word) for word in words)
         
-        if not batch:
+        results = list(database.svu_vectors_db.find(
+            {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE)}},
+            {"text": 1, "_id": 0}
+        ).limit(limit))
+        
+        if not results:
             return ""
-        
-        # Score each FAQ by keyword match count
-        scored = []
-        for faq in batch:
-            q_text = faq.get('question', '').lower()
-            a_text = faq.get('answer', '').lower()
-            combined = q_text + ' ' + a_text
-            score = sum(1 for kw in keywords if kw in combined)
-            if score > 0:
-                scored.append((score, faq))
-        
-        # Sort by relevance score, take top results
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top_results = [faq for _, faq in scored[:limit]]
-        
-        if not top_results:
-            return ""
-        
-        faq_context = "\n\n".join(
-            f"Question: {r['question']}\nAnswer: {r['answer']}" for r in top_results
-        )
-        logger.info(f"FAQ fallback found {len(top_results)} results for query: {query[:50]}")
-        return faq_context
+            
+        context = "\n\n".join(doc.get("text", "") for doc in results if "text" in doc)
+        logger.info(f"Keyword search found {len(results)} results for query: {query[:50]}")
+        return context
     except Exception as e:
-        logger.error(f"FAQ fallback search error: {e}")
+        logger.error(f"Keyword search error: {e}")
         return ""
 
 def _search_vectors_directly(query: str, limit: int = 10):
     """Search svu_vectors collection using embedding-based similarity search.
-    Uses the already-initialized vector_db (MongoDBAtlasVectorSearch) to perform
-    semantic search across the full 6700+ doc knowledge base."""
-    global vector_db
+    Uses similarity threshold filtering to ensure high confidence."""
     if not vector_db:
         return ""
     try:
-        # Use LangChain's similarity_search which handles embedding + Atlas query
-        results = vector_db.similarity_search(query, k=limit)
+        # Use similarity_search_with_score to filter out low-confidence matches.
+        # k is set slightly higher initialy since we might filter out some results.
+        results = vector_db.similarity_search_with_score(query, k=limit + 3)
         
         if not results:
             return ""
+            
+        # Threshold: 0.70 (cosine similarity)
+        valid_docs = [doc for doc, score in results if score >= 0.70]
+        valid_docs = valid_docs[:limit]
         
-        context = "\n\n".join(doc.page_content for doc in results if doc.page_content)
-        logger.info(f"Vectors similarity search found {len(results)} results for query: {query[:50]}")
+        if not valid_docs:
+            logger.info(f"Vector search found results, but none met the 0.70 threshold for query: {query[:50]}")
+            return ""
+        
+        context = "\n\n".join(doc.page_content for doc in valid_docs if doc.page_content)
+        logger.info(f"Vectors similarity search found {len(valid_docs)} valid results for query: {query[:50]}")
         return context
     except Exception as e:
         logger.error(f"Vectors similarity search error: {e}")
@@ -473,7 +457,7 @@ def _search_vectors_directly(query: str, limit: int = 10):
 
 
 async def generate_response(message: str, session_id: str, user_role: str, current_time: str, language: str = "en"):
-    if not retrieval_chain:
+    if not smart_llm:
         return "System initializing, please try again in a moment."
 
     user_role_key = user_role
@@ -497,71 +481,50 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         user_username = session_id
         
         trim_session_history(session_id, limit=10)
-        
         update_entities(session_id, message)
         entities_str = str(get_session_entities(session_id))
 
         try:
-            response_text = await retrieval_chain.ainvoke(
-                {
-                    "input": message, 
-                    "user_context": personal_context_str, 
-                    "current_time": current_time,
-                    "entities": entities_str,
-                    "language_instruction": lang_instruction,
-                    "user_username": user_username
-                },
-                config={"configurable": {"session_id": session_id}}
-            )
+            # 1. RETRIEVAL PHASE: Run both keyword & vector search concurrently
+            logger.info(f"[RAG] Processing query: {message[:50]}")
+            vector_context = _search_vectors_directly(message, limit=6)
+            keyword_context = _search_keywords_directly(message, limit=4)
             
-            # Ensure we always return a plain string
-            if isinstance(response_text, dict):
-                response_text = response_text.get("output", response_text.get("answer", str(response_text)))
-            if hasattr(response_text, 'content'):
-                response_text = response_text.content
-            response_text = str(response_text)
+            # Combine block avoiding duplicates basically
+            combined_context = "\n\n".join(filter(bool, [vector_context, keyword_context]))
             
-            # If RAG returned the "no relevant info" fallback, try direct search on both collections
+            # 2. GENERATION PHASE
+            master_prompt = f"""You are SVU CampusConnect AI, the highly intelligent official assistant for Sri Venkateswara University.
+
+Current Time: {current_time}
+User Context: {personal_context_str}
+Known Entities: {entities_str}
+Language Rule: {lang_instruction}
+
+Retrieve verified facts from the University Knowledge Base below:
+---
+{combined_context if combined_context.strip() else "No specific documents found in the database for this exact query."}
+---
+
+User Query: {message}
+
+Instructions to Deliver the Perfect Response:
+1. **Combine Local Data with Generative AI Intelligence**: Use everything in the Knowledge Base above as absolute truth. Then, use your generative reasoning to connect these facts smoothly, clearly, and logically to answer the user's completely.
+2. **Handle Empty Context Gracefully**: If the Knowledge Base is empty ("No specific documents found") AND you cannot confidently infer the answer based strictly on SVU domain boundaries, reply: "This specific information is not officially available on the Sri Venkateswara University website right now." Do NOT hallucinate.
+3. **Be Thorough, Formatting is Key**: Break down facts into bullet points if providing dates, rules, or lists. Make the output easy to read and extremely professional.
+4. **Tone**: Be extremely helpful, clear, and student-friendly. You are SVU's top digital ambassador.
+5. **DO NOT** mention "Based on the text below" or complain about context. Just give the answer seamlessly.
+"""
+            
+            # Execute with our smartest available model
+            response = await smart_llm.ainvoke(master_prompt)
+            response_text = response.content if hasattr(response, 'content') else str(response)
+            
+            # Fallback check
             no_info_phrases = ["no relevant information", "not officially available", "not available at the moment", "no information was found"]
-            is_no_info = any(phrase in response_text.lower() for phrase in no_info_phrases) or len(response_text.strip()) < 20
-            
-            if is_no_info:
-                # Search svu_vectors first (larger, richer dataset: 6700+ docs)
-                vector_context = _search_vectors_directly(message, limit=8)
-                # Also search faqs collection (2500+ docs)
-                faq_context = _search_faqs_directly(message, limit=5)
-                # Merge results from both sources
-                combined_context = "\n\n".join(filter(None, [vector_context, faq_context]))
+            if len(combined_context.strip()) < 10 and any(p in response_text.lower() for p in no_info_phrases):
+                logger.warning(f"[RAG] No context found for: {message[:50]}")
                 
-                if combined_context and len(combined_context.strip()) > 20:
-                    logger.info(f"RAG returned no context. Using combined fallback (vectors: {len(vector_context)} chars, faqs: {len(faq_context)} chars).")
-                    fallback_prompt = f"""You are SVU CampusConnect AI, the official assistant for Sri Venkateswara University.
-
-Language: {lang_instruction}
-
-The following FAQ entries were retrieved from the university knowledge base:
----
-{combined_context}
----
-
-User Question: {message}
-
-Instructions:
-1. Identify which FAQ entries above are MOST relevant to the user's question.
-2. Synthesize a clear, well-structured, and student-friendly answer from the relevant entries.
-3. If multiple FAQs partially answer the question, combine their information into one coherent response.
-4. Present key facts using bullet points or numbered lists where appropriate.
-5. If none of the FAQs contain relevant information, respond with: "This information is not officially available on the Sri Venkateswara University website at the moment."
-6. Do NOT add any information beyond what is provided in the FAQ data above.
-7. Be concise, accurate, and professional."""
-                    try:
-                        fallback_response = await smart_llm.ainvoke(fallback_prompt)
-                        if hasattr(fallback_response, 'content'):
-                            return fallback_response.content
-                        return str(fallback_response)
-                    except Exception as fb_err:
-                        logger.error(f"Combined fallback LLM error: {fb_err}")
-            
             return response_text
             
         except Exception as e:
@@ -578,46 +541,33 @@ Instructions:
         raise e
 
 async def train_on_all_faqs():
-    """Bulk-ingest ALL FAQs from the faqs collection into the vector store."""
-    if not vector_db:
-        setup_rag_chain()
-        if not vector_db:
-            raise Exception("Vector DB not initialized")
-    
-    if database.faqs_db is None:
-        return {"trained": 0, "message": "No FAQ database available"}
-    
-    from langchain.schema import Document
-    
-    all_faqs = list(database.faqs_db.find())
-    if not all_faqs:
-        return {"trained": 0, "message": "No FAQs found"}
-    
-    docs_to_ingest = []
-    for faq in all_faqs:
-        content = f"Question: {faq['question']}\nAnswer: {faq['answer']}"
-        metadata = {
-            "source": faq.get("source_urls", "manual") if isinstance(faq.get("source_urls"), str) else "manual",
-            "type": "faq",
-            "faq_id": str(faq["_id"]),
-            "category": faq.get("category", "General")
-        }
-        docs_to_ingest.append(Document(page_content=content, metadata=metadata))
-    
-    try:
-        batch_size = 50
-        total_ingested = 0
-        for i in range(0, len(docs_to_ingest), batch_size):
-            batch = docs_to_ingest[i:i + batch_size]
-            vector_db.add_documents(batch)
-            total_ingested += len(batch)
-            logger.info(f"Ingested FAQ batch {i//batch_size + 1}: {len(batch)} docs")
+    """Ensure all FAQs in svu_vectors have embeddings."""
+    if database.svu_vectors_db is None or not embeddings:
+        return {"trained": 0, "message": "Database or embeddings not available"}
         
-        logger.info(f"Successfully ingested {total_ingested} FAQs into vector store")
-        return {"trained": total_ingested, "message": f"Ingested {total_ingested} FAQs"}
+    try:
+        # Find FAQs missing embeddings
+        query = {"type": "faq", "embedding": {"$exists": False}}
+        missing_faqs = list(database.svu_vectors_db.find(query))
+        
+        trained = 0
+        for faq in missing_faqs:
+            text = faq.get("text", "")
+            if text:
+                try:
+                    embedding = embeddings.embed_query(text)
+                    database.svu_vectors_db.update_one(
+                        {"_id": faq["_id"]},
+                        {"$set": {"embedding": embedding}}
+                    )
+                    trained += 1
+                except Exception as e:
+                    logger.error(f"Error generating embedding during bulk train: {e}")
+                    
+        return {"trained": trained, "message": f"Generated embeddings for {trained} FAQs."}
     except Exception as e:
-        logger.error(f"Bulk FAQ ingestion error: {e}")
-        raise e
+        logger.error(f"Bulk train error: {e}")
+        return {"trained": 0, "message": f"Error: {str(e)}"}
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
@@ -636,7 +586,7 @@ async def ingest_url(url: str, store_vectors: bool = True):
         
         full_text = "\n\n".join([d.page_content for d in docs])
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
         splits = text_splitter.split_documents(docs)
         
         if store_vectors and vector_db:
@@ -691,7 +641,7 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
             page.metadata["user_id"] = user_id
             page.metadata["source"] = filename 
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
         
         if full_text.strip() and not pages:
              from langchain.schema import Document
@@ -725,7 +675,7 @@ async def ingest_text(text: str, metadata: dict = None):
         
         doc = Document(page_content=text, metadata=metadata or {})
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
         splits = text_splitter.split_documents([doc])
         
         vector_db.add_documents(splits)
@@ -734,33 +684,63 @@ async def ingest_text(text: str, metadata: dict = None):
         logger.error(f"Text Ingestion Error: {e}")
         raise e
 
-async def ingest_faq(question: str, answer: str, source: str = "manual", faq_id: str = None):
+async def ingest_faq(question: str, answer: str, category: str = "General", source: str = "manual", faq_id: str = None):
     """
-    Ingests a single FAQ into the vector database.
-    Does NOT split text (FAQs are usually detailed but atomic).
-    Uses faq_id to prevent duplicates if provided.
+    Ingests a single FAQ into the svu_vectors collection with a flat structure.
+    Generates embeddings manually and inserts directly to ensure consistency with admin management.
     """
-    if not vector_db:
-         setup_rag_chain()
-         if not vector_db:
-             raise Exception("Vector DB not initialized")
-    
+    if database.svu_vectors_db is None:
+        logger.error("Database not available for FAQ ingestion")
+        return False
+        
     try:
-        from langchain.schema import Document
+        import re
+        from bson import ObjectId
+        # Check for duplicates based on exact or highly similar question text
+        existing_faq = database.svu_vectors_db.find_one({
+            "type": "faq",
+            "text": {"$regex": f"Question:\\s*{re.escape(question)}", "$options": "i"}
+        })
         
+        if existing_faq and not faq_id:
+            logger.info(f"Skipping duplicate FAQ: {question[:50]}")
+            return False
+
         content = f"Question: {question}\nAnswer: {answer}"
-        metadata = {"source": source, "type": "faq", "faq_id": faq_id}
         
-        doc = Document(page_content=content, metadata=metadata)
+        # Generate embedding
+        embedding = None
+        if embeddings:
+            try:
+                embedding = embeddings.embed_query(content)
+            except Exception as e:
+                logger.error(f"Error generating embedding for FAQ: {e}")
         
-        ids = [faq_id] if faq_id else None
+        # Prepare flat document
+        faq_doc = {
+            "text": content,
+            "source": source,
+            "type": "faq",
+            "faq_id": faq_id or str(ObjectId()),
+            "category": category,
+            "created_at": datetime.utcnow()
+        }
         
-        vector_db.add_documents([doc], ids=ids)
+        if embedding:
+            faq_doc["embedding"] = embedding
+            
+        if faq_id:
+            # Upsert by faq_id
+            database.svu_vectors_db.update_one(
+                {"faq_id": faq_id},
+                {"$set": faq_doc},
+                upsert=True
+            )
+        else:
+            database.svu_vectors_db.insert_one(faq_doc)
+            
         return True
     except Exception as e:
-        if "E11000" in str(e):
-             logger.info(f"FAQ {faq_id} already exists. Skipping.")
-             return True
         logger.error(f"FAQ Ingestion Error: {e}")
         return False
 

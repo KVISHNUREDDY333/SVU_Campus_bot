@@ -95,25 +95,28 @@ async def resolve_ticket(ticket_id: str, update: TicketUpdate, current_user: Use
         )
 
         if update.save_as_faq and update.resolution:
-             new_faq = {
-                "question": ticket['subject'],
-                "answer": update.resolution,
-                "category": ticket.get('category', 'General'),
-                "created_at": datetime.utcnow(),
-                "source": "ticket_resolution"
-             }
-             if database.faqs_db is not None:
-                 result = database.faqs_db.insert_one(new_faq)
-                 
-                 try:
-                     from ..services.rag_service import rag_service
-                     faq_text = f"Question: {new_faq['question']}\nAnswer: {new_faq['answer']}"
-                     rag_service.add_document(
-                         faq_text, 
-                         metadata={"id": str(result.inserted_id), "type": "faq", "category": new_faq['category']}
+             try:
+                 from ..services.rag_service import ingest_faq
+                 # Insert directly into svu_vectors
+                 faq_id = str(ObjectId())
+                 await ingest_faq(
+                     question=ticket['subject'],
+                     answer=update.resolution,
+                     source="ticket_resolution",
+                     faq_id=faq_id
+                 )
+                 # Add metadata in the same collection
+                 if database.svu_vectors_db is not None:
+                     database.svu_vectors_db.update_one(
+                         {"metadata.faq_id": faq_id} if not ObjectId.is_valid(faq_id) else {"_id": ObjectId(faq_id)},
+                         {"$set": {
+                             "type": "faq",
+                             "category": ticket.get('category', 'General'),
+                             "created_at": datetime.utcnow()
+                         }}
                      )
-                 except Exception as e:
-                     print(f"RAG Sync Error: {e}")
+             except Exception as e:
+                 print(f"Error saving ticket as FAQ to svu_vectors: {e}")
 
         # Trigger notification to the ticket owner (notify on any status change)
         owner = ticket.get("created_by")

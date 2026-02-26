@@ -77,8 +77,6 @@ async def lifespan(app: FastAPI):
              database.tickets_db.create_index([("created_at", -1)])
         if database.documents_db is not None:
              database.documents_db.create_index([("uploaded_at", -1)])
-        if database.faqs_db is not None:
-             database.faqs_db.create_index([("category", 1)])
         if database.suggested_faqs_db is not None:
              database.suggested_faqs_db.create_index([("created_at", -1)])
         if database.notifications_db is not None:

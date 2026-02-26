@@ -9,6 +9,9 @@ const sendBtn = document.getElementById('send-btn');
 const welcomeScreen = document.getElementById('welcome-screen');
 const typingIndicator = document.getElementById('typing-indicator');
 
+// Global state for chat active request
+let currentChatController = null;
+
 // Mobile Sidebar Toggle
 function toggleSidebar(forceClose = null) {
     const sidebar = document.getElementById('sidebar');
@@ -677,7 +680,30 @@ async function appendQuick(text, preDefinedResponse = null) {
     sendMessage();
 }
 
+function setChatButtonState(isFetching) {
+    if (!sendBtn) return;
+    if (isFetching) {
+        // Change to a stop icon and red hover state to imply cancellation
+        sendBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+        sendBtn.classList.add('stop-state');
+    } else {
+        // Revert to arrow icon
+        sendBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
+        sendBtn.classList.remove('stop-state');
+    }
+}
+
 async function sendMessage() {
+    // If a request is active, pressing the button acts as "Stop"
+    if (currentChatController) {
+        console.warn("User cancelled generation early.");
+        currentChatController.abort();
+        currentChatController = null;
+        hideTypingIndicator();
+        setChatButtonState(false);
+        return;
+    }
+
     const text = userInput.value?.trim();
     if (!text) return;
 
@@ -687,12 +713,15 @@ async function sendMessage() {
     }
 
     // Add user message
-    // Add user message
     appendMessage(text, 'user', true);
     userInput.value = '';
 
     // Show typing indicator
     showTypingIndicator();
+    
+    // Set UI to cancel mode and instantiate abort controller
+    currentChatController = new AbortController();
+    setChatButtonState(true);
 
     // Scroll to bottom
     scrollToBottom();
@@ -715,7 +744,8 @@ async function sendMessage() {
                 message: text,
                 session_id: sessionId,
                 language: document.getElementById('lang-select')?.value || 'en'
-            })
+            }),
+            signal: currentChatController.signal
         });
 
         if (response.status === 401) {
@@ -744,7 +774,15 @@ async function sendMessage() {
 
     } catch (err) {
         hideTypingIndicator();
-        appendMessage("I apologize, but I'm unable to reach the server at the moment. Please try again later.", 'bot');
+        if (err.name === 'AbortError') {
+             appendMessage("Request explicitly cancelled by user.", 'bot', false);
+             console.log("Fetch aborted gracefully.");
+        } else {
+             appendMessage("I apologize, but I'm unable to reach the server at the moment. Please try again later.", 'bot');
+        }
+    } finally {
+        currentChatController = null;
+        setChatButtonState(false);
     }
 
     scrollToBottom();
@@ -1304,7 +1342,13 @@ function renderCharts(roleData, sentimentData) {
 // Chat Logic
 if (userInput) {
     userInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") sendMessage();
+        // Prevent stacking requests on enter key if already generating
+        if (e.key === "Enter") {
+             e.preventDefault();
+             if (!currentChatController) {
+                 sendMessage();
+             }
+        }
     });
 }
 
