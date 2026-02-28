@@ -427,6 +427,7 @@ function saveSession(data) {
     ACCESS_TOKEN = data.access_token;
     USER_ROLE = data.role;
     sessionStorage.setItem('access_token', ACCESS_TOKEN);
+    localStorage.setItem('access_token', ACCESS_TOKEN);
     sessionStorage.setItem('user_role', USER_ROLE);
     sessionStorage.setItem('username', data.username);
     sessionStorage.setItem('full_name', data.full_name || data.username);
@@ -456,6 +457,7 @@ function saveSession(data) {
 
 function logout() {
     sessionStorage.removeItem('access_token');
+    localStorage.removeItem('access_token');
     sessionStorage.removeItem('user_role');
     sessionStorage.removeItem('username');
     sessionStorage.removeItem('full_name');
