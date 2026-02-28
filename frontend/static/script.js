@@ -5666,7 +5666,7 @@ async function loadTrainStatus() {
                     <td style="text-align: center"><span class="${statusClass}">${statusText}</span></td>
                     <td style="text-align: center; font-size: 12px; color: var(--text-secondary)">${lastTrained}</td>
                     <td style="text-align: right">
-                        <button class="speech-btn" onclick="trainBrain('${doc.id}')" title="Train on this document" 
+                        <button class="speech-btn" onclick="trainBrain('${doc.id}', event)" title="Train on this document" 
                                 style="width: 28px; height: 28px; background: ${doc.is_trained ? 'rgba(0,0,0,0.05)' : 'var(--accent-color)'}; color: ${doc.is_trained ? 'var(--text-secondary)' : 'white'}">
                             <i class="fa-solid fa-brain"></i>
                         </button>
@@ -5700,9 +5700,13 @@ function filterTrainDocs() {
     });
 }
 
-async function trainBrain(id) {
+async function trainBrain(id, event) {
     if (!ACCESS_TOKEN) return;
     
+    const btn = event ? (event.currentTarget || event.target.closest('button')) : null;
+    const icon = btn ? btn.querySelector('i') : null;
+    
+    if (icon) icon.classList.add('fa-spin');
     if(typeof showStatusPopup === 'function') showStatusPopup("Activating Brain Cells...");
     
     try {
@@ -5727,6 +5731,8 @@ async function trainBrain(id) {
     } catch (e) {
         if(typeof showStatusPopup === 'function') showStatusPopup("Connection Error");
         console.error("Train Brain Network Error:", e);
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
     }
 }
 

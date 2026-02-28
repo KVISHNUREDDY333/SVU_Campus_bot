@@ -1,0 +1,593 @@
+<section
+          id="admin-section"
+          class="content-section"
+          style="display: none"
+        >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">System Configuration</h3>
+            </div>
+            <button id="admin-refresh-all" class="btn-primary" onclick="refreshAllAdminData()" style="padding: 8px 16px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+          </div>
+          <div class="admin-content">
+            <!-- Top Row: Config & Health -->
+            <div
+              class="grid-container"
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+                gap: 24px;
+              "
+            >
+              <!-- Configuration Card -->
+
+              <!-- System Health & Governance (Moved) -->
+              <div class="settings-card">
+                <div class="card-header">
+                  <div
+                    class="card-icon"
+                    style="
+                      background: linear-gradient(135deg, #10b981, #059669);
+                    "
+                  >
+                    <i class="fa-solid fa-heart-pulse"></i>
+                  </div>
+                  <h4>System Health & Governance</h4>
+                  <button
+                    class="btn-primary"
+                    style="
+                      margin-left: auto;
+                      background: #ef4444;
+                      font-size: 12px;
+                      padding: 6px 12px;
+                    "
+                    onclick="clearCache()"
+                  >
+                    <i class="fa-solid fa-trash-can"></i> Cache
+                  </button>
+                </div>
+                <div
+                  class="health-grid"
+                  style="
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 12px;
+                    margin-top: 15px;
+                  "
+                >
+                  <div class="health-item">
+                    <span style="font-size: 0.85rem">API Gateway</span>
+                    <span class="badge success" id="health-api">Healthy</span>
+                  </div>
+                  <div class="health-item">
+                    <span style="font-size: 0.85rem">Vector DB</span>
+                    <span class="badge success" id="health-vector"
+                      >Connected</span
+                    >
+                  </div>
+                  <div class="health-item">
+                    <span style="font-size: 0.85rem">LLM Service</span>
+                    <span class="badge success" id="health-llm">Online</span>
+                  </div>
+                  <div class="health-item">
+                    <span style="font-size: 0.85rem">MongoDB</span>
+                    <span class="badge success" id="health-mongo"
+                      >Connected</span
+                    >
+                  </div>
+                </div>
+                <div
+                  style="
+                    margin-top: 20px;
+                    border-top: 1px solid var(--border-color);
+                    padding-top: 15px;
+                  "
+                >
+                  <button
+                    class="btn-secondary"
+                    style="width: 100%; text-align: center; font-size: 0.9rem"
+                    onclick="reindexData()"
+                  >
+                    <i class="fa-solid fa-sync"></i> Re-index Knowledge Base
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trending Queries Management -->
+
+            <!-- Trending Queries Management -->
+            <div class="settings-card">
+              <div class="setting-card-header" style="display: flex; align-items: center; padding: 20px 25px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border-color);">
+                <div class="icon-wrapper" style="width: 45px; height: 45px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-right: 15px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                  <i class="fa-solid fa-fire" style="color: white; font-size: 20px;"></i>
+                </div>
+                <div class="setting-info" style="flex: 1;">
+                  <h3 style="margin: 0;">Trending Queries Setup</h3>
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn-secondary" onclick="loadAdminTrending()" title="Refresh List" style="padding: 10px 18px; border-radius: 10px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                      <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn-primary" onclick="openAddTrendingModal()" style="padding: 10px 22px; border-radius: 10px; font-size: 14px; font-weight: 600; background: linear-gradient(135deg, #14b8a6, #0d9488); border: none; box-shadow: 0 4px 10px rgba(20, 184, 166, 0.3);">
+                      <i class="fa-solid fa-plus" style="margin-right: 6px;"></i> Add Query
+                    </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <div class="trending-list" id="admin-trending-list" style="min-width: 600px;">
+                  <!-- Dynamic Content -->
+                </div>
+              </div>
+              <div id="trending-view-more" style="text-align: center; margin-top: 10px; display: none;">
+                  <span class="text-link" onclick="toggleTrendingView()" style="cursor: pointer; color: var(--accent-color); font-weight: 500;">View All</span>
+              </div>
+            </div>
+
+            <!-- User Management Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="
+                    background: linear-gradient(135deg, #ec4899, #db2777);
+                    box-shadow: 0 4px 12px rgba(236, 72, 153, 0.3);
+                  "
+                >
+                  <i class="fa-solid fa-users-gear"></i>
+                </div>
+                <h4>User Management</h4>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <div class="admin-search-container" style="margin: 0; width: 200px">
+                    <input type="text" id="user-search-input" placeholder="Search users..." class="admin-search-input" oninput="filterAdminUsers()" style="padding: 8px 12px; font-size: 13px">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                  </div>
+                  <button class="btn-primary" onclick="loadUsers()" style="font-size: 12px; padding: 8px 16px">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary" onclick="openAddUserModal()" style="font-size: 13px; padding: 8px 16px">
+                    <i class="fa-solid fa-user-plus"></i> Add User
+                  </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table"
+                  style="width: 100%; border-collapse: collapse; min-width: 600px;"
+                >
+                  <thead>
+                    <tr>
+                      <th style="padding: 12px; text-align: left">User</th>
+                      <th style="padding: 12px; text-align: left">Role</th>
+                      <th style="padding: 12px; text-align: left">Joined</th>
+                      <th style="padding: 12px; text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body">
+                    <tr>
+                      <td colspan="4" style="text-align: center; padding: 20px">
+                        Loading users...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Knowledge Base Management -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="
+                    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+                  "
+                >
+                  <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h4>Knowledge Base</h4>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <button class="btn-primary" onclick="loadDocuments()" style="font-size: 12px; padding: 8px 16px">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <div
+                    class="admin-search-container"
+                    style="margin: 0; width: 250px"
+                  >
+                    <input
+                      type="text"
+                      id="admin-search-input"
+                      placeholder="Search docs..."
+                      class="admin-search-input"
+                      style="padding: 8px 12px; font-size: 13px"
+                    />
+                    <i
+                      class="fa-solid fa-magnifying-glass admin-search-icon"
+                      style="top: 50%; transform: translateY(-50%); right: 10px"
+                    ></i>
+                  </div>
+
+                  <button
+                    class="btn-submit"
+                    onclick="openAllFaqsModal()"
+                    style="
+                      padding: 10px 18px;
+                      font-size: 13px;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+                      box-shadow: 0 4px 10px rgba(139, 92, 246, 0.25);
+                    "
+                  >
+                    <i class="fa-solid fa-list-check"></i> View All FAQs
+                  </button>
+                  <button
+                    class="btn-submit"
+                    onclick="openUploadModal()"
+                    style="
+                      padding: 10px 18px;
+                      font-size: 13px;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      background: #ef4444;
+                      box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25);
+                    "
+                  >
+                    <i class="fa-solid fa-file-pdf"></i> Upload PDF
+                  </button>
+                  <button
+                    class="btn-submit"
+                    onclick="openUrlModal()"
+                    style="
+                      padding: 10px 18px;
+                      font-size: 13px;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      background: #3b82f6;
+                      box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25);
+                    "
+                  >
+                    <i class="fa-solid fa-link"></i> Add URL
+                  </button>
+                  <button
+                    class="btn-submit"
+                    onclick="openTextModal()"
+                    style="
+                      padding: 10px 18px;
+                      font-size: 13px;
+                      display: flex;
+                      align-items: center;
+                      gap: 8px;
+                      background: var(--glass-bg);
+                      border: 1px solid var(--border-color);
+                      color: var(--text-primary);
+                      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+                    "
+                  >
+                    <i class="fa-solid fa-file-lines"></i> Add Text
+                  </button>
+                </div>
+              </div>
+
+              <div class="documents-list-container responsive-scroll-container">
+                <table class="documents-table">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Document Name</th>
+                      <th style="text-align: left">Type</th>
+                      <th style="text-align: center">Chunks</th>
+                      <th style="text-align: center">FAQs</th>
+                      <th style="text-align: center">Uploaded By</th>
+                      <th style="text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="documents-table-body">
+                    <tr>
+                      <td
+                        colspan="6"
+                        style="
+                          text-align: center;
+                          padding: 30px;
+                          color: var(--text-secondary);
+                        "
+                      >
+                        <i
+                          class="fa-solid fa-spinner fa-spin"
+                          style="margin-right: 8px"
+                        ></i>
+                        Loading knowledge base...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Train The Brain Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div class="card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                  <i class="fa-solid fa-brain"></i>
+                </div>
+                <h4>Train The Brain</h4>
+                <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
+                    <div class="admin-search-container" style="margin: 0; width: 220px">
+                        <input type="text" id="brain-search-input" placeholder="Search documents..." class="admin-search-input" oninput="filterTrainDocs()" style="padding: 8px 12px; font-size: 13px">
+                        <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                    </div>
+                    <button class="btn-primary" onclick="loadTrainStatus()" style="font-size: 12px; padding: 8px 16px; background: #6366f1; border: 1px solid #4f46e5; color: white;">
+                        <i class="fa-solid fa-rotate"></i> Refresh
+                    </button>
+                    <button class="btn-primary" onclick="trainAllBrain(event)" style="background: var(--accent-color); font-size: 13px; padding: 8px 16px;">
+                        <i class="fa-solid fa-brain"></i> Train Main Brain
+                    </button>
+                </div>
+              </div>
+              <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
+                Consolidate Knowledge Base data into the LLM's active reasoning. Train only on new or modified data.
+              </p>
+
+              <div class="documents-list-container responsive-scroll-container" style="max-height: 400px; overflow-y: auto;">
+                <table class="documents-table">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Document Name</th>
+                      <th style="text-align: center">Type</th>
+                      <th style="text-align: center">FAQs</th>
+                      <th style="text-align: center">Status</th>
+                      <th style="text-align: center">Last Trained</th>
+                      <th style="text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="brain-training-body">
+                    <tr>
+                      <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-secondary);">
+                        <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px"></i> Loading training status...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- System Logs -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="
+                    background: linear-gradient(135deg, #64748b, #475569);
+                    box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+                  "
+                >
+                  <i class="fa-solid fa-terminal"></i>
+                </div>
+                <h4>System Logs</h4>
+              </div>
+              <div
+                id="system-logs-container"
+                style="
+                  background: #1e293b;
+                  color: #cbd5e1;
+                  padding: 16px;
+                  border-radius: 12px;
+                  font-family: &quot;Fira Code&quot;, monospace;
+                  font-size: 11px;
+                  height: 180px;
+                  overflow-y: auto;
+                  white-space: pre-wrap;
+                  line-height: 1.5;
+                "
+              >
+                <div style="color: #64748b; text-align: center; padding-top: 60px;">
+                  Waiting for system events...
+                </div>
+              </div>
+            </div>
+
+            <!-- Academic Calendar Management -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="background: linear-gradient(135deg, #ec4899, #db2777)"
+                >
+                  <i class="fa-solid fa-calendar-check"></i>
+                </div>
+                <h4>Academic Calendar Management</h4>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <div class="admin-search-container" style="margin: 0; width: 200px">
+                    <input type="text" id="calendar-search-input" placeholder="Search events..." class="admin-search-input" oninput="filterAdminCalendar()" style="padding: 8px 12px; font-size: 13px">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                  </div>
+                  <button class="btn-primary" onclick="loadCalendarAdmin()" style="font-size: 12px; padding: 8px 16px">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary" onclick="openCalendarModal()" style="font-size: 13px; padding: 8px 16px">
+                    <i class="fa-solid fa-plus"></i> Add Event
+                  </button>
+                </div>
+              </div>
+              <div
+                class="calendar-admin-list responsive-scroll-container"
+                id="calendar-admin-list"
+                style="margin-top: 20px"
+              >
+                <table class="documents-table" style="min-width: 600px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Date</th>
+                      <th style="text-align: left">Event</th>
+                      <th style="text-align: left">Type</th>
+                      <th style="text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="calendar-admin-table-body">
+                    <tr>
+                      <td colspan="4" style="text-align: center; padding: 20px">
+                        Loading events...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Location Management Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div class="card-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb)">
+                  <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <h4>Location Management</h4>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <div class="admin-search-container" style="margin: 0; width: 200px">
+                    <input type="text" id="location-search-input" placeholder="Search locations..." class="admin-search-input" oninput="filterAdminLocations()" style="padding: 8px 12px; font-size: 13px">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                  </div>
+                  <button class="btn-primary" onclick="fetchLocations()" style="font-size: 12px; padding: 8px 16px">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary" onclick="openLocationModal()" style="font-size: 13px; padding: 8px 16px">
+                    <i class="fa-solid fa-plus"></i> Add Location
+                  </button>
+                </div>
+              </div>
+              <div class="documents-list-container responsive-scroll-container" style="margin-top: 20px">
+                <table class="documents-table" style="min-width: 600px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Location Name</th>
+                      <th style="text-align: left">Category</th>
+                      <th style="text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="locations-admin-table-body">
+                    <tr>
+                      <td colspan="3" style="text-align: center; padding: 20px">
+                        Loading locations...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- View More Toggle -->
+              <div id="location-admin-view-toggle" style="text-align: center; margin-top: 15px; display: none;">
+                <button class="btn-secondary" onclick="toggleAdminLocationsView()" style="font-size: 13px; padding: 8px 20px;">
+                  <span id="location-view-btn-text">View More</span>
+                  <i id="location-view-btn-icon" class="fa-solid fa-chevron-down" style="margin-left: 8px;"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Support Tickets Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="background: linear-gradient(135deg, #f59e0b, #d97706)"
+                >
+                  <i class="fa-solid fa-ticket"></i>
+                </div>
+                <h4>Student Support Tickets</h4>
+                <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <button class="btn-primary" onclick="loadAllTickets()" style="font-size: 12px; padding: 8px 16px">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table"
+                  style="width: 100%; border-collapse: collapse; margin-top: 15px; min-width: 700px;"
+                >
+                  <thead>
+                    <tr>
+                      <th style="text-align: left; padding: 12px">ID</th>
+                      <th style="text-align: left; padding: 12px">Subject</th>
+                      <th style="text-align: left; padding: 12px">Category</th>
+                      <th style="text-align: left; padding: 12px">User</th>
+                      <th style="text-align: center; padding: 12px">Status</th>
+                      <th style="text-align: right; padding: 12px">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tickets-table-body">
+                    <tr>
+                      <td colspan="6" style="text-align: center; padding: 20px">
+                        Loading tickets...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Suggested FAQs Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="
+                    background: linear-gradient(135deg, #fbbf24, #d97706);
+                    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+                  "
+                >
+                  <i class="fa-solid fa-lightbulb"></i>
+                </div>
+                <div style="flex: 1; display: flex; align-items: center; gap: 15px;">
+                  <div>
+                    <h4>Community Contributions</h4>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                      Review and approve user-suggested FAQs
+                    </p>
+                  </div>
+                  <button class="btn-primary" onclick="loadSuggestedFAQs()" style="font-size: 12px; padding: 8px 16px; margin-left: auto;">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="documents-list-container responsive-scroll-container">
+                <table class="documents-table" style="min-width: 600px;">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Suggested Content</th>
+                      <th style="text-align: left">Contributor</th>
+                      <th style="text-align: right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="suggested-faqs-table-body">
+                    <tr>
+                      <td
+                        colspan="3"
+                        style="
+                          text-align: center;
+                          padding: 40px;
+                          color: var(--text-secondary);
+                        "
+                      >
+                        <i
+                          class="fa-solid fa-check-circle"
+                          style="
+                            font-size: 24px;
+                            display: block;
+                            margin-bottom: 12px;
+                            color: #10b981;
+                            opacity: 0.5;
+                          "
+                        ></i>
+                        No pending suggestions. All caught up!
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>

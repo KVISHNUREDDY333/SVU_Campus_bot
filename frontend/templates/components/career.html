@@ -1,0 +1,306 @@
+<section
+          id="career-section"
+          class="content-section"
+          style="display: none"
+        >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Career & Placement Hub</h3>
+            </div>
+          </div>
+          <div
+            class="career-container"
+            style="padding: 24px; max-width: 900px; margin: 0 auto"
+          >
+            <!-- Career Tabs -->
+            <div
+              class="auth-tabs"
+              style="margin-bottom: 20px; justify-content: flex-start"
+            >
+              <button
+                id="tab-resume-checker"
+                class="auth-tab active"
+                onclick="switchCareerTab('checker')"
+              >
+                Resume Checker
+              </button>
+              <button
+                id="tab-resume-maker"
+                class="auth-tab"
+                onclick="switchCareerTab('maker')"
+              >
+                Resume Maker
+              </button>
+            </div>
+
+            <!-- Resume Checker View -->
+            <div id="resume-checker-view" class="settings-card">
+              <div class="card-header">
+                <div class="card-icon" style="background: #6366f1">
+                  <i class="fa-solid fa-file-invoice"></i>
+                </div>
+                <h4>AI Resume Checker</h4>
+              </div>
+              <div class="form-group" style="margin-bottom: 15px">
+                <label
+                  style="
+                    display: block;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: var(--text-secondary);
+                    margin-bottom: 8px;
+                  "
+                  >Target Job Role (Optional)</label
+                >
+                <input
+                  type="text"
+                  id="resume-target-role"
+                  placeholder="e.g., Software Engineer, Data Analyst..."
+                  style="
+                    width: 100%;
+                    padding: 12px;
+                    border-radius: 12px;
+                    border: 1px solid var(--border-color);
+                    background: var(--glass-bg);
+                    color: var(--text-primary);
+                    outline: none;
+                  "
+                />
+              </div>
+              <p
+                style="
+                  font-size: 13px;
+                  color: var(--text-secondary);
+                  margin: 10px 0;
+                "
+              >
+                Paste your resume text below for instant feedback based on SVU
+                guidelines and industry standards.
+              </p>
+              <textarea
+                id="resume-text-input"
+                rows="12"
+                placeholder="Paste resume content here..."
+                style="
+                  width: 100%;
+                  padding: 15px;
+                  border-radius: 12px;
+                  border: 1px solid var(--border-color);
+                  background: var(--glass-bg);
+                  color: var(--text-primary);
+                  margin-bottom: 15px;
+                "
+              ></textarea>
+              <button
+                class="btn-primary"
+                onclick="checkResume()"
+                style="width: 100%"
+              >
+                <i class="fa-solid fa-microscope"></i> Analyze Resume
+              </button>
+              <div
+                id="resume-feedback"
+                style="
+                  margin-top: 20px;
+                  font-size: 14px;
+                  line-height: 1.6;
+                  color: var(--text-primary);
+                "
+              ></div>
+            </div>
+
+            <!-- Resume Maker View -->
+            <div
+              id="resume-maker-view"
+              class="settings-card"
+              style="display: none"
+            >
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="background: var(--gradient-primary)"
+                >
+                  <i class="fa-solid fa-pen-nib"></i>
+                </div>
+                <h4>AI Resume Maker</h4>
+              </div>
+              <p
+                style="
+                  color: var(--text-secondary);
+                  font-size: 13px;
+                  margin-bottom: 20px;
+                "
+              >
+                Fill in the details to generate a professional, ATS-friendly
+                resume prototype.
+              </p>
+
+              <div
+                style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px"
+              >
+                <div class="form-group">
+                  <label>Full Name</label>
+                  <input
+                    type="text"
+                    id="maker-fullname"
+                    class="search-input"
+                    placeholder="John Doe"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    id="maker-email"
+                    class="search-input"
+                    placeholder="john@example.com"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Phone Number</label>
+                  <input
+                    type="text"
+                    id="maker-phone"
+                    class="search-input"
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>LinkedIn URL</label>
+                  <input
+                    type="text"
+                    id="maker-linkedin"
+                    class="search-input"
+                    placeholder="linkedin.com/in/johndoe"
+                  />
+                </div>
+              </div>
+
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: 2fr 1fr;
+                  gap: 15px;
+                  margin-top: 15px;
+                "
+              >
+                <div class="form-group">
+                  <label>Highest Qualification</label>
+                  <input
+                    type="text"
+                    id="maker-qualification"
+                    class="search-input"
+                    placeholder="B.Tech Computer Science"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Percentage / CGPA</label>
+                  <input
+                    type="text"
+                    id="maker-percentage"
+                    class="search-input"
+                    placeholder="8.5 CGPA"
+                  />
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Target Job Role</label>
+                <input
+                  type="text"
+                  id="maker-role"
+                  class="search-input"
+                  placeholder="e.g., Software Engineer, Data Scientist"
+                />
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Experience Level</label>
+                <select
+                  id="maker-level"
+                  class="custom-select"
+                  style="width: 100%; padding: 12px; border-radius: 12px"
+                  title="Select Experience Level"
+                >
+                  <option value="Beginner">Beginner (Student / Fresher)</option>
+                  <option value="Intermediate">Intermediate (1-3 years)</option>
+                  <option value="Professional">Professional (3+ years)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Technical Skills (Comma separated)</label>
+                <input
+                  type="text"
+                  id="maker-skills-tech"
+                  class="search-input"
+                  placeholder="React, Node.js, Python, SQL, MongoDB"
+                />
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Coding Skills (Comma separated)</label>
+                <input
+                  type="text"
+                  id="maker-skills-coding"
+                  class="search-input"
+                  placeholder="Java, C++, Python, JavaScript"
+                />
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Soft Skills</label>
+                <input
+                  type="text"
+                  id="maker-skills-soft"
+                  class="search-input"
+                  placeholder="Communication, Leadership, Problem Solving"
+                />
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Research Papers / Publications (Optional)</label>
+                <textarea
+                  id="maker-research"
+                  class="search-input"
+                  rows="3"
+                  placeholder="List any papers or publications..."
+                ></textarea>
+              </div>
+
+              <div class="form-group" style="margin-top: 15px">
+                <label>Industry / Internship Experience (Optional)</label>
+                <textarea
+                  id="maker-experience"
+                  class="search-input"
+                  rows="4"
+                  placeholder="Briefly describe your experience..."
+                ></textarea>
+              </div>
+
+              <button
+                class="btn-primary"
+                onclick="generateResume()"
+                style="width: 100%; margin-top: 20px"
+              >
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Resume
+                Prototype
+              </button>
+
+              <div
+                id="resume-generation-feedback"
+                style="
+                  margin-top: 20px;
+                  font-size: 14px;
+                  line-height: 1.6;
+                  color: var(--text-primary);
+                  background: var(--bg-secondary);
+                  padding: 20px;
+                  border-radius: 12px;
+                  display: none;
+                "
+              ></div>
+            </div>
+          </div>
+        </section>

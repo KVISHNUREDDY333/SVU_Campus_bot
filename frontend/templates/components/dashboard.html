@@ -1,0 +1,125 @@
+<section
+          id="dashboard-section"
+          class="content-section"
+          style="display: none"
+        >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Analytics Dashboard</h3>
+            </div>
+          </div>
+          <div class="admin-content">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-icon query-icon">
+                  <i class="fa-solid fa-comments"></i>
+                </div>
+                <div class="stat-info">
+                  <h3>Total Queries</h3>
+                  <p id="total-queries">Loading...</p>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon user-icon">
+                  <i class="fa-solid fa-users"></i>
+                </div>
+                <div class="stat-info">
+                  <h3>Active Users</h3>
+                  <p id="active-users">Loading...</p>
+                  <div style="font-size: 11px; color: #10b981; margin-top: 4px">
+                    <i class="fa-solid fa-arrow-up"></i> 5 new today
+                  </div>
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-icon doc-icon">
+                  <i class="fa-solid fa-database"></i>
+                </div>
+                <div class="stat-info">
+                  <h3>Documents</h3>
+                  <p id="total-documents">...</p>
+                  <div
+                    style="
+                      font-size: 11px;
+                      color: #10b981;
+                      margin-top: 4px;
+                    "
+                  >
+                    <i class="fa-solid fa-check-circle"></i> Live Data
+                  </div>
+                </div>
+              </div>
+              <div class="suggestions-grid" id="trending-queries-container">
+                <!-- Dynamic Content Loading... -->
+              </div>
+            </div>
+            <div
+              class="dashboard-grid"
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+                gap: 24px;
+                margin-top: 32px;
+              "
+            >
+              <div class="chart-container">
+                <canvas id="roleChart"></canvas>
+              </div>
+              <div class="chart-container">
+                <div
+                  class="chart-header"
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 12px;
+                    padding: 0 10px;
+                  "
+                >
+                  <h4
+                    style="
+                      margin: 0;
+                      font-size: 14px;
+                      color: var(--text-primary);
+                    "
+                  >
+                    User Sentiment Analysis
+                  </h4>
+                  <button
+                    class="speech-btn"
+                    onclick="loadDashboard()"
+                    title="Refresh Analytics"
+                    style="width: 28px; height: 28px; font-size: 12px"
+                  >
+                    <i class="fa-solid fa-rotate"></i>
+                  </button>
+                </div>
+                <canvas id="sentimentChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Knowledge Base Quick Access -->
+            <div class="settings-card" style="margin-top: 32px">
+              <div class="card-header">
+                <div
+                  class="card-icon"
+                  style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)"
+                >
+                  <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h4>Knowledge Base</h4>
+                <button
+                  class="btn-primary"
+                  onclick="showSection('admin')"
+                  style="margin-left: auto; font-size: 13px; padding: 8px 16px"
+                >
+                  <i class="fa-solid fa-gears"></i> Manage All Data
+                </button>
+              </div>
+              <p style="color: var(--text-secondary); margin-bottom: 20px">
+                View your documents in knowledge base
+              </p>
+            </div>
+          </div>
+        </section>

@@ -908,64 +908,77 @@ async def refine_kb_data(faqs: list, context: str):
     import json
     import re
     
-    # Process in batches of 10 to avoid token limits and keep quality high
-    batch_size = 10
-    refined_faqs = []
+    import asyncio
     
+    batch_size = 10
+    
+    sem = asyncio.Semaphore(5)
+    async def process_batch(batch):
+        async with sem:
+            batch_json = json.dumps(batch, indent=2)
+            refine_prompt = f"""
+            PHASE 4: KNOWLEDGE REFINEMENT (THOROUGH TRAINING)
+        
+            You are the University Information Architect. Your goal is to take extracted Q&A pairs and REFINE them into high-quality, professional, and student-centric information.
+        
+            **Source Context**:
+            {context[:8000]} # Limit context
+        
+            **Current Q&A Pairs**:
+            {batch_json}
+        
+            **Instructions**:
+            1. **Enhance Detail**: Add relevant context from the source text that might be missing.
+            2. **Clarity & Tone**: Ensure the answer is clear, polite, and authoritative.
+            3. **Accuracy**: Cross-reference each answer with the source context. Fix any subtle inaccuracies.
+            4. **Refined keywords**: Update keywords to be more descriptive for search.
+        
+            **Output Format**:
+            Return ONLY valid JSON in the exact same structure as the input:
+            {{
+                "faqs": [
+                    {{
+                        "question": "Refined question",
+                        "answer": "Deeply refined, high-context answer.",
+                        "category": "Category",
+                        "keywords": ["key", "words"]
+                    }}
+                ]
+            }}
+            """
+            try:
+                response = await llm.ainvoke(refine_prompt)
+                content = response.content
+            
+                json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+                if not json_match:
+                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            
+                if json_match:
+                    data = json.loads(json_match.group(0))
+                    return data.get("faqs", [])
+                else:
+                    return batch
+            except Exception as e:
+                logger.error(f"Refinement Batch Error: {e}")
+                return batch
+
+    # Prepare all tasks
+    tasks = []
     for i in range(0, len(faqs), batch_size):
         batch = faqs[i : i + batch_size]
-        batch_json = json.dumps(batch, indent=2)
+        tasks.append(process_batch(batch))
         
-        refine_prompt = f"""
-        PHASE 4: KNOWLEDGE REFINEMENT (THOROUGH TRAINING)
-        
-        You are the University Information Architect. Your goal is to take extracted Q&A pairs and REFINE them into high-quality, professional, and student-centric information.
-        
-        **Source Context**:
-        {context[:10000]} # Limit context to avoid overflow, usually enough for refinement
-        
-        **Current Q&A Pairs**:
-        {batch_json}
-        
-        **Instructions**:
-        1. **Enhance Detail**: Add relevant context from the source text that might be missing.
-        2. **Clarity & Tone**: Ensure the answer is clear, polite, and authoritative.
-        3. **Accuracy**: Cross-reference each answer with the source context. Fix any subtle inaccuracies.
-        4. **Refined keywords**: Update keywords to be more descriptive for search.
-        
-        **Output Format**:
-        Return ONLY valid JSON in the exact same structure as the input:
-        {{
-            "faqs": [
-                {{
-                    "question": "Refined question",
-                    "answer": "Deeply refined, high-context answer.",
-                    "category": "Category",
-                    "keywords": ["key", "words"]
-                }}
-            ]
-        }}
-        """
-        
-        try:
-            response = await llm.ainvoke(refine_prompt)
-            content = response.content
-            
-            json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
-            if not json_match:
-                json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            
-            if json_match:
-                data = json.loads(json_match.group(0))
-                batch_refined = data.get("faqs", [])
-                # If LLM returned fewer or more, we should be careful, but usually it follows instructions
-                refined_faqs.extend(batch_refined)
-            else:
-                refined_faqs.extend(batch) # Fallback to original
-                
-        except Exception as e:
-            logger.error(f"Refinement Batch Error: {e}")
-            refined_faqs.extend(batch)
+    # Run concurrently (Groq API handles high concurrency well)
+    logger.info(f"Refining {len(tasks)} batches concurrently...")
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    refined_faqs = []
+    for res in results:
+        if isinstance(res, Exception):
+            logger.error(f"Batch gathering error: {res}")
+        elif isinstance(res, list):
+            refined_faqs.extend(res)
             
     return refined_faqs
 

@@ -5,10 +5,11 @@ import logging
 import asyncio
 import platform
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 if platform.system() == 'Windows':
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -117,13 +118,14 @@ if not os.path.exists(static_dir):
     raise RuntimeError(f"Static directory not found: {static_dir}")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+templates_dir = os.path.join(project_root, "frontend", "templates")
+if not os.path.exists(templates_dir):
+    raise RuntimeError(f"Templates directory not found: {templates_dir}")
+templates = Jinja2Templates(directory=templates_dir)
+
 @app.get("/")
-async def read_root():
-    from fastapi.responses import FileResponse
-    template_path = os.path.join(project_root, "frontend", "templates", "index.html")
-    if not os.path.exists(template_path):
-        raise RuntimeError(f"Template not found: {template_path}")
-    response = FileResponse(template_path)
+async def read_root(request: Request):
+    response = templates.TemplateResponse("index.html", {"request": request})
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"

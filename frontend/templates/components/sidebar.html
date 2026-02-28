@@ -1,0 +1,63 @@
+<aside class="sidebar" id="sidebar">
+        <div class="logo">
+          <img
+            src="/static/images/svu_logo_final_v2.jpg"
+            alt="SVU logo"
+            class="logo-img"
+          />
+          <h2>CampusConnect AI</h2>
+        </div>
+
+        <nav>
+          <ul>
+            <li onclick="showSection('chat')" class="active" id="nav-chat">
+              <i class="fa-regular fa-comment-dots"></i> Home
+            </li>
+            <li
+              onclick="showSection('admin')"
+              id="nav-admin"
+              style="display: none"
+            >
+              <i class="fa-solid fa-cogs"></i> Admin Settings
+            </li>
+            <li
+              onclick="showSection('dashboard')"
+              id="nav-dashboard"
+              style="display: none"
+            >
+              <i class="fa-solid fa-chart-line"></i> Dashboard
+            </li>
+
+            <li id="nav-calendar" onclick="showSection('calendar')">
+              <i class="fa-solid fa-calendar-days"></i> Calendar
+            </li>
+            <li id="nav-locations" onclick="showSection('locations')">
+              <i class="fa-solid fa-location-dot"></i> Locations
+            </li>
+            <li id="nav-study" onclick="showSection('study')">
+              <i class="fa-solid fa-book-open-reader"></i> Study Buddy
+            </li>
+            <li id="nav-career" onclick="showSection('career')">
+              <i class="fa-solid fa-briefcase"></i> Career Center
+            </li>
+
+            <li id="nav-logout" onclick="logout()">
+              <i class="fa-solid fa-right-from-bracket"></i> Logout
+            </li>
+          </ul>
+        </nav>
+
+        <!-- User Profile Section -->
+        <div class="sidebar-user-footer">
+          <div class="sidebar-user-profile" id="sidebar-profile">
+            <div class="profile-avatar" id="profile-avatar">U</div>
+            <div class="profile-info">
+              <div class="profile-name" id="profile-name">User Name</div>
+              <div class="profile-role" id="profile-role">Student</div>
+            </div>
+            <div class="profile-more">
+              <i class="fa-solid fa-ellipsis"></i>
+            </div>
+          </div>
+        </div>
+      </aside>

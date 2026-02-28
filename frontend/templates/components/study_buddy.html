@@ -1,0 +1,193 @@
+<section
+          id="study-section"
+          class="content-section"
+          style="display: none"
+        >
+          <div class="header">
+            <div style="display: flex; align-items: center; gap: 15px;">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 style="margin: 0;">Study Buddy AI</h3>
+            </div>
+            <div class="auth-tabs" style="margin-bottom: 0; justify-content: flex-start; border-bottom: none;">
+              <button id="tab-study-notes" class="auth-tab active" onclick="switchStudyTab('notes')">Lecture Notes</button>
+              <button id="tab-study-zen" class="auth-tab" onclick="switchStudyTab('zen')">Zen AI</button>
+            </div>
+          </div>
+            <div id="study-notes-view" style="display: flex; flex-direction: column; gap: 24px;">
+                <div class="study-main">
+              <div class="settings-card">
+                <div class="card-header">
+                  <div
+                    class="card-icon"
+                    style="background: var(--gradient-primary)"
+                  >
+                    <i class="fa-solid fa-book-open"></i>
+                  </div>
+                  <h4>My Lecture Notes</h4>
+                  <button
+                    class="btn-primary"
+                    onclick="openUploadModal('study')"
+                    style="margin-left: auto"
+                  >
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload Notes
+                  </button>
+                  <button
+                    class="btn-secondary"
+                    onclick="openStudyTextModal()"
+                    style="margin-left: 10px"
+                  >
+                    <i class="fa-solid fa-keyboard"></i> Add Text
+                  </button>
+                </div>
+                <div id="study-materials-list" style="margin-top: 20px">
+                  <p
+                    style="
+                      text-align: center;
+                      color: var(--text-secondary);
+                      padding: 40px;
+                    "
+                  >
+                    No notes uploaded yet. Start by uploading a PDF!
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="study-sidebar">
+              <div class="settings-card" style="margin-bottom: 20px">
+                <div class="card-header">
+                  <div class="card-icon" style="background: #f59e0b">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  </div>
+                  <h4>AI Summary</h4>
+                </div>
+                <div
+                  id="material-summary-content"
+                  style="
+                    font-size: 14px;
+                    color: var(--text-primary);
+                    line-height: 1.6;
+                    min-height: 200px;
+                  "
+                >
+                  Select a document to generate a smart AI summary.
+                </div>
+              </div>
+
+              <!-- Specialized AI Chat for Document -->
+              <div
+                class="settings-card"
+                id="document-chat-card"
+                style="display: none; height: 350px; flex-direction: column"
+              >
+                <div class="card-header">
+                  <div
+                    class="card-icon"
+                    style="background: var(--gradient-primary)"
+                  >
+                    <i class="fa-solid fa-message"></i>
+                  </div>
+                  <h4>Ask this Document</h4>
+                </div>
+                <div
+                  id="document-chat-history"
+                  style="
+                    flex: 1;
+                    overflow-y: auto;
+                    padding: 10px;
+                    font-size: 13px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 10px;
+                    margin-bottom: 10px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 8px;
+                    background: rgba(0, 0, 0, 0.02);
+                  "
+                >
+                  <p
+                    style="
+                      color: var(--text-secondary);
+                      text-align: center;
+                      margin: auto;
+                    "
+                  >
+                    Ask me anything about these notes!
+                  </p>
+                </div>
+                <div style="display: flex; gap: 8px">
+                  <input
+                    type="text"
+                    id="document-chat-input"
+                    placeholder="Ask specific questions..."
+                    style="
+                      flex: 1;
+                      padding: 10px;
+                      border-radius: 8px;
+                      border: 1px solid var(--border-color);
+                      background: var(--glass-bg);
+                      color: var(--text-primary);
+                      outline: none;
+                      font-size: 13px;
+                    "
+                    onkeypress="if (event.key === 'Enter') askStudyBuddy();"
+                  />
+                  <button
+                    class="btn-primary"
+                    onclick="askStudyBuddy()"
+                    style="
+                      width: 40px;
+                      height: 40px;
+                      border-radius: 8px;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      padding: 0;
+                    "
+                  >
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zen AI Chat View -->
+          <div id="study-zen-view" style="display: none; flex-direction: column; height: calc(100vh - 120px); padding: 10px 24px;">
+              <div class="settings-card" style="flex: 1; display: flex; flex-direction: column; height: 100%;">
+                  <div class="card-header">
+                      <div class="card-icon" style="background: var(--gradient-primary)">
+                          <i class="fa-solid fa-brain"></i>
+                      </div>
+                      <h4>Zen Assistant</h4>
+                      <div style="margin-left: auto; display: flex; gap: 10px;">
+                          <button class="btn-secondary" onclick="newZenChat()" title="New Chat" style="padding: 8px 12px; font-size: 13px;">
+                              <i class="fa-solid fa-plus"></i> New Chat
+                          </button>
+                          <button class="btn-secondary" onclick="refreshZenChat()" title="Refresh" style="width: 36px; height: 36px; padding: 0;">
+                              <i class="fa-solid fa-arrows-rotate"></i>
+                          </button>
+                      </div>
+                  </div>
+                  
+                  <div id="zen-chat-history" style="flex: 1; overflow-y: auto; padding: 15px; border: 1px solid var(--border-color); border-radius: 12px; margin-bottom: 15px; background: rgba(0,0,0,0.015); display: flex; flex-direction: column; gap: 15px;">
+                      <div class="welcome-chat" style="text-align: center; margin: auto; padding: 20px;">
+                           <i class="fa-solid fa-brain" style="font-size: 40px; color: var(--accent-color); margin-bottom: 15px; opacity: 0.8;"></i>
+                           <h4 style="margin-bottom: 8px;">I am Zen</h4>
+                           <p style="color: var(--text-secondary); font-size: 14px;">Your generative AI partner for academic brilliance. Ask me anything!</p>
+                      </div>
+                  </div>
+                  
+                  <div class="zen-input-area" style="display: flex; gap: 10px; align-items: center;">
+                      <button class="btn-secondary" id="zen-mic-btn" onclick="startZenSTT()" style="width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0;">
+                          <i class="fa-solid fa-microphone"></i>
+                      </button>
+                      <input type="text" id="zen-input" placeholder="Ask Zen..." 
+                          style="flex: 1; padding: 12px 20px; border-radius: 12px; border: 1px solid var(--border-color); background: var(--glass-bg); color: var(--text-primary); outline: none;"
+                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                      <button class="btn-primary" onclick="sendZenMessage()" style="width: 44px; height: 44px; border-radius: 12px; padding: 0;">
+                          <i class="fa-solid fa-paper-plane"></i>
+                      </button>
+                  </div>
+              </div>
+          </div>
+        </section>
