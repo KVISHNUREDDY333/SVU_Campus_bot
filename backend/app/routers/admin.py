@@ -115,19 +115,32 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=403, detail="Admin access required")
         
     try:
-        if database.svu_vectors_db is None:
+        if database.svu_vectors_db is None or database.documents_db is None:
             raise HTTPException(status_code=503, detail="Database not available")
         
-        # Delete from svu_vectors by _id or by top-level faq_id
-        result = database.svu_vectors_db.delete_one({"_id": ObjectId(faq_id)})
-        if result.deleted_count == 0:
-            # Try by top-level faq_id
-            result = database.svu_vectors_db.delete_one({"faq_id": faq_id})
+        # Get the FAQ first to find its source
+        faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
+        if not faq:
+            faq = database.svu_vectors_db.find_one({"faq_id": faq_id})
         
-        if result.deleted_count == 0:
+        if not faq:
             raise HTTPException(status_code=404, detail="FAQ not found")
         
-        return {"status": "success", "message": "FAQ deleted from knowledge base"}
+        source = faq.get("source")
+        
+        # Delete from svu_vectors
+        result = database.svu_vectors_db.delete_one({"_id": faq["_id"]})
+        
+        if result.deleted_count > 0:
+            # Decrement FAQ count in documents_db if source exists
+            if source:
+                database.documents_db.update_one(
+                    {"filename": source},
+                    {"$inc": {"extracted_faqs": -1}, "$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
+                )
+            return {"status": "success", "message": "FAQ deleted and document count updated"}
+        else:
+            raise HTTPException(status_code=404, detail="FAQ not found during deletion")
     except HTTPException:
         raise
     except Exception as e:
@@ -860,17 +873,18 @@ async def train_specific_document(doc_id: str, current_user: User = Depends(get_
                     {"$set": update_data}
                 )
 
-    database.documents_db.update_one(
-        {"_id": ObjectId(doc_id)},
-        {"$set": {"is_trained": True, "last_trained": datetime.utcnow()}}
-    )
-    
-    # Ingest all FAQs into vector store for this document
-    try:
-        await train_on_all_faqs()
-    except Exception as e:
-        print(f"Error ingesting FAQs into vector store: {e}")
-    
+    # Final synchronization of counts
+    if filename:
+        actual_count = database.svu_vectors_db.count_documents({
+            "source": filename,
+            "type": "faq"
+        })
+        database.documents_db.update_one(
+            {"_id": ObjectId(doc_id)},
+            {"$set": {"extracted_faqs": actual_count}}
+        )
+        print(f"[TRAIN] Synced FAQ count for {filename}: {actual_count}")
+
     return {"status": "success", "message": "Document training complete and FAQs ingested into vector store."}
 
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
@@ -1218,3 +1232,36 @@ async def delete_trending_query(query_id: str, current_user: User = Depends(get_
 
 
 
+@router.post("/admin/repair/sync-faq-counts")
+async def sync_faqs_count(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    if database.documents_db is None or database.svu_vectors_db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+        
+    try:
+        docs = list(database.documents_db.find({}))
+        synced_count = 0
+        
+        for doc in docs:
+            filename = doc.get("filename")
+            if not filename:
+                continue
+                
+            # Count actual FAQs in svu_vectors
+            actual_count = database.svu_vectors_db.count_documents({
+                "source": filename,
+                "type": "faq"
+            })
+            
+            # Update the document record
+            database.documents_db.update_one(
+                {"_id": doc["_id"]},
+                {"$set": {"extracted_faqs": actual_count}}
+            )
+            synced_count += 1
+            
+        return {"status": "success", "message": f"Synced FAQ counts for {synced_count} documents"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
