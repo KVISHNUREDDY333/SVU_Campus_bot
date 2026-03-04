@@ -233,7 +233,7 @@ def trim_session_history(session_id: str, limit: int = 20):
     except Exception as e:
         logger.error(f"Error trimming history: {e}")
 
-CURRENT_TEMPERATURE = 0.2
+CURRENT_TEMPERATURE = 0.0
 
 try:
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
@@ -410,10 +410,13 @@ def _search_keywords_directly(query: str, limit: int = 5):
         if not words:
             return ""
         
-        regex_pattern = "|".join(re.escape(word) for word in words)
+        # Use lookaheads to ensure ALL words are present (AND logic) instead of ANY word (OR logic)
+        regex_pattern = "".join(f"(?=.*{re.escape(word)})" for word in words)
+        # Add a trailing match-all so the regex consumes the string if all lookaheads pass
+        regex_pattern = f"^{regex_pattern}.*$"
         
         results = list(database.svu_vectors_db.find(
-            {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE)}},
+            {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE | re.DOTALL)}},
             {"text": 1, "_id": 0}
         ).limit(limit))
         
@@ -440,12 +443,12 @@ def _search_vectors_directly(query: str, limit: int = 10):
         if not results:
             return ""
             
-        # Threshold: 0.70 (cosine similarity)
-        valid_docs = [doc for doc, score in results if score >= 0.70]
+        # Threshold: 0.60 (cosine similarity)
+        valid_docs = [doc for doc, score in results if score >= 0.60]
         valid_docs = valid_docs[:limit]
         
         if not valid_docs:
-            logger.info(f"Vector search found results, but none met the 0.70 threshold for query: {query[:50]}")
+            logger.info(f"Vector search found results, but none met the 0.60 threshold for query: {query[:50]}")
             return ""
         
         context = "\n\n".join(doc.page_content for doc in valid_docs if doc.page_content)

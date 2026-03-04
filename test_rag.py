@@ -12,13 +12,12 @@ load_dotenv("c:/SVU_Campus_bot/.env")
 MONGO_URI = os.getenv("MONGODB_URI")
 database.mongo_client = MongoClient(MONGO_URI)
 
-# init RAG
 setup_rag_chain()
 
 async def test_rag():
     print("Testing RAG...")
     response = await generate_response(
-        message="What are the library timings?",
+        message="who is the vc",
         session_id="test_session_123",
         user_role="student",
         current_time=datetime.now().strftime("%A, %b %d, %Y at %I:%M %p"),
