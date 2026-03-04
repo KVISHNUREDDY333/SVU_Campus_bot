@@ -488,63 +488,47 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         entities_str = str(get_session_entities(session_id))
 
         try:
-            # 1. STATEFUL CONTEXT PHASE: Rephrase query based on history if needed
-            history = get_session_history(session_id).messages
-            if history:
-                logger.info(f"[RAG] Contextualizing query based on {len(history)} previous messages.")
-                rephrased_result = await (contextualize_q_prompt | fast_llm | StrOutputParser()).ainvoke({
-                    "input": message,
-                    "chat_history": history
-                })
-                search_query = rephrased_result
-                logger.info(f"[RAG] Rephrased Query: {search_query}")
-            else:
-                search_query = message
-
-            # 2. RETRIEVAL PHASE: Run both keyword & vector search concurrently
-            logger.info(f"[RAG] Processing query: {search_query[:50]}")
-            vector_context = _search_vectors_directly(search_query, limit=6)
-            keyword_context = _search_keywords_directly(search_query, limit=4)
+            # 1. RETRIEVAL PHASE: Use the direct user message to search for related data
+            logger.info(f"[RAG] Processing query: {message[:50]}")
+            vector_context = _search_vectors_directly(message, limit=8)
+            keyword_context = _search_keywords_directly(message, limit=5)
             
-            # Combine block avoiding duplicates basically
-            combined_context = "\n\n".join(filter(bool, [vector_context, keyword_context]))
+            # Combine and deduplicate context for quality
+            context_snippets = set()
+            for ctx in [vector_context, keyword_context]:
+                if ctx:
+                    for snippet in ctx.split("\n\n"):
+                        snippet = snippet.strip()
+                        if snippet:
+                            context_snippets.add(snippet)
             
-            # 3. GENERATION PHASE
-            master_prompt = f"""You are SVU CampusConnect AI, the exceptionally professional, friendly, and knowledgeable digital ambassador for Sri Venkateswara University. 
-Represent the institution with high dignity, acting as a supportive mentor and expert advisor to students.
+            combined_context = "\n\n".join(context_snippets)
+            
+            # 2. GENERATION PHASE: Direct, professional, and refined response
+            master_prompt = f"""You are the official SVU CampusConnect AI assistant. 
+Your task is to provide a detailed, accurate, and professional response to the user's request using the provided University Knowledge Base context.
 
 Current Time: {current_time}
 User Context: {personal_context_str}
-Known Entities: {entities_str}
 Language Rule: {lang_instruction}
 
-Knowledge Base (Your Verifiable Truth):
+University Knowledge Base:
 ---
-{combined_context if combined_context.strip() else "No specific secondary documents found for this exact query."}
+{combined_context if combined_context.strip() else "No specific records found in the database for this query."}
 ---
 
-Original User Query: {message}
+User Request: {message}
 
-The Golden Rules for an Intelligent & Human-Like response:
-1. **Professional Etiquette & Warmth**: Begin with a polite, professional greeting if appropriate. End with a supportive closing. Speak with the warmth of a mentor but the precision of an official representative.
-2. **Contextual Intelligence**: If the user's query is a follow-up, use the chat history context to provide a seamless answer. 
-3. **Reasoning & Relevance**: Carefully examine the Knowledge Base above. If multiple facts are present, synthesize them into a single, cohesive narrative. Do NOT just list things; explain how they relate to the user's request.
-4. **Authentic Empathy**: Connect with the student's intent. If they are seeking help, be exceptionally encouraging. If they have a problem, be reassuring and solution-oriented.
-5. **Quality & Clarity**: Use perfect grammar. Ensure the response flows logically. Use bullet points for structured data (like dates or steps) but wrap them in natural, conversational paragraphs.
-6. **Graceful Grounding**: If the knowledge base is empty, DO NOT apologize profusely or sound robotic. Say: "I've checked our university records, but I don't have the official details on that right now. To ensure you get the absolute best information, I'd suggest reaching out to the [Relevant Department] directly!"
-7. **Persona Integrity**: Never mention "context provided," "search results," or your status as an AI. You are simply CampusConnect AI.
+Final Response Guidelines:
+1. **Accuracy & Quality**: Use the Knowledge Base context above to deliver a meaningful and precise answer.
+2. **Refined & Direct**: Avoid unnecessary filler, conversational "drama," or tangential data. Get straight to the point in a polite and professional manner.
+3. **Handle Missing Data**: If the Knowledge Base is empty or lacks the specific answer, politely state that the information is not officially available in the university database at this time.
+4. **Professionalism**: Maintain a helpful and polite tone without being overly emotional or informal.
 """
             
-            # Execute with our smartest available model
+            # Execute with the smartest model for quality refinement
             response = await smart_llm.ainvoke(master_prompt)
-            response_text = response.content if hasattr(response, 'content') else str(response)
-            
-            # Fallback check
-            no_info_phrases = ["no relevant information", "not officially available", "not available at the moment", "no information was found"]
-            if len(combined_context.strip()) < 10 and any(p in response_text.lower() for p in no_info_phrases):
-                logger.warning(f"[RAG] No context found for: {message[:50]}")
-                
-            return response_text
+            return response.content if hasattr(response, 'content') else str(response)
             
         except Exception as e:
             error_str = str(e).lower()
