@@ -488,35 +488,51 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         entities_str = str(get_session_entities(session_id))
 
         try:
-            # 1. RETRIEVAL PHASE: Run both keyword & vector search concurrently
-            logger.info(f"[RAG] Processing query: {message[:50]}")
-            vector_context = _search_vectors_directly(message, limit=6)
-            keyword_context = _search_keywords_directly(message, limit=4)
+            # 1. STATEFUL CONTEXT PHASE: Rephrase query based on history if needed
+            history = get_session_history(session_id).messages
+            if history:
+                logger.info(f"[RAG] Contextualizing query based on {len(history)} previous messages.")
+                rephrased_result = await (contextualize_q_prompt | fast_llm | StrOutputParser()).ainvoke({
+                    "input": message,
+                    "chat_history": history
+                })
+                search_query = rephrased_result
+                logger.info(f"[RAG] Rephrased Query: {search_query}")
+            else:
+                search_query = message
+
+            # 2. RETRIEVAL PHASE: Run both keyword & vector search concurrently
+            logger.info(f"[RAG] Processing query: {search_query[:50]}")
+            vector_context = _search_vectors_directly(search_query, limit=6)
+            keyword_context = _search_keywords_directly(search_query, limit=4)
             
             # Combine block avoiding duplicates basically
             combined_context = "\n\n".join(filter(bool, [vector_context, keyword_context]))
             
-            # 2. GENERATION PHASE
-            master_prompt = f"""You are SVU CampusConnect AI, the highly intelligent official assistant for Sri Venkateswara University.
+            # 3. GENERATION PHASE
+            master_prompt = f"""You are SVU CampusConnect AI, the exceptionally professional, friendly, and knowledgeable digital ambassador for Sri Venkateswara University. 
+Represent the institution with high dignity, acting as a supportive mentor and expert advisor to students.
 
 Current Time: {current_time}
 User Context: {personal_context_str}
 Known Entities: {entities_str}
 Language Rule: {lang_instruction}
 
-Retrieve verified facts from the University Knowledge Base below:
+Knowledge Base (Your Verifiable Truth):
 ---
-{combined_context if combined_context.strip() else "No specific documents found in the database for this exact query."}
+{combined_context if combined_context.strip() else "No specific secondary documents found for this exact query."}
 ---
 
-User Query: {message}
+Original User Query: {message}
 
-Instructions to Deliver the Perfect Response:
-1. **Combine Local Data with Generative AI Intelligence**: Use everything in the Knowledge Base above as absolute truth. Then, use your generative reasoning to connect these facts smoothly, clearly, and logically to answer the user's completely.
-2. **Handle Empty Context Gracefully**: If the Knowledge Base is empty ("No specific documents found") AND you cannot confidently infer the answer based strictly on SVU domain boundaries, reply: "This specific information is not officially available on the Sri Venkateswara University website right now." Do NOT hallucinate.
-3. **Be Thorough, Formatting is Key**: Break down facts into bullet points if providing dates, rules, or lists. Make the output easy to read and extremely professional.
-4. **Tone**: Be extremely helpful, clear, and student-friendly. You are SVU's top digital ambassador.
-5. **DO NOT** mention "Based on the text below" or complain about context. Just give the answer seamlessly.
+The Golden Rules for an Intelligent & Human-Like response:
+1. **Professional Etiquette & Warmth**: Begin with a polite, professional greeting if appropriate. End with a supportive closing. Speak with the warmth of a mentor but the precision of an official representative.
+2. **Contextual Intelligence**: If the user's query is a follow-up, use the chat history context to provide a seamless answer. 
+3. **Reasoning & Relevance**: Carefully examine the Knowledge Base above. If multiple facts are present, synthesize them into a single, cohesive narrative. Do NOT just list things; explain how they relate to the user's request.
+4. **Authentic Empathy**: Connect with the student's intent. If they are seeking help, be exceptionally encouraging. If they have a problem, be reassuring and solution-oriented.
+5. **Quality & Clarity**: Use perfect grammar. Ensure the response flows logically. Use bullet points for structured data (like dates or steps) but wrap them in natural, conversational paragraphs.
+6. **Graceful Grounding**: If the knowledge base is empty, DO NOT apologize profusely or sound robotic. Say: "I've checked our university records, but I don't have the official details on that right now. To ensure you get the absolute best information, I'd suggest reaching out to the [Relevant Department] directly!"
+7. **Persona Integrity**: Never mention "context provided," "search results," or your status as an AI. You are simply CampusConnect AI.
 """
             
             # Execute with our smartest available model
