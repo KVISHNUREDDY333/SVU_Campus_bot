@@ -155,3 +155,17 @@ async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current
     except Exception as e:
         print(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@router.delete("/admin/tickets/delete/closed")
+async def delete_all_closed_tickets(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if database.tickets_db is None:
+        raise HTTPException(status_code=503, detail="Database Unavailable")
+    
+    try:
+        result = database.tickets_db.delete_many({"status": "closed"})
+        return {"status": "success", "message": f"Deleted {result.deleted_count} closed tickets"}
+    except Exception as e:
+        print(f"Bulk Delete Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")

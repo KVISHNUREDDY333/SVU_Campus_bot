@@ -69,6 +69,19 @@ let ACCESS_TOKEN = sessionStorage.getItem("access_token");
 let USER_ROLE = sessionStorage.getItem("user_role");
 
 document.addEventListener("DOMContentLoaded", () => {
+  const splashScreen = document.getElementById("splash-screen");
+
+  if (splashScreen) {
+    // Show splash screen for 2 seconds by default
+    setTimeout(() => {
+      splashScreen.classList.add("fade-out");
+      splashScreen.style.pointerEvents = "none";
+      setTimeout(() => {
+        splashScreen.style.display = "none";
+      }, 800);
+    }, 2000);
+  }
+
   // Load Theme Preference
   const savedTheme = sessionStorage.getItem("svu_theme");
   const hasSession = !!sessionStorage.getItem("access_token");
@@ -135,17 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Theme extracted to top of DOMContentLoaded
 
-  const splashScreen = document.getElementById("splash-screen");
-  if (splashScreen) {
-    setTimeout(() => {
-      splashScreen.classList.add("fade-out");
-      setTimeout(() => {
-        splashScreen.style.display = "none";
-      }, 800);
-    }, 1500);
-  }
-
-  // Load Trending Queries
   loadTrendingQueries();
 
   if (userInput) {
@@ -197,38 +199,7 @@ function checkAuth() {
   }
 }
 
-function switchAuthTab(tab) {
-  // Clear inputs when switching
-  clearAuthInputs();
-
-  const loginForm = document.getElementById("login-form");
-  const registerForm = document.getElementById("register-form");
-  const forgotForm = document.getElementById("forgot-form"); // New
-  const tabs = document.querySelectorAll(".auth-tab");
-
-  document.getElementById("auth-error").style.display = "none";
-
-  if (tab === "login") {
-    loginForm.style.display = "block";
-    registerForm.style.display = "none";
-    forgotForm.style.display = "none";
-    tabs[0].classList.add("active");
-    tabs[1].classList.remove("active");
-  } else {
-    loginForm.style.display = "none";
-    registerForm.style.display = "block";
-    forgotForm.style.display = "none";
-    tabs[0].classList.remove("active");
-    tabs[1].classList.add("active");
-  }
-}
-
-function showForgotPassword() {
-  document.getElementById("login-form").style.display = "none";
-  document.getElementById("register-form").style.display = "none";
-  document.getElementById("forgot-form").style.display = "block";
-  document.getElementById("auth-error").style.display = "none";
-}
+/* Duplicated switchAuthTab and showForgotPassword removed. Merged at the end of file. */
 
 async function handleForgotPassword(e) {
   e.preventDefault();
@@ -2176,7 +2147,7 @@ let allFAQs = [];
 
 async function loadFAQs() {
   try {
-    const res = await fetch(`${API_URL}/faqs`);
+    const res = await fetch(`${API_URL}/admin/faqs`);
     if (!res.ok) return;
     allFAQs = await res.json();
     renderFAQs(allFAQs);
@@ -3318,7 +3289,7 @@ function renderTicketsTable(tickets, limit = null) {
     // Delete Button Logic (Only for Closed Tickets and Admins)
     let deleteBtn = "";
     // Strict role check from storage to ensure freshness
-    const currentRole = localStorage.getItem("user_role");
+    const currentRole = sessionStorage.getItem("user_role");
     if (t.status.toLowerCase() === "closed" && currentRole === "admin") {
       deleteBtn = `
                 <button class="icon-btn" title="Delete Ticket" onclick="deleteTicket('${t.id}')" style="color: #ef4444;">
@@ -3402,6 +3373,34 @@ async function deleteTicket(id) {
     }
   } catch (e) {
     console.error(e);
+    alert("Error deleting ticket.");
+  }
+}
+
+async function deleteAllClosedTickets() {
+  if (
+    !confirm(
+      "Are you sure you want to delete ALL closed tickets permanently? This action cannot be undone.",
+    )
+  )
+    return;
+
+  try {
+    const res = await fetch(`${API_URL}/admin/tickets/delete/closed`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      showStatusPopup(data.message || "All closed tickets deleted.");
+      loadAllTickets();
+    } else {
+      alert(data.detail || "Failed to delete closed tickets.");
+    }
+  } catch (e) {
+    console.error(e);
+    alert("Error during bulk deletion.");
   }
 }
 
@@ -3951,6 +3950,7 @@ async function reindexData() {
 
 // --- Auth UI Interactions ---
 function switchAuthTab(tab) {
+  clearAuthInputs();
   const loginForm = document.getElementById("login-form");
   const registerForm = document.getElementById("register-form");
   const forgotForm = document.getElementById("forgot-form");
@@ -3975,9 +3975,15 @@ function switchAuthTab(tab) {
 }
 
 function showForgotPassword() {
-  document.getElementById("login-form").style.display = "none";
-  document.getElementById("register-form").style.display = "none";
-  document.getElementById("forgot-form").style.display = "block";
+  const loginForm = document.getElementById("login-form");
+  const registerForm = document.getElementById("register-form");
+  const forgotForm = document.getElementById("forgot-form");
+  const errorEl = document.getElementById("auth-error");
+
+  if (loginForm) loginForm.style.display = "none";
+  if (registerForm) registerForm.style.display = "none";
+  if (forgotForm) forgotForm.style.display = "block";
+  if (errorEl) errorEl.style.display = "none";
 }
 
 function startNewChat() {

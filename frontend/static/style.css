@@ -726,10 +726,11 @@ body.dark-mode .incognito-badge {
   color: white;
 }
 
+
 #splash-screen {
   position: fixed;
   inset: 0;
-  background: #ffffff;
+  background: var(--bg-base);
   z-index: 10000;
   display: flex;
   align-items: center;
@@ -1446,14 +1447,14 @@ body.dark-mode .btn-upload-url:hover {
 }
 
 .auth-card {
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--glass-bg);
   width: min(100% - 40px, 440px);
   padding: clamp(24px, 5vh, 48px);
   border-radius: 32px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1577,7 +1578,7 @@ body.dark-mode .form-group input {
   box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
 }
 
-.auth-btn {
+.auth-btn-primary {
   width: 100%;
   padding: 14px;
   border-radius: 14px;
@@ -1587,15 +1588,66 @@ body.dark-mode .form-group input {
   font-weight: 700;
   font-size: 16px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   margin-top: 10px;
   box-shadow: 0 10px 20px -5px rgba(20, 184, 166, 0.4);
 }
 
-.auth-btn:hover {
+.auth-btn-primary:hover {
   transform: translateY(-2px);
   box-shadow: 0 15px 25px -5px rgba(20, 184, 166, 0.5);
+  filter: brightness(1.1);
 }
+
+.google-auth-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: white;
+  color: #3c4043;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 5px;
+}
+
+.google-auth-btn:hover {
+  background: #f8f9fa;
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+body.dark-mode .google-auth-btn {
+  background: white; /* Google buttons traditionally stay white for brand identity */
+  color: #333;
+}
+
+.auth-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 20px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auth-separator::before,
+.auth-separator::after {
+  content: "";
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+  opacity: 0.5;
+}
+
+.auth-separator::before { margin-right: 15px; }
+.auth-separator::after { margin-left: 15px; }
 
 .forgot-link {
   display: block;
@@ -1832,16 +1884,7 @@ input:checked + .slider-small:before {
   border-radius: 10px;
 }
 
-#splash-screen {
-  position: fixed;
-  inset: 0;
-  background: #fff;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-}
+/* Removed redundant splash-screen block */
 
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.15);

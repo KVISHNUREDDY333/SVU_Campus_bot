@@ -45,7 +45,6 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
         return {"response": ModerationService.get_rejection_message(), "context_used": False}
     
     try:
-        # from ..services.rag_service import rag_service (Removed: module already imported)
         if not rag_service.vector_db:
             rag_service.setup_rag_chain()
         
@@ -56,21 +55,23 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
             "user_id": current_user.username
         }
         
-        # Use existing vector_db for search
-        docs = rag_service.vector_db.similarity_search(
+        # Use existing vector_db for search with higher k and score filtering if needed
+        # The new embeddings (mpnet) will automatically improve these results.
+        docs = rag_service.vector_db.similarity_search_with_score(
             req.query, 
-            k=5, 
+            k=8, 
             filter=filter_metadata
         )
         
-        context = "\n\n".join([doc.page_content for doc in docs])
+        # Filter by threshold 0.5 (slightly lower for specific docs to be safe)
+        valid_docs = [doc for doc, score in docs if score >= 0.5]
+        if not valid_docs:
+             # Fallback to search just by filename
+             docs = rag_service.vector_db.similarity_search(req.query, k=5, filter={"source": material["filename"]})
+             valid_docs = docs
+             
+        context = "\n\n".join([doc.page_content for doc in valid_docs])
         
-        if not context.strip():
-            # Fallback if no specific chunks found (maybe metadata mismatch)
-            # Try searching just by filename
-            docs = rag_service.vector_db.similarity_search(req.query, k=5, filter={"source": material["filename"]})
-            context = "\n\n".join([doc.page_content for doc in docs])
-
         prompt = f"""
         You are an academic assistant helping a student with their lecture notes.
         DOCUMENT: {material['filename']}
@@ -91,7 +92,7 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
              rag_service.setup_rag_chain()
              
         response = await rag_service.llm.ainvoke(prompt)
-        return {"response": response.content, "context_used": len(docs) > 0}
+        return {"response": response.content, "context_used": len(valid_docs) > 0}
 
     except Exception as e:
         print(f"Study Chat Error: {e}")
@@ -159,7 +160,6 @@ async def upload_material(file: UploadFile = File(...), current_user: User = Dep
     # Generate Summary immediately
     summary_text = ""
     try:
-        # from ..services.rag_service import rag_service (Removed: module already imported)
         if not rag_service.fast_llm:
              rag_service.setup_rag_chain()
         
@@ -351,7 +351,6 @@ async def summarize_material(material_id: str, current_user: User = Depends(get_
                 text = f.read()
             logger.info(f"Read {len(text)} chars from text file: {file_path}")
         
-        # from ..services.rag_service import rag_service (Removed: module already imported)
         if not rag_service.fast_llm:
              rag_service.setup_rag_chain()
         

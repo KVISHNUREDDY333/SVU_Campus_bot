@@ -236,6 +236,7 @@ def trim_session_history(session_id: str, limit: int = 20):
 CURRENT_TEMPERATURE = 0.0
 
 try:
+    # Reverted to all-MiniLM-L6-v2 (384) to match existing MongoDB Vector Index
     embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 except Exception as e:
     logger.warning(f"Connection error downloading embeddings ({e}), attempting to load from local cache...")
@@ -318,7 +319,7 @@ def setup_rag_chain(force_reload: bool = False):
             | (lambda x: base_retriever.invoke(x["rephrased_query"]))
         )
 
-        qa_system_prompt = """You are SVU CampusConnect AI.
+        qa_system_prompt = """You are Intelligent Campus Assistant Chatbot.
 
 Language Instruction: {language_instruction}
 Current Time: {current_time}
@@ -397,51 +398,59 @@ Instructions:
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
-# Removed _search_faqs_directly as faqs collection is consolidated into svu_vectors.
-# Fallback search is now handled by _search_vectors_directly which searches the primary collection.
 
-def _search_keywords_directly(query: str, limit: int = 5):
-    """Fallback keyword search using MongoDB raw queries."""
+
+async def _search_keywords_directly(query: str, limit: int = 5, return_list: bool = False, doc_type: str = None):
+    """
+    Search by keyword directly in svu_vectors collection (useful if vector search misses exact terms).
+    Optional 'doc_type' allows targeting specific results like 'faq'.
+    """
     if database.svu_vectors_db is None:
-        return ""
+        return [] if return_list else ""
     try:
         import re
         words = [w for w in query.split() if len(w) > 3]
         if not words:
-            return ""
+            return [] if return_list else ""
         
-        # Use lookaheads to ensure ALL words are present (AND logic) instead of ANY word (OR logic)
+        # Use lookaheads to ensure ALL words are present (AND logic)
         regex_pattern = "".join(f"(?=.*{re.escape(word)})" for word in words)
-        # Add a trailing match-all so the regex consumes the string if all lookaheads pass
         regex_pattern = f"^{regex_pattern}.*$"
         
+        search_query = {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE | re.DOTALL)}}
+        if doc_type:
+            search_query["type"] = doc_type
+            
         results = list(database.svu_vectors_db.find(
-            {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE | re.DOTALL)}},
+            search_query,
             {"text": 1, "_id": 0}
-        ).limit(limit))
+        ).sort("created_at", -1).limit(limit)) # Prioritize newer records
         
         if not results:
-            return ""
+            return [] if return_list else ""
             
-        context = "\n\n".join(doc.get("text", "") for doc in results if "text" in doc)
-        logger.info(f"Keyword search found {len(results)} results for query: {query[:50]}")
+        texts = [doc.get("text", "") for doc in results if "text" in doc]
+        if return_list:
+            return texts
+            
+        context = "\n\n".join(texts)
+        scope = f"(Type: {doc_type})" if doc_type else ""
+        logger.info(f"Keyword search {scope} found {len(results)} results for query: {query[:50]}")
         return context
     except Exception as e:
         logger.error(f"Keyword search error: {e}")
-        return ""
+        return [] if return_list else ""
 
-def _search_vectors_directly(query: str, limit: int = 10):
+def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = False):
     """Search svu_vectors collection using embedding-based similarity search.
     Uses similarity threshold filtering to ensure high confidence."""
     if not vector_db:
-        return ""
+        return [] if return_list else ""
     try:
-        # Use similarity_search_with_score to filter out low-confidence matches.
-        # k is set slightly higher initialy since we might filter out some results.
         results = vector_db.similarity_search_with_score(query, k=limit + 3)
         
         if not results:
-            return ""
+            return [] if return_list else ""
             
         # Threshold: 0.60 (cosine similarity)
         valid_docs = [doc for doc, score in results if score >= 0.60]
@@ -449,14 +458,61 @@ def _search_vectors_directly(query: str, limit: int = 10):
         
         if not valid_docs:
             logger.info(f"Vector search found results, but none met the 0.60 threshold for query: {query[:50]}")
-            return ""
+            return [] if return_list else ""
         
+        if return_list:
+            return valid_docs
+            
         context = "\n\n".join(doc.page_content for doc in valid_docs if doc.page_content)
         logger.info(f"Vectors similarity search found {len(valid_docs)} valid results for query: {query[:50]}")
         return context
     except Exception as e:
         logger.error(f"Vectors similarity search error: {e}")
-        return ""
+        return [] if return_list else ""
+
+def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
+    """Combines vector and keyword results using Reciprocal Rank Fusion."""
+    scores = {}
+    from langchain.schema import Document
+    
+    # Vector results processing
+    for rank, doc in enumerate(vector_results):
+        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+        if content not in scores:
+            scores[content] = {"score": 0.0, "doc": doc}
+        scores[content]["score"] += 1.0 / (rank + k + 1)
+        
+    # Keyword results processing
+    for rank, content in enumerate(keyword_results):
+        if not content: continue
+        if content not in scores:
+            scores[content] = {"score": 0.0, "doc": Document(page_content=content)}
+        scores[content]["score"] += 1.0 / (rank + k + 1)
+        
+    # Sort and return top documents
+    fused = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
+    return [item["doc"] for item in fused]
+
+async def _hybrid_search(query: str, limit: int = 10):
+    """
+    Performs hybrid search combining Vector and Keyword retrieval via RRF.
+    Prioritizes FAQ-specific keyword hits to ensure official answers are delivered first.
+    """
+    # 1. Targeted Keyword Search (FAQs only)
+    faq_keyword_results = await _search_keywords_directly(query, limit=5, return_list=True, doc_type="faq")
+    
+    # 2. Broader Keyword Search (All sources)
+    broad_keyword_results = await _search_keywords_directly(query, limit=limit, return_list=True)
+    
+    # 3. Vector Similarity Search (All sources)
+    # Note: _search_vectors_directly is currently sync but wrapped for future-proofing
+    vector_docs = _search_vectors_directly(query, limit=limit, return_list=True)
+    
+    # Combine results using RRF
+    # We pass both sets of keyword results; RRF handles the overlap naturally
+    fused_docs = _reciprocal_rank_fusion(vector_docs, faq_keyword_results + broad_keyword_results)
+    
+    return fused_docs[:limit]
 
 
 async def generate_response(message: str, session_id: str, user_role: str, current_time: str, language: str = "en"):
@@ -488,45 +544,65 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         entities_str = str(get_session_entities(session_id))
 
         try:
-            # 1. RETRIEVAL PHASE: Use the direct user message to search for related data
-            logger.info(f"[RAG] Processing query: {message[:50]}")
-            vector_context = _search_vectors_directly(message, limit=8)
-            keyword_context = _search_keywords_directly(message, limit=5)
+            # 1. RETRIEVAL PHASE: Hybrid Search with Query Rephrasing candidate
+            logger.info(f"[RAG] Hybrid Retrieval for query: {message[:50]}")
             
-            # Combine and deduplicate context for quality
-            context_snippets = set()
-            for ctx in [vector_context, keyword_context]:
-                if ctx:
-                    for snippet in ctx.split("\n\n"):
-                        snippet = snippet.strip()
-                        if snippet:
-                            context_snippets.add(snippet)
-            
-            combined_context = "\n\n".join(context_snippets)
+            # Use LLM to rephrase if history exists (Optional, depends on model speed)
+            rephrased_query = message
+            try:
+                if fast_llm:
+                    # Get history for context
+                    history = get_session_history(session_id).messages[-5:] # Last 5 turns
+                    if history:
+                        contextualize_prompt = f"""Given the chat history and the latest user question, 
+                        formulate a standalone question in English. 
+                        
+                        History: {history}
+                        Latest: {message}
+                        
+                        Standalone:"""
+                        rephrase_res = await fast_llm.ainvoke(contextualize_prompt)
+                        rephrased_query = rephrase_res.content if hasattr(rephrase_res, 'content') else str(rephrase_res)
+                        logger.info(f"[RAG] Rephrased Query: {rephrased_query}")
+            except Exception as re_e:
+                 logger.warning(f"Rephrasing failed: {re_e}")
+
+            # Hybrid Search
+            fused_docs = await _hybrid_search(rephrased_query, limit=10)
+            combined_context = "\n\n".join([doc.page_content for doc in fused_docs])
             
             # 2. GENERATION PHASE: Direct, professional, and refined response
-            master_prompt = f"""You are the official SVU CampusConnect AI assistant. 
-Your task is to provide a detailed, accurate, and professional response to the user's request using the provided University Knowledge Base context.
+            master_prompt = f"""You are the official Intelligent Campus Assistant Chatbot for Sri Venkateswara University (SVU). 
+Your goal is to deliver an **Accurate and Refined Answer** based on the University Knowledge Base (FAQ & Campus Data).
 
 Current Time: {current_time}
 User Context: {personal_context_str}
 Language Rule: {lang_instruction}
 
-University Knowledge Base:
+University Knowledge Base (Refined Context):
 ---
-{combined_context if combined_context.strip() else "No specific records found in the database for this query."}
+{combined_context if combined_context.strip() else "No specific records found in the database."}
 ---
 
 User Request: {message}
 
-Final Response Guidelines:
-1. **Accuracy & Quality**: Use the Knowledge Base context above to deliver a meaningful and precise answer.
-2. **Refined & Direct**: Avoid unnecessary filler, conversational "drama," or tangential data. Get straight to the point in a polite and professional manner.
-3. **Handle Missing Data**: If the Knowledge Base is empty or lacks the specific answer, politely state that the information is not officially available in the university database at this time.
-4. **Professionalism**: Maintain a helpful and polite tone without being overly emotional or informal.
+### CRITICAL INSTRUCTIONS FOR RESPONSE QUALITY:
+1. **FAQ & ACCURACY**: 
+   - Analyze the provided context carefully. If an official FAQ is present, prioritize its details.
+   - Deliver the **Exact Answer** prominently. No conversational fluff or preamble.
+2. **SITUATIONAL OPTIMAL FORMATTING**: 
+   - **Data/Comparison/Fee/Courses?** -> Use a **Markdown Table**.
+   - **Step-by-step or Features?** -> Use **Numbered/Bullet Lists**.
+   - **Concise Fact?** -> Use a **Single Clear Line** with bold highlights.
+   - **Complex Explanation?** -> Use **Short, Structured Paragraphs**.
+3. **REFINEMENT & LENGTH**:
+   - Synthesize information to a "proper length"—neither too short to be vague nor too long to be repetitive.
+   - If the user specifies a length (e.g. "in 3 lines"), adhere to it strictly.
+4. **CONTEXT SYNTHESIS**: Merge overlapping details from multiple context blocks into a single, cohesive, and accurate response.
+5. **MISSING DATA**: If the answer isn't in the provided context, say: "This information is not officially available in the university database at this time."
 """
             
-            # Execute with the smartest model for quality refinement
+            # Execute with the smartest model for quality refinement and formatting compliance
             response = await smart_llm.ainvoke(master_prompt)
             return response.content if hasattr(response, 'content') else str(response)
             
@@ -589,7 +665,7 @@ async def ingest_url(url: str, store_vectors: bool = True):
         
         full_text = "\n\n".join([d.page_content for d in docs])
 
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
         if store_vectors and vector_db:
@@ -644,7 +720,7 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
             page.metadata["user_id"] = user_id
             page.metadata["source"] = filename 
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         
         if full_text.strip() and not pages:
              from langchain.schema import Document
@@ -678,7 +754,7 @@ async def ingest_text(text: str, metadata: dict = None):
         
         doc = Document(page_content=text, metadata=metadata or {})
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=400)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents([doc])
         
         vector_db.add_documents(splits)

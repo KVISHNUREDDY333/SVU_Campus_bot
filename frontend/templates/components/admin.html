@@ -498,8 +498,15 @@
                 </div>
                 <h4>Student Support Tickets</h4>
                 <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
+                  <div class="admin-search-container" style="margin: 0; width: 200px">
+                    <input type="text" id="ticket-search-input" placeholder="Search tickets..." class="admin-search-input" oninput="filterAdminTickets()" style="padding: 8px 12px; font-size: 13px">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
+                  </div>
                   <button class="btn-primary" onclick="loadAllTickets()" style="font-size: 12px; padding: 8px 16px">
                     <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary" onclick="deleteAllClosedTickets()" style="font-size: 12px; padding: 8px 16px; background: #ef4444; border: none;">
+                    <i class="fa-solid fa-trash-can"></i> Delete Closed
                   </button>
                 </div>
               </div>

@@ -11,8 +11,21 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+# Handle asyncio loop policy for Windows and suppress deprecation warnings in Python 3.12+
 if platform.system() == 'Windows':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    import warnings
+    # Suppress the specific deprecation warning for WindowsSelectorEventLoopPolicy and set_event_loop_policy
+    warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*asyncio.*(WindowsSelectorEventLoopPolicy|set_event_loop_policy).*")
+    
+    try:
+        # Use ProactorEventLoopPolicy for better performance on Windows if available
+        # It's also the default in newer Python versions
+        if hasattr(asyncio, 'WindowsProactorEventLoopPolicy'):
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        else:
+            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception as e:
+        logger.warning(f"Loop policy configuration skipped: {e}")
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
