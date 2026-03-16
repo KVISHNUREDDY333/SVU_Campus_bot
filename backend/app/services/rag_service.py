@@ -15,6 +15,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 import logging
 import os
 from datetime import datetime
+
+# Configure environment variables to suppress Hugging Face warnings
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TOKENIZERS_PARALLELISM"] = "false" # Avoids potential parallelism warnings
+
+try:
+    # Suppress verbose "unauthenticated requests" warnings from huggingface_hub
+    from huggingface_hub.utils import logging as hf_logging
+    hf_logging.set_verbosity_error()
+except Exception:
+    pass
 from ..core.config import Config
 from ..core import database
 from .logging_service import log_event

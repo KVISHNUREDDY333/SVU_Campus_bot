@@ -1,4 +1,4 @@
-# SVU Campus Bot - Intelligent Campus Assistant
+# Intelligent Campus Assistant Chatbot
 
 ## Problem Statement
 Managing campus-related tasks regarding student queries on different concerns is often time-consuming due to static and fragmented information systems. There is a need for an intelligent, centralized solution that can understand natural language queries and provide accurate, context-aware responses using institutional data. This application aims to develop an intelligent campus assistant chatbot that delivers quick and reliable campus-related information through a conversational web interface, with optional voice support, while remaining lightweight and suitable for academic purpose.
