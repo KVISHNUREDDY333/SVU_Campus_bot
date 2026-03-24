@@ -425,11 +425,10 @@ async def _search_keywords_directly(query: str, limit: int = 5, return_list: boo
         if not words:
             return [] if return_list else ""
         
-        # Use lookaheads to ensure ALL words are present (AND logic)
-        regex_pattern = "".join(f"(?=.*{re.escape(word)})" for word in words)
-        regex_pattern = f"^{regex_pattern}.*$"
+        # Use OR logic to match any of the important keywords
+        regex_pattern = "|".join(re.escape(word) for word in words)
         
-        search_query = {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE | re.DOTALL)}}
+        search_query = {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE)}}
         if doc_type:
             search_query["type"] = doc_type
             
@@ -464,12 +463,12 @@ def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = Fa
         if not results:
             return [] if return_list else ""
             
-        # Threshold: 0.60 (cosine similarity)
-        valid_docs = [doc for doc, score in results if score >= 0.60]
+        # Threshold: 0.50 (cosine similarity) - Lowered from 0.60 to improve recall
+        valid_docs = [doc for doc, score in results if score >= 0.50]
         valid_docs = valid_docs[:limit]
         
         if not valid_docs:
-            logger.info(f"Vector search found results, but none met the 0.60 threshold for query: {query[:50]}")
+            logger.info(f"Vector search found results, but none met the 0.50 threshold for query: {query[:50]}")
             return [] if return_list else ""
         
         if return_list:
@@ -601,6 +600,7 @@ User Request: {message}
 ### CRITICAL INSTRUCTIONS FOR RESPONSE QUALITY:
 1. **FAQ & ACCURACY**: 
    - Analyze the provided context carefully. If an official FAQ is present, prioritize its details.
+   - **REFINE the retrieved FAQ** to directly address the user's specific question. Do not just paste the FAQ; adapt it to the user's context.
    - Deliver the **Exact Answer** prominently. No conversational fluff or preamble.
 2. **SITUATIONAL OPTIMAL FORMATTING**: 
    - **Data/Comparison/Fee/Courses?** -> Use a **Markdown Table**.
@@ -612,6 +612,7 @@ User Request: {message}
    - If the user specifies a length (e.g. "in 3 lines"), adhere to it strictly.
 4. **CONTEXT SYNTHESIS**: Merge overlapping details from multiple context blocks into a single, cohesive, and accurate response.
 5. **MISSING DATA**: If the answer isn't in the provided context, say: "This information is not officially available in the university database at this time."
+6. **LLM REFINEMENT**: Use your intelligence to refine the response based on the relative keywords and meaning of the user's request.
 """
             
             # Execute with the smartest model for quality refinement and formatting compliance
