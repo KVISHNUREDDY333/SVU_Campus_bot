@@ -310,52 +310,7 @@
               </div>
             </div>
 
-            <!-- Train The Brain Section -->
-            <div class="settings-card">
-              <div class="card-header">
-                <div class="card-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
-                  <i class="fa-solid fa-brain"></i>
-                </div>
-                <h4>Train The Brain</h4>
-                <div style="margin-left: auto; display: flex; gap: 12px; align-items: center;">
-                    <div class="admin-search-container" style="margin: 0; width: 220px">
-                        <input type="text" id="brain-search-input" placeholder="Search documents..." class="admin-search-input" oninput="filterTrainDocs()" style="padding: 8px 12px; font-size: 13px">
-                        <i class="fa-solid fa-magnifying-glass admin-search-icon" style="top: 50%; transform: translateY(-50%); right: 10px"></i>
-                    </div>
-                    <button class="btn-primary" onclick="loadTrainStatus()" style="font-size: 12px; padding: 8px 16px; background: #6366f1; border: 1px solid #4f46e5; color: white;">
-                        <i class="fa-solid fa-rotate"></i> Refresh
-                    </button>
-                    <button class="btn-primary" onclick="trainAllBrain(event)" style="background: var(--accent-color); font-size: 13px; padding: 8px 16px;">
-                        <i class="fa-solid fa-brain"></i> Train Main Brain
-                    </button>
-                </div>
-              </div>
-              <p style="color: var(--text-secondary); margin-bottom: 20px; font-size: 14px;">
-                Consolidate Knowledge Base data into the LLM's active reasoning. Train only on new or modified data.
-              </p>
 
-              <div class="documents-list-container responsive-scroll-container" style="max-height: 400px; overflow-y: auto;">
-                <table class="documents-table">
-                  <thead>
-                    <tr>
-                      <th style="text-align: left">Document Name</th>
-                      <th style="text-align: center">Type</th>
-                      <th style="text-align: center">FAQs</th>
-                      <th style="text-align: center">Status</th>
-                      <th style="text-align: center">Last Trained</th>
-                      <th style="text-align: right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody id="brain-training-body">
-                    <tr>
-                      <td colspan="6" style="text-align: center; padding: 30px; color: var(--text-secondary);">
-                        <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px"></i> Loading training status...
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
 
             <!-- System Logs -->
             <div class="settings-card">

@@ -629,7 +629,6 @@ function showSection(section) {
     loadSystemHealth();
     loadSuggestedFAQs();
     loadAdminTrending();
-    loadTrainStatus(); // Load training status dashboard
   }
 
   if (section === "calendar") {
@@ -4373,7 +4372,6 @@ async function refreshAllAdminData() {
       loadAllTickets(),
       loadSuggestedFAQs(),
       loadSystemHealth(),
-      loadTrainStatus(),
     ]);
 
     showToast("Success", "All admin features updated successfully!");
@@ -6007,171 +6005,6 @@ async function deleteNotification(event, id) {
   }
 }
 
-// --- Train The Brain Feature ---
-
-async function loadTrainStatus() {
-  if (!ACCESS_TOKEN) return;
-  const bodyEl = document.getElementById("brain-training-body");
-  if (!bodyEl) return;
-
-  try {
-    const res = await fetch(`${API_URL}/admin/brain/status`, {
-      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
-    });
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.detail || "Failed to load status");
-
-    if (data.length === 0) {
-      bodyEl.innerHTML =
-        '<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-secondary);">No documents available for training.</td></tr>';
-      return;
-    }
-
-    bodyEl.innerHTML = data
-      .map((doc) => {
-        const lastTrained = doc.last_trained
-          ? formatDate(doc.last_trained)
-          : "Never";
-        const statusClass = doc.is_trained
-          ? "status-pill status-active"
-          : "status-pill status-pending";
-        const statusText = doc.is_trained ? "Trained" : "Untrained";
-        const typeLabel = doc.type ? doc.type.toUpperCase() : "PDF";
-
-        return `
-                <tr class="brain-doc-row" data-filename="${doc.filename.toLowerCase()}">
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <i class="${getFileIconClass(doc.filename)}" style="color: var(--accent-color)"></i>
-                            <span>${escapeHtml(doc.filename)}</span>
-                        </div>
-                    </td>
-                    <td style="text-align: center"><span class="type-pill">${typeLabel}</span></td>
-                    <td style="text-align: center">${doc.faq_count}</td>
-                    <td style="text-align: center"><span class="${statusClass}">${statusText}</span></td>
-                    <td style="text-align: center; font-size: 12px; color: var(--text-secondary)">${lastTrained}</td>
-                    <td style="text-align: right">
-                        <button class="speech-btn" onclick="trainBrain('${doc.id}', event)" title="Train on this document" 
-                                style="width: 28px; height: 28px; background: ${doc.is_trained ? "rgba(0,0,0,0.05)" : "var(--accent-color)"}; color: ${doc.is_trained ? "var(--text-secondary)" : "white"}">
-                            <i class="fa-solid fa-brain"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-      })
-      .join("");
-
-    // Apply existing filter if search input is not empty
-    filterTrainDocs();
-  } catch (e) {
-    console.error("Load Train Status Error:", e);
-    bodyEl.innerHTML =
-      '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error loading status.</td></tr>';
-  }
-}
-
-function filterTrainDocs() {
-  const input = document.getElementById("brain-search-input");
-  if (!input) return;
-  const filter = input.value.toLowerCase();
-  const rows = document.querySelectorAll(".brain-doc-row");
-
-  rows.forEach((row) => {
-    const filename = row.getAttribute("data-filename") || "";
-    if (filename.includes(filter)) {
-      row.style.display = "";
-    } else {
-      row.style.display = "none";
-    }
-  });
-}
-
-async function trainBrain(id, event) {
-  if (!ACCESS_TOKEN) return;
-
-  const btn = event
-    ? event.currentTarget || event.target.closest("button")
-    : null;
-  const icon = btn ? btn.querySelector("i") : null;
-
-  if (icon) icon.classList.add("fa-spin");
-  if (typeof showStatusPopup === "function")
-    showStatusPopup("Activating Brain Cells...");
-
-  try {
-    const res = await fetch(`${API_URL}/admin/train/${id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      if (typeof showStatusPopup === "function")
-        showStatusPopup("Document Knowledge Ingested!");
-      refreshAdminData();
-    } else {
-      const errorMsg = data.detail || "Training failed";
-      if (typeof showStatusPopup === "function") showStatusPopup(errorMsg);
-      console.error("Train Brain Specific Error:", data);
-    }
-  } catch (e) {
-    if (typeof showStatusPopup === "function")
-      showStatusPopup("Connection Error");
-    console.error("Train Brain Network Error:", e);
-  } finally {
-    if (icon) icon.classList.remove("fa-spin");
-  }
-}
-
-async function trainAllBrain(e) {
-  if (!ACCESS_TOKEN) return;
-
-  const event = e || (typeof window !== "undefined" ? window.event : null);
-  const btn = event?.currentTarget || event?.target?.closest("button");
-  const icon = btn?.querySelector("i");
-
-  if (icon) icon.classList.add("fa-spin");
-  console.log("Starting Global Brain Training...");
-
-  if (typeof showStatusPopup === "function")
-    showStatusPopup("Activating University-Wide Brain...");
-
-  try {
-    const res = await fetch(`${API_URL}/admin/train/all`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await res.json();
-    console.log("Train All Brain Response:", data);
-
-    if (data.status === "no_updates") {
-      alert("No new data is injected to train.");
-      if (typeof showStatusPopup === "function")
-        showStatusPopup("Brain is already up to date.");
-    } else if (res.ok) {
-      if (typeof showStatusPopup === "function")
-        showStatusPopup(`Trained on ${data.trained_count} new document(s)!`);
-      refreshAdminData();
-    } else {
-      const errorMsg = data.detail || "Global training failed";
-      if (typeof showStatusPopup === "function") showStatusPopup(errorMsg);
-    }
-  } catch (e) {
-    if (typeof showStatusPopup === "function")
-      showStatusPopup("Failed to connect to service");
-    console.error("Train All Brain Error:", e);
-  } finally {
-    if (icon) icon.classList.remove("fa-spin");
-  }
-}
-
 function formatDate(dateStr) {
   if (!dateStr) return "N/A";
   const date = new Date(dateStr);
@@ -6198,10 +6031,6 @@ window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
 window.deleteNotification = deleteNotification;
-window.trainBrain = trainBrain;
-window.trainAllBrain = trainAllBrain;
-window.filterTrainDocs = filterTrainDocs;
-window.loadTrainStatus = loadTrainStatus;
 
 // Initialize if already logged in
 if (ACCESS_TOKEN) {
