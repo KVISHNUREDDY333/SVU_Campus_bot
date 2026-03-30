@@ -30,27 +30,8 @@ except Exception:
 from ..core.config import Config
 from ..core import database
 from .logging_service import log_event
-import re
-import uuid
 
 logger = logging.getLogger("uvicorn")
-
-def clean_text(text: str) -> str:
-    """
-    Cleans and normalizes text for RAG.
-    - Removes excessive whitespace
-    - Removes noise characters
-    - Normalizes line endings
-    """
-    if not text:
-        return ""
-    # Remove excessive newlines and spaces
-    text = re.sub(r'\n\s*\n', '\n\n', text)
-    text = re.sub(r' +', ' ', text)
-    # Remove non-printable characters
-    text = "".join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
-    return text.strip()
-
 
 MASTER_AGENT_PROMPT = """✅ SVU UNIVERSITY CHATBOT – MASTER SYSTEM PROMPT
 You are an AI-powered University Chatbot for Sri Venkateswara University (SVU).
@@ -500,89 +481,7 @@ def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = Fa
         logger.error(f"Vectors similarity search error: {e}")
         return [] if return_list else ""
 
-async def expand_query(query: str) -> list:
-    """
-    Generates 2-3 variations of the user query to improve retrieval coverage.
-    """
-    if not fast_llm:
-        return [query]
-    
-    prompt = f"""
-    You are an AI assistant helping to improve search retrieval for Sri Venkateswara University (SVU). 
-    Generate 2 variations of the following user query to help find more relevant information in the university database.
-    
-    Original Query: {query}
-    
-    Output exactly two variations, one per line. Do not include numbering or any other text.
-    """
-    try:
-        response = await fast_llm.ainvoke(prompt)
-        content = response.content if hasattr(response, 'content') else str(response)
-        variations = [line.strip() for line in content.split('\n') if line.strip()]
-        return [query] + variations[:2]
-    except Exception as e:
-        logger.error(f"Error expanding query: {e}")
-        return [query]
-
-async def rerank_chunks(query: str, chunks: list, top_k: int = 5) -> list:
-    """
-    Re-ranks retrieved chunks based on relevance to the query using the smart LLM.
-    """
-    if not smart_llm or not chunks:
-        return chunks[:top_k]
-    
-    # Pack chunks with indices for identification
-    packed_chunks = ""
-    for i, chunk in enumerate(chunks[:10]): # Re-rank top 10
-        content = chunk.page_content if hasattr(chunk, 'page_content') else str(chunk)
-        packed_chunks += f"ID: {i}\nContent: {content[:300]}...\n\n"
-    
-    prompt = f"""
-    You are a relevance ranker. Given a user query and a list of context fragments, rank them by how well they can answer the query.
-    
-    Query: {query}
-    
-    Context Fragments:
-    {packed_chunks}
-    
-    Respond with the IDs of the top {top_k} most relevant fragments, ordered by relevance, separated by commas. 
-    Output ONLY the IDs.
-    """
-    try:
-        response = await smart_llm.ainvoke(prompt)
-        content = response.content if hasattr(response, 'content') else str(response)
-        ids_str = content.strip()
-        # Handle cases where LLM might add prefix
-        ids_match = re.search(r'([0-9,\s]+)', ids_str)
-        if ids_match:
-            ids_str = ids_match.group(1)
-            
-        ids = []
-        for id_val in ids_str.split(','):
-            id_val = id_val.strip()
-            if id_val.isdigit():
-                ids.append(int(id_val))
-        
-        reranked = []
-        for idx in ids:
-            if idx < len(chunks):
-                reranked.append(chunks[idx])
-        
-        # Add any missing chunks that weren't in the top IDs but were in the original list
-        seen_contents = {c.page_content if hasattr(c, 'page_content') else str(c) for c in reranked}
-        for chunk in chunks:
-            content = chunk.page_content if hasattr(chunk, 'page_content') else str(chunk)
-            if content not in seen_contents and len(reranked) < top_k:
-                reranked.append(chunk)
-                seen_contents.add(content)
-                
-        return reranked[:top_k]
-    except Exception as e:
-        logger.error(f"Error re-ranking chunks: {e}")
-        return chunks[:top_k]
-
 def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
-
     """Combines vector and keyword results using Reciprocal Rank Fusion."""
     scores = {}
     from langchain.schema import Document
@@ -654,116 +553,113 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         trim_session_history(session_id, limit=10)
         update_entities(session_id, message)
         entities_str = str(get_session_entities(session_id))
-        
-        # 1. RETRIEVAL PHASE: Hybrid Search with Multi-Query Expansion
-        logger.info(f"[RAG] Optimized Retrieval for query: {message[:50]}")
-        
-        # Step 1.1: Query Rephrasing (Standalone Question)
-        rephrased_query = message
+
         try:
-            if fast_llm:
-                history = get_session_history(session_id).messages[-5:]
-                if history:
-                    contextualize_prompt = f"""Given the chat history and the latest user question, 
-                    formulate a standalone question in English that represents the user's intent clearly for database search.
-                    
-                    History: {history}
-                    Latest: {message}
-                    
-                    Standalone:"""
-                    rephrase_res = await fast_llm.ainvoke(contextualize_prompt)
-                    rephrased_query = rephrase_res.content if hasattr(rephrase_res, 'content') else str(rephrase_res)
-                    logger.info(f"[RAG] Rephrased Query: {rephrased_query}")
-        except Exception as re_e:
-             logger.warning(f"Rephrasing failed: {re_e}")
+            # 1. RETRIEVAL PHASE: Hybrid Search with Query Rephrasing candidate
+            logger.info(f"[RAG] Hybrid Retrieval for query: {message[:50]}")
+            
+            # Use LLM to rephrase if history exists (Optional, depends on model speed)
+            rephrased_query = message
+            try:
+                if fast_llm:
+                    # Get history for context
+                    history = get_session_history(session_id).messages[-5:] # Last 5 turns
+                    if history:
+                        contextualize_prompt = f"""Given the chat history and the latest user question, 
+                        formulate a standalone question in English. 
+                        
+                        History: {history}
+                        Latest: {message}
+                        
+                        Standalone:"""
+                        rephrase_res = await fast_llm.ainvoke(contextualize_prompt)
+                        rephrased_query = rephrase_res.content if hasattr(rephrase_res, 'content') else str(rephrase_res)
+                        logger.info(f"[RAG] Rephrased Query: {rephrased_query}")
+            except Exception as re_e:
+                 logger.warning(f"Rephrasing failed: {re_e}")
 
-        # Step 1.2: Multi-Query Expansion
-        expanded_queries = await expand_query(rephrased_query)
-        logger.info(f"[RAG] Expanded queries: {expanded_queries}")
+            # Hybrid Search
+            fused_docs = await _hybrid_search(rephrased_query, limit=10)
+            combined_context = "\n\n".join([doc.page_content for doc in fused_docs])
+            
+            # 2. GENERATION PHASE: Direct, professional, and refined response
+            master_prompt = f"""You are the official Intelligent Campus Assistant Chatbot for Sri Venkateswara University (SVU). 
+Your goal is to deliver an **Accurate and Refined Answer** based on the University Knowledge Base (FAQ & Campus Data).
 
-        # Step 1.3: Hybrid Search for all query variations
-        all_fused_docs = []
-        for q in expanded_queries:
-            fused_docs = await _hybrid_search(q, limit=5)
-            all_fused_docs.extend(fused_docs)
-        
-        # De-duplicate results from multi-query expansion
-        unique_docs = []
-        seen_content = set()
-        for doc in all_fused_docs:
-            content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
-            if content not in seen_content:
-                unique_docs.append(doc)
-                seen_content.add(content)
-        
-        # Step 1.4: Re-Ranking
-        logger.info(f"[RAG] Re-ranking {len(unique_docs)} unique documents...")
-        final_docs = await rerank_chunks(rephrased_query, unique_docs, top_k=5)
-        
-        combined_context = "\n\n".join([doc.page_content for doc in final_docs])
-        sources = list(set([doc.metadata.get("source", "Unknown") for doc in final_docs]))
-        
-        # 2. GENERATION PHASE: Strict, professional, and structured JSON response
-        master_prompt = f"""
-You are the official Intelligent Campus Assistant Chatbot for Sri Venkateswara University (SVU). 
-Your goal is to deliver an **Accurate and Refined Answer** based ONLY on the provided University Knowledge Base.
-
-### STRICT RULES:
-1. Generate the answer ONLY from the retrieved context below.
-2. Do NOT use external knowledge. Do NOT guess or hallucinate.
-3. If the answer is NOT found in the context, respond EXACTLY with: "Information not available in the provided data"
-4. Output your response in the following JSON format:
-{{
-  "answer": "Your clear and concise response here",
-  "sources": ["source1", "source2"],
-  "confidence": "high|medium|low"
-}}
-
----
-### INPUT DATA:
 Current Time: {current_time}
 User Context: {personal_context_str}
 Language Rule: {lang_instruction}
 
-University Knowledge Base (Context):
-{combined_context if combined_context.strip() else "NO_CONTEXT_AVAILABLE"}
+University Knowledge Base (Refined Context):
+---
+{combined_context if combined_context.strip() else "No specific records found in the database."}
+---
 
 User Request: {message}
 
-### INSTRUCTIONS:
-- Synthesize a well-structured answer. Use bullet points or tables within the "answer" field if appropriate (escape newlines).
-- Confidence Scoring: 
-  - "high" if the context directly and fully answers the query.
-  - "medium" if the context partially answers the query.
-  - "low" if the context is tangentially related.
+### CRITICAL INSTRUCTIONS FOR RESPONSE QUALITY:
+1. **FAQ & ACCURACY**: 
+   - Analyze the provided context carefully. If an official FAQ is present, prioritize its details.
+   - **REFINE the retrieved FAQ** to directly address the user's specific question. Do not just paste the FAQ; adapt it to the user's context.
+   - Deliver the **Exact Answer** prominently. No conversational fluff or preamble.
+2. **SITUATIONAL OPTIMAL FORMATTING**: 
+   - **Data/Comparison/Fee/Courses?** -> Use a **Markdown Table**.
+   - **Step-by-step or Features?** -> Use **Numbered/Bullet Lists**.
+   - **Concise Fact?** -> Use a **Single Clear Line** with bold highlights.
+   - **Complex Explanation?** -> Use **Short, Structured Paragraphs**.
+3. **REFINEMENT & LENGTH**:
+   - Synthesize information to a "proper length"—neither too short to be vague nor too long to be repetitive.
+   - If the user specifies a length (e.g. "in 3 lines"), adhere to it strictly.
+4. **CONTEXT SYNTHESIS**: Merge overlapping details from multiple context blocks into a single, cohesive, and accurate response.
+5. **MISSING DATA**: If the answer isn't in the provided context, say: "This information is not officially available in the university database at this time."
+6. **LLM REFINEMENT**: Use your intelligence to refine the response based on the relative keywords and meaning of the user's request.
 """
-        
-        # Execute with the smartest model
-        response = await smart_llm.ainvoke(master_prompt)
-        res_content = response.content if hasattr(response, 'content') else str(response)
-        
-        # Try to ensure valid JSON output
-        if not res_content.strip().startswith('{'):
-            # Extract JSON if LLM added preamble
-            json_match = re.search(r'(\{.*\})', res_content, re.DOTALL)
-            if json_match:
-                res_content = json_match.group(1)
-        
-        return res_content
             
+            # Execute with the smartest model for quality refinement and formatting compliance
+            response = await smart_llm.ainvoke(master_prompt)
+            return response.content if hasattr(response, 'content') else str(response)
+            
+        except Exception as e:
+            error_str = str(e).lower()
+            if "413" in error_str or "429" in error_str or "rate limit" in error_str or "too large" in error_str:
+                logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history...")
+                trim_session_history(session_id, limit=2)
+                return "The system is currently experiencing high demand. Please try again in a few minutes."
+            else:
+                raise e
     except Exception as e:
-        error_str = str(e).lower()
-        if "413" in error_str or "429" in error_str or "rate limit" in error_str or "too large" in error_str:
-            logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history...")
-            trim_session_history(session_id, limit=2)
-            return "The system is currently experiencing high demand. Please try again in a few minutes."
-        
         import traceback
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
         raise e
 
-
-
+async def train_on_all_faqs():
+    """Ensure all FAQs in svu_vectors have embeddings."""
+    if database.svu_vectors_db is None or not embeddings:
+        return {"trained": 0, "message": "Database or embeddings not available"}
+        
+    try:
+        # Find FAQs missing embeddings
+        query = {"type": "faq", "embedding": {"$exists": False}}
+        missing_faqs = list(database.svu_vectors_db.find(query))
+        
+        trained = 0
+        for faq in missing_faqs:
+            text = faq.get("text", "")
+            if text:
+                try:
+                    embedding = embeddings.embed_query(text)
+                    database.svu_vectors_db.update_one(
+                        {"_id": faq["_id"]},
+                        {"$set": {"embedding": embedding}}
+                    )
+                    trained += 1
+                except Exception as e:
+                    logger.error(f"Error generating embedding during bulk train: {e}")
+                    
+        return {"trained": trained, "message": f"Generated embeddings for {trained} FAQs."}
+    except Exception as e:
+        logger.error(f"Bulk train error: {e}")
+        return {"trained": 0, "message": f"Error: {str(e)}"}
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
@@ -780,26 +676,9 @@ async def ingest_url(url: str, store_vectors: bool = True):
         loader = WebBaseLoader(url, requests_kwargs={"verify": False})
         docs = loader.load()
         
-        # Data Cleaning
-        for doc in docs:
-            doc.page_content = clean_text(doc.page_content)
-        
         full_text = "\n\n".join([d.page_content for d in docs])
-        
-        # Metadata Enrichment
-        doc_id = str(uuid.uuid4())
-        title = docs[0].metadata.get("title", url) if docs else url
-        
-        for doc in docs:
-            doc.metadata.update({
-                "document_id": doc_id,
-                "title": title,
-                "source": url,
-                "ingested_at": datetime.utcnow().isoformat()
-            })
 
-        # Smart Chunking: 400 tokens with 80 overlap
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=80)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
         
         if store_vectors and vector_db:
@@ -812,7 +691,6 @@ async def ingest_url(url: str, store_vectors: bool = True):
     except Exception as e:
         logger.error(f"URL Ingestion Error: {e}")
         raise e
-
 
 async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: bool = True):
     """
@@ -829,30 +707,39 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
             
         logger.info(f"Ingesting PDF: {file_path} for user: {user_id}")
         
-        filename = os.path.basename(file_path)
-        doc_id = str(uuid.uuid4())
+        full_text = ""
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(file_path)
+            text_parts = []
+            for page in reader.pages:
+                text_parts.append(page.extract_text() or "")
+            full_text = "\n\n".join(text_parts)
+            logger.info(f"Extracted {len(full_text)} chars using pypdf directly.")
+        except Exception as e:
+            logger.error(f"pypdf extraction failed: {e}, falling back to loader.")
         
         from langchain_community.document_loaders import PyPDFLoader
         loader = PyPDFLoader(file_path)
         pages = loader.load()
         
-        # Data Cleaning & Metadata Enrichment
+        if not full_text.strip():
+            full_text = "\n\n".join([d.page_content for d in pages])
+            logger.info(f"Extracted {len(full_text)} chars using PyPDFLoader.")
+
+        filename = os.path.basename(file_path)
+        
         for page in pages:
-            page.page_content = clean_text(page.page_content)
-            page.metadata.update({
-                "document_id": doc_id,
-                "title": filename,
-                "source": filename,
-                "user_id": user_id,
-                "ingested_at": datetime.utcnow().isoformat(),
-                "section": page.metadata.get("page", "unknown")
-            })
+            page.metadata["user_id"] = user_id
+            page.metadata["source"] = filename 
         
-        full_text = "\n\n".join([d.page_content for d in pages])
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         
-        # Smart Chunking: 400 tokens with 80 overlap
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=80)
-        splits = text_splitter.split_documents(pages)
+        if full_text.strip() and not pages:
+             from langchain.schema import Document
+             splits = text_splitter.create_documents([full_text], metadatas=[{"source": filename, "user_id": user_id}])
+        else:
+             splits = text_splitter.split_documents(pages)
         
         if store_vectors and vector_db:
              vector_db.add_documents(splits)
@@ -864,7 +751,6 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
     except Exception as e:
         logger.error(f"Ingestion Error: {e}")
         raise e
-
 
 async def ingest_text(text: str, metadata: dict = None):
     """
@@ -879,11 +765,9 @@ async def ingest_text(text: str, metadata: dict = None):
         from langchain.schema import Document
         logger.info("Ingesting Text Chunk...")
         
-        clean_content = clean_text(text)
-        doc = Document(page_content=clean_content, metadata=metadata or {})
+        doc = Document(page_content=text, metadata=metadata or {})
         
-        # Smart Chunking: 400 tokens with 80 overlap
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=80)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents([doc])
         
         vector_db.add_documents(splits)
@@ -891,7 +775,6 @@ async def ingest_text(text: str, metadata: dict = None):
     except Exception as e:
         logger.error(f"Text Ingestion Error: {e}")
         raise e
-
 
 async def ingest_faq(question: str, answer: str, category: str = "General", source: str = "manual", faq_id: str = None):
     """

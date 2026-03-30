@@ -136,7 +136,7 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)
             if source:
                 database.documents_db.update_one(
                     {"filename": source},
-                    {"$inc": {"extracted_faqs": -1}, "$set": {"last_modified": datetime.utcnow()}}
+                    {"$inc": {"extracted_faqs": -1}, "$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
                 )
             return {"status": "success", "message": "FAQ deleted and document count updated"}
         else:
@@ -308,7 +308,8 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
              "last_modified": datetime.utcnow(),
-
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "text",
@@ -381,7 +382,8 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
              "last_modified": datetime.utcnow(),
-
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "pdf",
@@ -445,7 +447,8 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
              "uploaded_by": current_user.username,
              "uploaded_at": datetime.utcnow(),
              "last_modified": datetime.utcnow(),
-
+             "is_trained": False,
+             "last_trained": None,
              "chunks": num_chunks,
              "status": "ingested",
              "type": "url",
@@ -669,6 +672,220 @@ async def list_documents(
         docs.append(doc)
     return docs
 
+@router.get("/admin/brain/status")
+async def get_brain_training_status(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if database.documents_db is None:
+        return []
+    
+    docs = list(database.documents_db.find().sort("last_modified", -1))
+    results = []
+    for d in docs:
+        results.append({
+            "id": str(d["_id"]),
+            "filename": d.get("filename", "Unknown"),
+            "type": d.get("type", "unknown"),
+            "faq_count": d.get("extracted_faqs", 0),
+            "is_trained": d.get("is_trained", False),
+            "last_trained": d.get("last_trained"),
+            "last_modified": d.get("last_modified", d.get("uploaded_at"))
+        })
+    return results
+
+@router.post("/admin/train/all")
+async def train_all_knowledge(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    from ..services.rag_service import refine_kb_data, ingest_faq, ingest_url, ingest_pdf, train_on_all_faqs
+    
+    # Find untrained or modified docs
+    query = {"$or": [{"is_trained": False}, {"is_trained": {"$exists": False}}]}
+    untrained_docs = list(database.documents_db.find(query))
+    
+    trained_count = 0
+    
+    for doc in untrained_docs:
+        doc_id = str(doc["_id"])
+        filename = doc.get("filename")
+        doc_type = doc.get("type", "pdf")
+        
+        full_text = ""
+        try:
+            if doc_type == "url":
+                _, full_text = await ingest_url(filename, store_vectors=False)
+            elif doc_type == "pdf":
+                upload_dir = "backend/uploads"
+                file_path = os.path.join(upload_dir, filename)
+                if os.path.exists(file_path):
+                    _, full_text = await ingest_pdf(file_path, store_vectors=False)
+        except Exception as e:
+            print(f"Error fetching content for training (Doc: {filename}): {e}")
+
+        now = datetime.utcnow()
+        # Query svu_vectors for FAQ-type documents matching this source
+        faqs = list(database.svu_vectors_db.find({"type": "faq", "source": filename}))
+        
+        if faqs and full_text:
+            faqs_to_refine = []
+            for f in faqs:
+                text = f.get("text", "")
+                question = ""
+                answer = ""
+                if "Question:" in text and "Answer:" in text:
+                    parts = text.split("Answer:", 1)
+                    question = parts[0].replace("Question:", "").strip()
+                    answer = parts[1].strip()
+                else:
+                    question = text[:100]
+                    answer = text
+
+                faqs_to_refine.append({
+                    "question": question,
+                    "answer": answer,
+                    "category": f.get("category", "General"),
+                    "keywords": f.get("keywords", [])
+                })
+            
+            refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+            from ..services.rag_service import embeddings
+            
+            for i, f in enumerate(faqs):
+                if i < len(refined_faqs):
+                    refined = refined_faqs[i]
+                    formatted_text = f"Question: {refined.get('question', '')}\nAnswer: {refined.get('answer', '')}"
+                    update_data = {
+                        "text": formatted_text,
+                        "category": refined.get("category", f.get("category", "General")),
+                        "keywords": refined.get("keywords", f.get("keywords", [])),
+                        "last_verified": now
+                    }
+                    try:
+                        if embeddings:
+                            update_data["embedding"] = embeddings.embed_query(formatted_text)
+                    except Exception as e:
+                        print(f"Error embedding refined FAQ: {e}")
+                    
+                    database.svu_vectors_db.update_one(
+                        {"_id": f["_id"]},
+                        {"$set": update_data}
+                    )
+
+        database.documents_db.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"is_trained": True, "last_trained": now}}
+        )
+        trained_count += 1
+    
+    # Always bulk-ingest ALL FAQs into the vector store for comprehensive retrieval
+    try:
+        result = await train_on_all_faqs()
+        faq_count = result.get("trained", 0)
+    except Exception as e:
+        print(f"Error during bulk FAQ ingestion: {e}")
+        faq_count = 0
+    
+    if trained_count == 0 and faq_count == 0:
+        return {"status": "no_updates", "message": "No data is injected to train."}
+    
+    return {
+        "status": "success", 
+        "trained_count": trained_count, 
+        "faq_count": faq_count,
+        "message": f"Trained {trained_count} document(s) and ingested {faq_count} FAQs into vector store."
+    }
+
+@router.post("/admin/train/{doc_id}")
+async def train_specific_document(doc_id: str, current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    from ..services.rag_service import refine_kb_data, ingest_faq, train_on_all_faqs
+    
+    doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    filename = doc.get("filename")
+    doc_type = doc.get("type", "pdf")
+    
+    full_text = ""
+    try:
+        if doc_type == "url":
+            from ..services.rag_service import ingest_url
+            _, full_text = await ingest_url(filename, store_vectors=False)
+        elif doc_type == "pdf":
+            upload_dir = "backend/uploads"
+            file_path = os.path.join(upload_dir, filename)
+            from ..services.rag_service import ingest_pdf
+            _, full_text = await ingest_pdf(file_path, store_vectors=False)
+    except Exception as e:
+        print(f"Error fetching document content for refinement: {e}")
+
+    # Query svu_vectors for FAQ-type documents matching this source
+    faqs = list(database.svu_vectors_db.find({"type": "faq", "source": filename}))
+    
+    if faqs and full_text:
+        print(f"[TRAIN] Refining {len(faqs)} FAQs for {filename}")
+        faqs_to_refine = []
+        for f in faqs:
+            text = f.get("text", "")
+            question = ""
+            answer = ""
+            if "Question:" in text and "Answer:" in text:
+                parts = text.split("Answer:", 1)
+                question = parts[0].replace("Question:", "").strip()
+                answer = parts[1].strip()
+            else:
+                question = text[:100]
+                answer = text
+
+            faqs_to_refine.append({
+                "question": question,
+                "answer": answer,
+                "category": f.get("category", "General"),
+                "keywords": f.get("keywords", [])
+            })
+            
+        refined_faqs = await refine_kb_data(faqs_to_refine, full_text)
+        from ..services.rag_service import embeddings
+        
+        for i, f in enumerate(faqs):
+            if i < len(refined_faqs):
+                refined = refined_faqs[i]
+                formatted_text = f"Question: {refined.get('question', '')}\nAnswer: {refined.get('answer', '')}"
+                update_data = {
+                    "text": formatted_text,
+                    "category": refined.get("category", f.get("category", "General")),
+                    "keywords": refined.get("keywords", f.get("keywords", [])),
+                    "last_verified": datetime.utcnow()
+                }
+                try:
+                    if embeddings:
+                        update_data["embedding"] = embeddings.embed_query(formatted_text)
+                except Exception as e:
+                    print(f"Error embedding refined FAQ: {e}")
+                
+                database.svu_vectors_db.update_one(
+                    {"_id": f["_id"]},
+                    {"$set": update_data}
+                )
+
+    # Final synchronization of counts
+    if filename:
+        actual_count = database.svu_vectors_db.count_documents({
+            "source": filename,
+            "type": "faq"
+        })
+        database.documents_db.update_one(
+            {"_id": ObjectId(doc_id)},
+            {"$set": {"extracted_faqs": actual_count}}
+        )
+        print(f"[TRAIN] Synced FAQ count for {filename}: {actual_count}")
+
+    return {"status": "success", "message": "Document training complete and FAQs ingested into vector store."}
 
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
 async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):
@@ -796,7 +1013,17 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="FAQ not found")
             
-        return {"status": "success", "message": "FAQ updated"}
+        # Mark parent document as untrained
+        updated_faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
+        if updated_faq:
+            source = updated_faq.get("source")
+            if source:
+                database.documents_db.update_one(
+                    {"filename": source},
+                    {"$set": {"is_trained": False, "last_modified": datetime.utcnow()}}
+                )
+            
+        return {"status": "success", "message": "FAQ updated and document marked for retraining"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
