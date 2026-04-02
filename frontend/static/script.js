@@ -548,15 +548,19 @@ async function loadTrendingQueries() {
     data.forEach((q) => {
       const card = document.createElement("div");
       card.className = "suggestion-card";
-      // Pass response if it exists, otherwise just text
+      // Pass response if it exists, otherwise null
       const responseArg = q.response
-        ? `, '${q.response.replace(/'/g, "\\'")}'`
-        : "";
+        ? `'${q.response.replace(/'/g, "\\'")}'`
+        : "null";
+      const linkArg = q.link ? `'${q.link.replace(/'/g, "\\'")}'` : "null";
+
       card.setAttribute(
         "onclick",
-        `appendQuick('${q.text.replace(/'/g, "\\'")}'${responseArg})`,
+        `appendQuick('${q.text.replace(/'/g, "\\'")}', ${responseArg}, ${linkArg})`,
       );
-      card.innerHTML = `<div class='icon'><i class='${q.icon}'></i></div><div><div class='title'>${q.text}</div><div class='desc'>${q.subtext}</div></div>`;
+      
+      const linkIcon = q.link ? `<i class='fa-solid fa-link' style='font-size:10px; margin-left:4px; opacity:0.6;'></i>` : "";
+      card.innerHTML = `<div class='icon'><i class='${q.icon}'></i></div><div><div class='title'>${q.text} ${linkIcon}</div><div class='desc'>${q.subtext}</div></div>`;
       container.appendChild(card);
     });
     console.timeEnd("TrendingQueriesLoad");
@@ -649,8 +653,8 @@ function showSection(section) {
   }
 }
 
-async function appendQuick(text, preDefinedResponse = null) {
-  if (preDefinedResponse) {
+async function appendQuick(text, preDefinedResponse = null, link = null) {
+  if (preDefinedResponse || link) {
     // Hide welcome screen if visible
     const welcomeScreen = document.getElementById("welcome-screen");
     if (welcomeScreen && welcomeScreen.style.display !== "none") {
@@ -663,7 +667,12 @@ async function appendQuick(text, preDefinedResponse = null) {
     // Simulate a small delay for natural feeling
     setTimeout(() => {
       hideTypingIndicator();
-      appendMessage(preDefinedResponse, "bot", true);
+      let responseText = preDefinedResponse || "";
+      if (link) {
+          if (responseText) responseText += "\n\n";
+          responseText += `Visit the link to know more: <a href="${link}" target="_blank" class="chat-link">${link}</a>`;
+      }
+      appendMessage(responseText, "bot", true);
       scrollToBottom();
     }, 600);
     return;
@@ -4373,7 +4382,6 @@ async function refreshAllAdminData() {
       loadAllTickets(),
       loadSuggestedFAQs(),
       loadSystemHealth(),
-      loadTrainStatus(),
     ]);
 
     showToast("Success", "All admin features updated successfully!");
@@ -5332,6 +5340,7 @@ function renderAdminTrendingList() {
             <div style='flex:1;'>
                 <div style='font-weight:600; color:var(--text-primary); font-size:15px; margin-bottom: 2px;'>${q.text}</div>
                 <div style='font-size:13px; color:var(--text-secondary); opacity: 0.8;'>${q.subtext}</div>
+                ${q.link ? `<div style='font-size:11px; color:var(--accent-color); margin-top:4px;'><i class='fa-solid fa-link'></i> ${q.link}</div>` : ""}
             </div>
             <div style='display:flex; gap:10px;'>
                 <button onclick='editTrendingQuery("${q.id}")' style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color:var(--text-secondary); cursor:pointer; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;' title='Edit'>
@@ -5385,6 +5394,7 @@ function openAddTrendingModal(query = null) {
   const textInput = document.getElementById("trending-text");
   const subtextInput = document.getElementById("trending-subtext");
   const responseInput = document.getElementById("trending-response");
+  const linkInput = document.getElementById("trending-link");
   const hiddenIcon = document.getElementById("trending-icon");
   const modalTitle = modal.querySelector("h3");
   const submitBtn = document.getElementById("btn-trending-submit");
@@ -5395,6 +5405,7 @@ function openAddTrendingModal(query = null) {
     if (textInput) textInput.value = query.text;
     if (subtextInput) subtextInput.value = query.subtext;
     if (responseInput) responseInput.value = query.response || "";
+    if (linkInput) linkInput.value = query.link || "";
     if (hiddenIcon) hiddenIcon.value = query.icon;
 
     if (modalTitle) modalTitle.innerText = "Update Trending Query";
@@ -5414,6 +5425,7 @@ function openAddTrendingModal(query = null) {
     if (textInput) textInput.value = "";
     if (subtextInput) subtextInput.value = "";
     if (responseInput) responseInput.value = "";
+    if (linkInput) linkInput.value = "";
     if (hiddenIcon) hiddenIcon.value = "fa-solid fa-fire"; // Default
 
     if (modalTitle) modalTitle.innerText = "Add Trending Query";
@@ -5503,17 +5515,18 @@ async function addTrendingQuery() {
   const id = document.getElementById("trending-id").value;
   const text = document.getElementById("trending-text").value;
   const subtext = document.getElementById("trending-subtext").value;
+  const response = document.getElementById("trending-response").value;
+  const link = document.getElementById("trending-link").value;
   const icon = document.getElementById("trending-icon").value;
-  const response = document.getElementById("trending-response").value.trim();
 
-  if (!text || !subtext) {
-    alert("Please fill in all fields");
+  if (!text || !subtext || !icon) {
+    showStatusPopup("Text, Subtext and Icon are required");
     return;
   }
 
-  try {
-    const payload = { text, subtext, icon, order: 0, response: response };
+  const payload = { text, subtext, icon, response, link };
 
+  try {
     console.log("Saving Query:", { id, payload });
 
     let url = `${API_URL}/admin/trending`;
@@ -6009,168 +6022,6 @@ async function deleteNotification(event, id) {
 
 // --- Train The Brain Feature ---
 
-async function loadTrainStatus() {
-  if (!ACCESS_TOKEN) return;
-  const bodyEl = document.getElementById("brain-training-body");
-  if (!bodyEl) return;
-
-  try {
-    const res = await fetch(`${API_URL}/admin/brain/status`, {
-      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
-    });
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.detail || "Failed to load status");
-
-    if (data.length === 0) {
-      bodyEl.innerHTML =
-        '<tr><td colspan="6" style="text-align: center; padding: 30px; color: var(--text-secondary);">No documents available for training.</td></tr>';
-      return;
-    }
-
-    bodyEl.innerHTML = data
-      .map((doc) => {
-        const lastTrained = doc.last_trained
-          ? formatDate(doc.last_trained)
-          : "Never";
-        const statusClass = doc.is_trained
-          ? "status-pill status-active"
-          : "status-pill status-pending";
-        const statusText = doc.is_trained ? "Trained" : "Untrained";
-        const typeLabel = doc.type ? doc.type.toUpperCase() : "PDF";
-
-        return `
-                <tr class="brain-doc-row" data-filename="${doc.filename.toLowerCase()}">
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <i class="${getFileIconClass(doc.filename)}" style="color: var(--accent-color)"></i>
-                            <span>${escapeHtml(doc.filename)}</span>
-                        </div>
-                    </td>
-                    <td style="text-align: center"><span class="type-pill">${typeLabel}</span></td>
-                    <td style="text-align: center">${doc.faq_count}</td>
-                    <td style="text-align: center"><span class="${statusClass}">${statusText}</span></td>
-                    <td style="text-align: center; font-size: 12px; color: var(--text-secondary)">${lastTrained}</td>
-                    <td style="text-align: right">
-                        <button class="speech-btn" onclick="trainBrain('${doc.id}', event)" title="Train on this document" 
-                                style="width: 28px; height: 28px; background: ${doc.is_trained ? "rgba(0,0,0,0.05)" : "var(--accent-color)"}; color: ${doc.is_trained ? "var(--text-secondary)" : "white"}">
-                            <i class="fa-solid fa-brain"></i>
-                        </button>
-                    </td>
-                </tr>
-            `;
-      })
-      .join("");
-
-    // Apply existing filter if search input is not empty
-    filterTrainDocs();
-  } catch (e) {
-    console.error("Load Train Status Error:", e);
-    bodyEl.innerHTML =
-      '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error loading status.</td></tr>';
-  }
-}
-
-function filterTrainDocs() {
-  const input = document.getElementById("brain-search-input");
-  if (!input) return;
-  const filter = input.value.toLowerCase();
-  const rows = document.querySelectorAll(".brain-doc-row");
-
-  rows.forEach((row) => {
-    const filename = row.getAttribute("data-filename") || "";
-    if (filename.includes(filter)) {
-      row.style.display = "";
-    } else {
-      row.style.display = "none";
-    }
-  });
-}
-
-async function trainBrain(id, event) {
-  if (!ACCESS_TOKEN) return;
-
-  const btn = event
-    ? event.currentTarget || event.target.closest("button")
-    : null;
-  const icon = btn ? btn.querySelector("i") : null;
-
-  if (icon) icon.classList.add("fa-spin");
-  if (typeof showStatusPopup === "function")
-    showStatusPopup("Activating Brain Cells...");
-
-  try {
-    const res = await fetch(`${API_URL}/admin/train/${id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await res.json();
-
-    if (res.ok) {
-      if (typeof showStatusPopup === "function")
-        showStatusPopup("Document Knowledge Ingested!");
-      refreshAdminData();
-    } else {
-      const errorMsg = data.detail || "Training failed";
-      if (typeof showStatusPopup === "function") showStatusPopup(errorMsg);
-      console.error("Train Brain Specific Error:", data);
-    }
-  } catch (e) {
-    if (typeof showStatusPopup === "function")
-      showStatusPopup("Connection Error");
-    console.error("Train Brain Network Error:", e);
-  } finally {
-    if (icon) icon.classList.remove("fa-spin");
-  }
-}
-
-async function trainAllBrain(e) {
-  if (!ACCESS_TOKEN) return;
-
-  const event = e || (typeof window !== "undefined" ? window.event : null);
-  const btn = event?.currentTarget || event?.target?.closest("button");
-  const icon = btn?.querySelector("i");
-
-  if (icon) icon.classList.add("fa-spin");
-  console.log("Starting Global Brain Training...");
-
-  if (typeof showStatusPopup === "function")
-    showStatusPopup("Activating University-Wide Brain...");
-
-  try {
-    const res = await fetch(`${API_URL}/admin/train/all`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const data = await res.json();
-    console.log("Train All Brain Response:", data);
-
-    if (data.status === "no_updates") {
-      alert("No new data is injected to train.");
-      if (typeof showStatusPopup === "function")
-        showStatusPopup("Brain is already up to date.");
-    } else if (res.ok) {
-      if (typeof showStatusPopup === "function")
-        showStatusPopup(`Trained on ${data.trained_count} new document(s)!`);
-      refreshAdminData();
-    } else {
-      const errorMsg = data.detail || "Global training failed";
-      if (typeof showStatusPopup === "function") showStatusPopup(errorMsg);
-    }
-  } catch (e) {
-    if (typeof showStatusPopup === "function")
-      showStatusPopup("Failed to connect to service");
-    console.error("Train All Brain Error:", e);
-  } finally {
-    if (icon) icon.classList.remove("fa-spin");
-  }
-}
 
 function formatDate(dateStr) {
   if (!dateStr) return "N/A";
@@ -6198,10 +6049,6 @@ window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
 window.deleteNotification = deleteNotification;
-window.trainBrain = trainBrain;
-window.trainAllBrain = trainAllBrain;
-window.filterTrainDocs = filterTrainDocs;
-window.loadTrainStatus = loadTrainStatus;
 
 // Initialize if already logged in
 if (ACCESS_TOKEN) {

@@ -5,7 +5,8 @@ from datetime import datetime
 from ..core import database
 from ..models.user import User
 from .auth import get_current_user
-from ..services import notification_service
+from ..services import notification_service, rag_service
+
 
 router = APIRouter()
 
@@ -65,10 +66,21 @@ async def add_calendar_event(event: CalendarEvent, current_user: User = Depends(
     res = database.calendar_db.insert_one(event_dict)
     event_dict["id"] = str(res.inserted_id)
     
-    # Trigger notification
+    # Trigger RAG ingestion
+    await rag_service.ingest_calendar_event(
+        event_id=event_dict["id"],
+        title=event.title,
+        from_date=event.from_date,
+        to_date=event.to_date,
+        event_type=event.type,
+        location=event.location,
+        description=event.description
+    )
+
+    # Restore notification
     await notification_service.create_notification(
         title="Calendar Update",
-        message=f"New event '{event.title}' added to the academic calendar.",
+        message=f"New {event.type} '{event.title}' added to the calendar.",
         notification_type="common"
     )
 
@@ -90,7 +102,18 @@ async def update_calendar_event(event_id: str, event: CalendarEvent, current_use
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Event not found")
         
-        # Trigger notification
+        # Trigger RAG ingestion (update)
+        await rag_service.ingest_calendar_event(
+            event_id=event_id,
+            title=event.title,
+            from_date=event.from_date,
+            to_date=event.to_date,
+            event_type=event.type,
+            location=event.location,
+            description=event.description
+        )
+        
+        # Restore notification
         await notification_service.create_notification(
             title="Calendar Update",
             message=f"Academic event '{event.title}' has been updated.",
@@ -113,7 +136,10 @@ async def delete_calendar_event(event_id: str, current_user: User = Depends(get_
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Event not found")
             
-        # Trigger notification
+        # Remove from RAG
+        await rag_service.remove_calendar_event(event_id)
+            
+        # Restore notification
         await notification_service.create_notification(
             title="Calendar Update",
             message=f"An event has been removed from the academic calendar.",

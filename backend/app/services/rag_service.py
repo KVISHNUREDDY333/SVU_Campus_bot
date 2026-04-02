@@ -12,6 +12,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain.schema import Document
 import logging
 import os
 from datetime import datetime
@@ -357,6 +358,7 @@ Rules:
 Instructions:
 - Synthesize a well-structured answer from the context above.
 - If the context has partial info, provide what's available and note what's missing.
+- **IMPORTANT**: If the retrieved context contains "upcoming events" or "exams" (indexed from the calendar), you must present them clearly with their dates, times, and locations in your response.
 """
         
         qa_prompt = ChatPromptTemplate.from_messages(
@@ -632,34 +634,40 @@ User Request: {message}
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
         raise e
 
-async def train_on_all_faqs():
-    """Ensure all FAQs in svu_vectors have embeddings."""
-    if database.svu_vectors_db is None or not embeddings:
-        return {"trained": 0, "message": "Database or embeddings not available"}
-        
+async def process_and_refine_knowledge(text: str, source: str):
+    """
+    Automated pipeline: Extract -> Refine -> Ingest (with embeddings).
+    This replaces the manual 'Train the Brain' feature.
+    """
     try:
-        # Find FAQs missing embeddings
-        query = {"type": "faq", "embedding": {"$exists": False}}
-        missing_faqs = list(database.svu_vectors_db.find(query))
+        # 1. Extract raw FAQs
+        logger.info(f"[AUTO-TRAIN] Extracting FAQs from: {source}")
+        raw_faqs = await extract_faqs_from_text(text)
+        if not raw_faqs:
+            logger.warning(f"[AUTO-TRAIN] No FAQs extracted from: {source}")
+            return 0
+            
+        # 2. Refine FAQs using full context
+        logger.info(f"[AUTO-TRAIN] Refining {len(raw_faqs)} FAQs for: {source}")
+        refined_faqs = await refine_kb_data(raw_faqs, text)
         
-        trained = 0
-        for faq in missing_faqs:
-            text = faq.get("text", "")
-            if text:
-                try:
-                    embedding = embeddings.embed_query(text)
-                    database.svu_vectors_db.update_one(
-                        {"_id": faq["_id"]},
-                        {"$set": {"embedding": embedding}}
-                    )
-                    trained += 1
-                except Exception as e:
-                    logger.error(f"Error generating embedding during bulk train: {e}")
-                    
-        return {"trained": trained, "message": f"Generated embeddings for {trained} FAQs."}
+        # 3. Ingest each refined FAQ (ingest_faq handles embeddings)
+        inserted_count = 0
+        for faq in refined_faqs:
+            success = await ingest_faq(
+                question=faq.get("question"),
+                answer=faq.get("answer"),
+                category=faq.get("category", "General"),
+                source=source
+            )
+            if success:
+                inserted_count += 1
+        
+        logger.info(f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}")
+        return inserted_count
     except Exception as e:
-        logger.error(f"Bulk train error: {e}")
-        return {"trained": 0, "message": f"Error: {str(e)}"}
+        logger.error(f"[AUTO-TRAIN] Error processing knowledge for {source}: {e}")
+        return 0
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
@@ -775,6 +783,71 @@ async def ingest_text(text: str, metadata: dict = None):
     except Exception as e:
         logger.error(f"Text Ingestion Error: {e}")
         raise e
+
+async def ingest_calendar_event(event_id: str, title: str, from_date: str, to_date: str, event_type: str, location: str = "", description: str = ""):
+    """
+    Ingests a calendar event/exam into the vector database.
+    Formats the event as a searchable entry for the RAG system.
+    """
+    try:
+        # Formulate a clear, descriptive question and answer pair for the vector store
+        # This structure helps the RAG retrieve the event when the user asks about it.
+        # Adding 'upcoming' keywords to improve relevance for future-dated queries.
+        
+        question = f"What are the details for the upcoming {event_type}: {title}?"
+        
+        # Clean up dates for better readability in the answer
+        try:
+            start_dt = datetime.fromisoformat(from_date)
+            end_dt = datetime.fromisoformat(to_date)
+            start = start_dt.strftime("%B %d, %Y at %I:%M %p")
+            end = end_dt.strftime("%B %d, %Y at %I:%M %p")
+        except:
+            start = from_date
+            end = to_date
+            
+        answer = f"Yes, there is an upcoming {event_type} titled '{title}'. It is scheduled from {start} to {end}."
+        if location:
+            answer += f" Location: {location}."
+        if description:
+            answer += f" Additional Details: {description}"
+            
+        # Use existing ingest_faq to handle the embedding and storage
+        # We prefix the ID to avoid collisions and allow targeted deletion
+        vector_id = f"event_{event_id}"
+        
+        success = await ingest_faq(
+            question=question,
+            answer=answer,
+            category="Calendar",
+            source="calendar",
+            faq_id=vector_id
+        )
+        
+        if success:
+            logger.info(f"Successfully ingested calendar event: {title} (ID: {vector_id})")
+        return success
+    except Exception as e:
+        logger.error(f"Error ingesting calendar event {title}: {e}")
+        return False
+
+async def remove_calendar_event(event_id: str):
+    """
+    Removes a calendar event from the vector database.
+    """
+    if database.svu_vectors_db is None:
+        return False
+        
+    try:
+        vector_id = f"event_{event_id}"
+        result = database.svu_vectors_db.delete_one({"faq_id": vector_id})
+        if result.deleted_count > 0:
+            logger.info(f"Successfully removed calendar event vector: {vector_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error removing calendar event vector {event_id}: {e}")
+        return False
 
 async def ingest_faq(question: str, answer: str, category: str = "General", source: str = "manual", faq_id: str = None):
     """
