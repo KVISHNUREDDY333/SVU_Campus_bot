@@ -83,8 +83,8 @@ async def chat_with_material(req: StudyBuddyChatRequest, current_user: User = De
         {req.query}
         
         INSTRUCTIONS:
-        1. Answer based ONLY on the context provided above.
-        2. If the answer is not in the context, say: "I couldn't find specific information about that in this document, but I can help you with what's available."
+        1. Answer based ONLY on the context provided above. Do NOT use external knowledge.
+        2. If the answer is not in the context, say: "I'm sorry, but that specific information is not available in the uploaded document. I can only provide details found within the provided data."
         3. Be encouraging and helpful.
         """
         
@@ -197,6 +197,10 @@ async def upload_material(file: UploadFile = File(...), current_user: User = Dep
             ...
             
             ---
+            At the end of your analysis, please ask: "Do you have any specific questions about this analysis or would you like me to clarify anything from the document?"
+
+            CRITICAL GROUNDING RULE: You must base all information EXCLUSIVELY on the provided document text. Do not use external facts or general knowledge. If information is missing, state that it is not in the document.
+            
             MATERIAL CONTENT:
             {full_text[:10000]}
             """
@@ -290,6 +294,10 @@ async def upload_text_material(req: StudyMaterialTextRequest, current_user: User
             ...
             
             ---
+            At the end of your analysis, please ask: "Do you have any specific questions about this analysis or would you like me to clarify anything from the document?"
+
+            CRITICAL GROUNDING RULE: You must base all information EXCLUSIVELY on the provided document text. Do not use external facts or general knowledge. If information is missing, state that it is not in the document.
+            
             MATERIAL CONTENT:
             {req.content[:10000]}
             """
@@ -387,6 +395,10 @@ async def summarize_material(material_id: str, current_user: User = Depends(get_
         ...
         
         ---
+        At the end of your analysis, please ask: "Do you have any specific questions about this analysis or would you like me to clarify anything from the document?"
+
+        CRITICAL GROUNDING RULE: You must base all information EXCLUSIVELY on the provided document text. Do not use external facts or general knowledge. If information is missing, state that it is not in the document.
+        
         MATERIAL CONTENT:
         {text[:10000]}
         """

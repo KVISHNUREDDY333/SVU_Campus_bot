@@ -191,6 +191,7 @@ function clearAuthInputs() {
 // --- Auth Functions ---
 function checkAuth() {
   const overlay = document.getElementById("auth-overlay");
+  const ACCESS_TOKEN = sessionStorage.getItem("access_token");
 
   if (!ACCESS_TOKEN) {
     if (overlay) overlay.classList.add("active");
@@ -202,7 +203,8 @@ function checkAuth() {
 }
 
 function initRoleUI() {
-  if (USER_ROLE === "admin") {
+  const role = sessionStorage.getItem("user_role");
+  if (role === "admin") {
     const navAdmin = document.getElementById("nav-admin");
     const navDashboard = document.getElementById("nav-dashboard");
     if (navAdmin) {
@@ -214,7 +216,6 @@ function initRoleUI() {
       navDashboard.style.display = "block";
     }
   } else {
-    // Ensure admin links are hidden for non-admins (e.g. after logout/login swap)
     const navAdmin = document.getElementById("nav-admin");
     const navDashboard = document.getElementById("nav-dashboard");
     if (navAdmin) {
@@ -228,7 +229,49 @@ function initRoleUI() {
   }
 }
 
-/* Duplicated switchAuthTab and showForgotPassword removed. Merged at the end of file. */
+function saveSession(data) {
+  ACCESS_TOKEN = data.access_token;
+  USER_ROLE = data.role;
+  sessionStorage.setItem("access_token", ACCESS_TOKEN);
+  sessionStorage.setItem("user_role", USER_ROLE);
+  sessionStorage.setItem("username", data.username);
+
+  initRoleUI();
+  checkAuth();
+  
+  // Show welcome message
+  showStatusPopup(`Welcome back, ${data.username}!`);
+  
+  // Start system features
+  if (typeof startNotificationPolling === "function") {
+    startNotificationPolling();
+  }
+  
+  // Refresh data
+  if (USER_ROLE === "admin") {
+     refreshAllAdminData();
+  }
+}
+
+function logout() {
+  ACCESS_TOKEN = null;
+  USER_ROLE = null;
+  sessionStorage.removeItem("access_token");
+  sessionStorage.removeItem("user_role");
+  sessionStorage.removeItem("username");
+  
+  stopNotificationPolling();
+  
+  // Reset UI
+  const body = document.body;
+  body.classList.remove("dark-mode");
+  sessionStorage.setItem("svu_theme", "light");
+  
+  checkAuth();
+  window.location.reload(); // Hard reset to clear memory
+}
+
+window.logout = logout;
 
 async function handleForgotPassword(e) {
   e.preventDefault();
@@ -958,14 +1001,14 @@ function renderDocuments(docs) {
 
     tbody.innerHTML += `
             <tr>
-                <td style="display: flex; align-items: center; gap: 8px;">
+                <td style="display: flex; align-items: center; gap: 8px;" title="${escapeHtml(doc.filename)}">
                     <i class="fa-solid ${iconClass}" style="color: var(--accent-color);"></i>
                     ${escapeHtml(doc.filename)}
                 </td>
-                <td><span class="badge ${badgeClass}">${typeLabel}</span></td>
+                <td title="${typeLabel}"><span class="badge ${badgeClass}">${typeLabel}</span></td>
                 <td style="text-align: center;">${doc.chunks || 0}</td>
                 <td style="text-align: center;">${doc.extracted_faqs || 0}</td>
-                <td style="text-align: center;">${doc.uploaded_by || "Admin"}</td>
+                <td style="text-align: center;" title="${escapeHtml(doc.uploaded_by || "Admin")}">${doc.uploaded_by || "Admin"}</td>
                 <td style="display: flex; gap: 8px; justify-content: flex-end;">
                     <button class="icon-btn" onclick="viewDocFaqs('${doc._id}', '${escapeHtml(doc.filename)}')" style="color: var(--accent-color);" title="View FAQs">
                         <i class="fa-solid fa-eye"></i>
@@ -1107,7 +1150,13 @@ function closeAllFaqsModal() {
 function updateFAQCount() {
   const countEl = document.getElementById("faq-count");
   if (countEl) {
-    countEl.textContent = `Showing ${Math.min((currentFAQPage + 1) * FAQ_BATCH_SIZE, currentFilteredFAQs.length)} of ${currentFilteredFAQs.length} FAQs`;
+    const span = countEl.querySelector("span");
+    const text = `Showing ${Math.min((currentFAQPage + 1) * FAQ_BATCH_SIZE, currentFilteredFAQs.length)} of ${currentFilteredFAQs.length} FAQs`;
+    if (span) {
+      span.textContent = text;
+    } else {
+      countEl.textContent = text;
+    }
   }
 }
 
@@ -1189,38 +1238,41 @@ function filterFAQs() {
  */
 function renderFAQItem(f) {
   const item = document.createElement("div");
-  item.className = "faq-item";
+  item.className = "faq-card-premium";
   item.id = `all-faq-item-${f.id}`;
-  item.style.marginBottom = "20px";
-  item.style.padding = "15px";
-  item.style.background = "var(--bg-secondary)";
-  item.style.borderRadius = "12px";
-  item.style.border = "1px solid var(--border-color)";
 
   item.innerHTML = `
         <div class="faq-display-mode">
-            <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 8px; font-size: 15px;">Q: ${escapeHtml(f.question)}</div>
-            <div style="color: var(--text-primary); line-height: 1.5; font-size: 14px;">A: ${escapeHtml(f.answer)}</div>
-            <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <span class="badge info" style="font-size: 10px; padding: 4px 8px;">${escapeHtml(f.category || "General")}</span>
-                ${f.source_urls && f.source_urls.length > 0 ? `<span style="font-size: 11px; color: var(--text-secondary); border-left: 1px solid var(--border-color); padding-left: 10px; margin-left: 5px;">Source: ${escapeHtml(f.source_urls[0])}</span>` : ""}
+            <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 8px; font-size: 15px; display: flex; align-items: flex-start; gap: 8px;">
+                <span style="opacity: 0.6; flex-shrink: 0;">Q:</span>
+                <span>${escapeHtml(f.question)}</span>
+            </div>
+            <div style="color: var(--text-primary); line-height: 1.6; font-size: 14px; display: flex; align-items: flex-start; gap: 8px;">
+                <span style="opacity: 0.6; flex-shrink: 0; font-weight: 600;">A:</span>
+                <span>${escapeHtml(f.answer)}</span>
+            </div>
+            <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <span class="badge success" style="font-size: 9px; padding: 4px 10px; border-radius: 50px;">${escapeHtml(f.category || "General")}</span>
+                ${f.source_urls && f.source_urls.length > 0 ? `<span style="font-size: 11px; color: var(--text-secondary); opacity: 0.8;">Source: ${escapeHtml(f.source_urls[0])}</span>` : ""}
                 <div style="margin-left: auto; display: flex; gap: 12px;">
-                    <button onclick="enableEditAllFAQ('${f.id}')" style="background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                        <i class="fa-solid fa-pen"></i> Edit
+                    <button onclick="enableEditAllFAQ('${f.id}')" style="background: none; border: none; color: var(--accent-color); cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-pen-to-square"></i> Edit
                     </button>
-                    <button onclick="deleteAllFAQ('${f.id}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                        <i class="fa-solid fa-trash"></i> Delete
+                    <button onclick="deleteAllFAQ('${f.id}')" style="background: none; border: none; color: #ef4444; cursor: pointer; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-trash-can"></i> Delete
                     </button>
                 </div>
             </div>
         </div>
         
         <div class="faq-edit-mode" style="display: none;">
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <input type="text" id="all-edit-q-${f.id}" value="${escapeHtml(f.question)}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
-                <textarea id="all-edit-a-${f.id}" rows="4" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">${escapeHtml(f.answer)}</textarea>
-                <div style="display: flex; gap: 10px;">
-                    <select id="all-edit-c-${f.id}" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent-color);">Question</label>
+                <input type="text" id="all-edit-q-${f.id}" value="${escapeHtml(f.question)}" class="input-premium">
+                <label style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent-color);">Answer</label>
+                <textarea id="all-edit-a-${f.id}" rows="4" class="input-premium">${escapeHtml(f.answer)}</textarea>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select id="all-edit-c-${f.id}" class="custom-select" style="flex: 1;">
                         <option value="General" ${f.category === "General" ? "selected" : ""}>General</option>
                         <option value="Academic" ${f.category === "Academic" ? "selected" : ""}>Academic</option>
                         <option value="Admissions" ${f.category === "Admissions" ? "selected" : ""}>Admissions</option>
@@ -1229,8 +1281,8 @@ function renderFAQItem(f) {
                         <option value="Placements" ${f.category === "Placements" ? "selected" : ""}>Placements</option>
                         <option value="User added faqs" ${f.category === "User added faqs" ? "selected" : ""}>User Contributions</option>
                     </select>
-                    <button onclick="cancelEditAllFAQ('${f.id}')" class="btn-ghost">Cancel</button>
-                    <button onclick="updateAllFAQ('${f.id}')" class="btn-primary">Save</button>
+                    <button onclick="cancelEditAllFAQ('${f.id}')" class="btn-ghost" style="padding: 10px 20px;">Cancel</button>
+                    <button onclick="updateAllFAQ('${f.id}')" class="btn-primary" style="padding: 10px 25px;">Update</button>
                 </div>
             </div>
         </div>
@@ -2331,17 +2383,17 @@ function renderSuggestedFAQsTable(suggestions) {
             class="review-row">
             <td style="padding: 16px;">
                 <div class="suggested-faq-content">
-                    <div class="suggested-faq-question">${escapeHtml(s.question)}</div>
-                    <div class="suggested-faq-answer">${escapeHtml(s.answer)}</div>
-                    <div class="suggested-faq-meta">
-                        <span class="badge success" style="font-size: 9px; padding: 2px 6px;">${escapeHtml(s.category || "General")}</span>
+                    <div class="suggested-faq-question"><span style="opacity: 0.6; margin-right: 4px;">Q:</span>${escapeHtml(s.question)}</div>
+                    <div class="suggested-faq-answer"><span style="opacity: 0.6; margin-right: 4px; font-weight: 600;">A:</span>${escapeHtml(s.answer)}</div>
+                    <div class="suggested-faq-meta" style="margin-top: 8px;">
+                        <span class="badge success" style="font-size: 9px; padding: 4px 10px; border-radius: 50px;">${escapeHtml(s.category || "General")}</span>
                     </div>
                 </div>
             </td>
-            <td style="padding: 16px;">
-                <div class="contributor-item">
+            <td style="padding: 16px; text-align: left; white-space: normal; vertical-align: middle;">
+                <div class="contributor-item" style="max-width: 100%;">
                     <div class="contributor-avatar">${initial}</div>
-                    <div class="contributor-info">
+                    <div class="contributor-info" style="text-align: left;">
                         <div class="contributor-name">${escapeHtml(s.suggested_by)}</div>
                         <div class="contributor-date">${dateStr}</div>
                     </div>
@@ -2684,25 +2736,52 @@ function renderCalendar(events) {
       const escapedDesc = escapeHtml(e.description || "").replace(/'/g, "\\'");
 
       return `
-            <div class="calendar-card ${colorClass}">
-                <div class="calendar-date">
-                    <span class="day">${day}</span>
-                    <span class="month">${month}</span>
+            <div class="calendar-stats-card card-${(e.type || "Event").toLowerCase()}">
+                <div class="date-side">
+                    <div class="date-box">
+                        <div class="day-num">${day}</div>
+                        <div class="month-name">${month}</div>
+                    </div>
                 </div>
-                <div class="calendar-info">
-                    <span class="event-tag">${(e.type || "Event").toUpperCase()}</span>
-                    <h4 class="event-title">${escapeHtml(e.title)}</h4>
-                    <p class="event-desc">${escapeHtml(e.description || "No description available.")}</p>
-                    
-                    <a href="javascript:void(0)" 
-                       class="add-calendar-link" 
-                       onclick="addToGoogleCalendar('${escapedTitle}', '${fromDate}', '${toDate}', '${escapedDesc}')">
-                        <i class="fa-brands fa-google"></i>
-                        <span>Add to Calendar</span>
-                    </a>
+                <div class="info-side">
+                    <div class="mb-4">
+                        <span class="event-pill ${e.type === "Exam" ? "pill-exam" : e.type === "Event" ? "pill-event" : "pill-holiday"}">
+                            ${(e.type || "Event").toUpperCase()}
+                        </span>
+                    </div>
+                    <div class="event-title-main">${escapeHtml(e.title)}</div>
+
+                    <div class="event-data-grid mt-16 mb-16">
+                        <div class="data-row">
+                            <i class="fa-solid fa-clock data-icon text-accent"></i>
+                            <div class="data-content">
+                                <span class="data-label">Time:</span>
+                                <span class="data-value">${fromDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${toDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                        </div>
+                        ${e.location ? `
+                        <div class="data-row">
+                            <i class="fa-solid fa-location-dot data-icon text-accent"></i>
+                            <div class="data-content">
+                                <span class="data-label">Location:</span>
+                                <span class="data-value">${escapeHtml(e.location)}</span>
+                            </div>
+                        </div>
+                        ` : ""}
+                    </div>
+
+                    <div class="event-desc-sub mb-16 border-top pt-12">
+                        ${escapeHtml(e.description || "University-wide scheduled activity.")}
+                    </div>
+
+                    <div class="card-footer-actions">
+                        <a href="javascript:void(0)" class="gcal-btn" 
+                           onclick="addToGoogleCalendar('${escapedTitle}', '${fromDate}', '${toDate}', '${escapedDesc}')">
+                            <i class="fa-brands fa-google mr-4"></i> Add to Google Calendar
+                        </a>
+                    </div>
                 </div>
-            </div>
-        `;
+            </div>`;
     })
     .join("");
 
@@ -2816,14 +2895,14 @@ function renderCalendarAdminTable(events) {
 
       return `
         <tr>
-            <td style="padding: 16px; font-size: 13px;">${dateDisplay}</td>
-            <td style="padding: 16px;">
-                <div style="font-weight: 700; color: #1e293b; font-size: 14px;">${escapeHtml(e.title)}</div>
-                ${e.location ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(e.location)}</div>` : ""}
+            <td style="padding: 18px 16px; font-size: 13px; color: #64748b;" title="${dateDisplay}">${dateDisplay}</td>
+            <td style="padding: 18px 16px;" title="${escapeHtml(e.title)}">
+                <div style="font-weight: 700; color: #1e293b; font-size: 14.5px; letter-spacing: -0.01em;">${escapeHtml(e.title)}</div>
+                ${e.location ? `<div style="font-size: 11px; color: #94a3b8; margin-top: 5px; display: flex; align-items: center; gap: 5px;"><i class="fa-solid fa-thumbtack" style="font-size: 10px; opacity: 0.7;"></i> ${escapeHtml(e.location)}</div>` : ""}
             </td>
-            <td style="padding: 16px;"><span class="badge" style="background: rgba(0,0,0,0.05); color: #64748b; padding: 4px 12px; border-radius: 50px; font-size: 10px;">${escapeHtml(e.type || "Event")}</span></td>
-            <td style="padding: 16px; text-align: right;">
-                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <td style="padding: 18px 16px;" title="${escapeHtml(e.type || "Event")}"><span class="badge" style="background: rgba(0,0,0,0.04); color: #64748b; padding: 4px 12px; border-radius: 50px; font-size: 10px; font-weight: 600; text-transform: lowercase;">${escapeHtml(e.type || "Event")}</span></td>
+            <td style="padding: 18px 16px; text-align: right;">
+                <div style="display: flex; gap: 14px; justify-content: flex-end; align-items: center;">
                   <button class="icon-btn" onclick="editCalendarEvent('${escapedId}')" style="color: #6366f1;" title="Edit event">
                       <i class="fa-solid fa-pen-to-square"></i>
                   </button>
@@ -3120,10 +3199,10 @@ function renderTicketsTable(tickets) {
 
     tbody.innerHTML += `
         <tr>
-            <td style="padding: 16px; color: #64748b; font-size: 13px;">#${t.id.substring(t.id.length - 6)}</td>
-            <td style="padding: 16px;">${escapeHtml(t.subject)}</td>
-            <td style="padding: 16px;">${escapeHtml(t.category)}</td>
-            <td style="padding: 16px; font-weight: 600;">${escapeHtml(t.created_by)}</td>
+            <td class="no-ellipsis" style="padding: 16px; color: #64748b; font-size: 13px;">#${t.id.substring(t.id.length - 6)}</td>
+            <td style="padding: 16px;" title="${escapeHtml(t.subject)}">${escapeHtml(t.subject)}</td>
+            <td style="padding: 16px;" title="${escapeHtml(t.category)}">${escapeHtml(t.category)}</td>
+            <td style="padding: 16px; font-weight: 600;" title="${escapeHtml(t.created_by)}">${escapeHtml(t.created_by)}</td>
             <td style="padding: 16px;"><span class="badge ${badgeClass}" style="cursor:pointer;" onclick="toggleTicketStatus('${t.id}', '${t.status}')">${t.status.toUpperCase()}</span></td>
             <td style="padding: 16px;">
                 <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center;">
@@ -3777,13 +3856,13 @@ function switchAuthTab(tab) {
   if (forgotForm) forgotForm.style.display = "none";
 
   if (tab === "login") {
-    if (loginForm) loginForm.style.display = "block";
-    if (registerForm) registerForm.style.display = "none";
+    if (loginForm) loginForm.classList.remove("hidden");
+    if (registerForm) registerForm.classList.add("hidden");
     if (loginBtn) loginBtn.classList.add("active");
     if (registerBtn) registerBtn.classList.remove("active");
   } else {
-    if (loginForm) loginForm.style.display = "none";
-    if (registerForm) registerForm.style.display = "block";
+    if (loginForm) loginForm.classList.add("hidden");
+    if (registerForm) registerForm.classList.remove("hidden");
     if (loginBtn) loginBtn.classList.remove("active");
     if (registerBtn) registerBtn.classList.add("active");
   }
@@ -3795,9 +3874,12 @@ function showForgotPassword() {
   const forgotForm = document.getElementById("forgot-form");
   const errorEl = document.getElementById("auth-error");
 
-  if (loginForm) loginForm.style.display = "none";
-  if (registerForm) registerForm.style.display = "none";
-  if (forgotForm) forgotForm.style.display = "block";
+  if (loginForm) loginForm.classList.add("hidden");
+  if (registerForm) registerForm.classList.add("hidden");
+  if (forgotForm) {
+      forgotForm.classList.remove("hidden");
+      forgotForm.style.display = "block"; // Fallback for transition
+  }
   if (errorEl) errorEl.style.display = "none";
 }
 
@@ -3900,7 +3982,7 @@ function renderUsersTable(users) {
 
     tbody.innerHTML += `
         <tr>
-            <td style="padding: 12px; display: flex; align-items: center; gap: 10px;">
+            <td style="padding: 12px; display: flex; align-items: center; gap: 10px;" title="${escapeHtml(u.username)}">
                 <div style="width: 32px; height: 32px; background: ${u.role === "admin" ? "#6366f1" : "#10b981"}; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold;">
                     ${initial}
                 </div>
@@ -3909,8 +3991,8 @@ function renderUsersTable(users) {
                     <div style="font-size: 11px; color: var(--text-secondary);">ID: ...${u.id.substring(u.id.length - 6)}</div>
                 </div>
             </td>
-            <td style="padding: 12px;"><span class="badge ${roleBadge}">${roleLabel}</span></td>
-            <td style="padding: 12px; font-size: 13px;">${joinedDate}</td>
+            <td style="padding: 12px;" title="${roleLabel}"><span class="badge ${roleBadge}">${roleLabel}</span></td>
+            <td style="padding: 12px; font-size: 13px;" title="${joinedDate}">${joinedDate}</td>
             <td style="padding: 12px; text-align: right;">
                 <button class="icon-btn" onclick="toggleUserRole('${u.id}', '${u.role}')" title="Switch Role">
                     <i class="fa-solid fa-user-shield"></i>
@@ -4178,24 +4260,28 @@ async function loadStudyBuddy() {
         listEl.innerHTML =
           '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes uploaded yet. Start by uploading a PDF!</p>';
       } else {
-        listEl.innerHTML = "";
-        materials.forEach((m) => {
+        const html = materials.map((m) => {
           const date = new Date(m.upload_date).toLocaleDateString();
-          listEl.innerHTML += `
+          return `
                     <div class="study-material-item">
-                        <div class="material-content" onclick="summarizeMaterial('${m.id}')" style="display: flex; align-items: center; gap: 15px; flex: 1; cursor: pointer;">
+                        <div class="material-content" onclick="summarizeMaterial('${m.id}')">
                             <div class="material-icon"><i class="fa-solid fa-file-pdf"></i></div>
                             <div class="material-details">
                                 <span class="material-name">${escapeHtml(m.filename)}</span>
                                 <span class="material-meta">Uploaded on ${date}</span>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div class="action-btn" title="Summarize" onclick="summarizeMaterial('${m.id}')"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
-                            <div class="action-btn delete" title="Delete" onclick="deleteStudyMaterial('${m.id}')" style="color: #ef4444;"><i class="fa-solid fa-trash-can"></i></div>
+                        <div class="material-actions">
+                            <button class="action-btn" title="Summarize" onclick="summarizeMaterial('${m.id}')">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            </button>
+                            <button class="action-btn delete" title="Delete" onclick="deleteStudyMaterial('${m.id}')">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
                         </div>
                     </div>`;
-        });
+        }).join("");
+        listEl.innerHTML = html;
       }
     }
   } catch (e) {
@@ -4286,14 +4372,25 @@ window.closeStudyTextModal = closeStudyTextModal;
 window.submitStudyText = submitStudyText;
 
 async function summarizeMaterial(id) {
+  if (!ACCESS_TOKEN) return;
   const summaryEl = document.getElementById("material-summary-content");
-  summaryEl.innerHTML =
-    '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing content...</div>';
+  if (!summaryEl) return;
 
+  // Abort previous if overlapping
+  if (currentChatController) currentChatController.abort();
+  currentChatController = new AbortController();
+
+  summaryEl.innerHTML = `
+    <div class="flex items-center justify-center gap-12 p-30 bg-ghost rounded-12">
+        <i class="fa-solid fa-spinner fa-spin text-accent text-2xl"></i>
+        <div class="text-secondary font-medium">Zen is reading your notes...</div>
+    </div>`;
+  
   try {
     const res = await fetch(`${API_URL}/study-buddy/summarize/${id}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+      signal: currentChatController.signal
     });
 
     if (!res.ok) {
@@ -4302,7 +4399,7 @@ async function summarizeMaterial(id) {
     }
 
     const data = await res.json();
-    summaryEl.innerHTML = `<div class="markdown-body">${marked.parse(data.summary)}</div>`;
+    summaryEl.innerHTML = `<div class="markdown-body p-10">${marked.parse(data.summary)}</div>`;
 
     // Setup Chat
     currentStudyMaterialId = id;
@@ -4310,12 +4407,27 @@ async function summarizeMaterial(id) {
     if (chatCard) {
       chatCard.style.display = "flex";
       const history = document.getElementById("document-chat-history");
-      if (history)
-        history.innerHTML =
-          '<p style="color: var(--text-secondary); text-align: center; margin: auto;">Notes loaded. Ask me anything about them!</p>';
+      if (history) {
+        history.innerHTML = `
+          <div class="bot-msg-standard" style="background: rgba(13, 148, 136, 0.05); padding: 15px; border-radius: 12px; border: 1px dashed var(--accent-color); margin-bottom: 15px;">
+            <p style="margin: 0 0 10px 0; font-weight: 600; color: var(--accent-color); font-size: 13.5px;">
+              <i class="fa-solid fa-circle-check"></i> Analysis Complete
+            </p>
+            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+              I've processed your notes. Any follow-up questions will now be answered using <strong>only</strong> the data provided in these files.
+            </p>
+            <div class="flex flex-wrap gap-8 mt-12">
+               <button class="tool-chip" onclick="setStudyInput('Explain the main points')">Explain main points</button>
+               <button class="tool-chip" onclick="setStudyInput('List key definitions')">Key definitions</button>
+               <button class="tool-chip" onclick="setStudyInput('Quiz me on this')">Generate quiz</button>
+            </div>
+          </div>
+        `;
+      }
     }
   } catch (e) {
-    summaryEl.innerHTML = `<p style="color: #ef4444;">Failed to generate summary: ${e.message}</p>`;
+    if (e.name === 'AbortError') return;
+    summaryEl.innerHTML = `<p style="color: #ef4444; padding: 20px;">Failed to generate summary: ${e.message}</p>`;
     console.error(e);
   }
 }
@@ -4328,6 +4440,12 @@ async function askStudyBuddy() {
 
   if (!query) return;
 
+  // Set Study Input Helper
+  window.setStudyInput = (text) => {
+    input.value = text;
+    input.focus();
+  };
+
   // Add user message to mini-history
   const userMsg = document.createElement("div");
   userMsg.style.cssText =
@@ -4339,9 +4457,9 @@ async function askStudyBuddy() {
   // Typing indicator
   const typing = document.createElement("div");
   typing.innerHTML =
-    '<i class="fa-solid fa-ellipsis fa-fade"></i> AI is reading...';
+    '<i class="fa-solid fa-brain fa-fade"></i> AI is reviewing notes...';
   typing.style.cssText =
-    "align-self: flex-start; color: var(--text-secondary); font-size: 11px; margin-top: 5px;";
+    "align-self: flex-start; color: var(--accent-color); font-size: 12px; margin-top: 5px; font-weight: 500;";
   history.appendChild(typing);
   history.scrollTop = history.scrollHeight;
 
@@ -4352,6 +4470,7 @@ async function askStudyBuddy() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${ACCESS_TOKEN}`,
       },
+      signal: currentChatController.signal,
       body: JSON.stringify({
         material_id: currentStudyMaterialId,
         query: query,
@@ -5005,8 +5124,9 @@ function renderAdminTrendingList() {
 
   currentTrendingQueries.forEach((q) => {
     const row = document.createElement("tr");
+    row.style.borderBottom = "1px solid rgba(0,0,0,0.03)";
     row.innerHTML = `
-            <td class="text-center">
+            <td class="text-center no-ellipsis" style="padding: 15px 10px;">
                 <div style='width:36px; height:36px; background: linear-gradient(135deg, #14b8a6, #0d9488); color:white; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; box-shadow: 0 4px 10px rgba(20, 184, 166, 0.2);'>
                     <i class='${q.icon}' style='font-size: 16px;'></i>
                 </div>
@@ -5032,6 +5152,16 @@ function renderAdminTrendingList() {
     tbody.appendChild(row);
   });
 }
+
+function editTrendingQuery(id) {
+  const query = currentTrendingQueries.find((q) => q.id === id);
+  if (query) {
+    openAddTrendingModal(query);
+  } else {
+    showStatusPopup("Query not found", 1500);
+  }
+}
+window.editTrendingQuery = editTrendingQuery;
 
 function openAddTrendingModal(query = null) {
   const modal = document.getElementById("trending-modal");
@@ -5243,6 +5373,15 @@ window.deleteTrendingQuery = deleteTrendingQuery;
 let zenChatHistory = [];
 let zenRecognition = null;
 
+function setZenInput(text) {
+  const input = document.getElementById("zen-input");
+  if (input) {
+    input.value = text;
+    input.focus();
+  }
+}
+window.setZenInput = setZenInput;
+
 function switchStudyTab(tab) {
   const notesTab = document.getElementById("tab-study-notes");
   const zenTab = document.getElementById("tab-study-zen");
@@ -5263,18 +5402,32 @@ function switchStudyTab(tab) {
     zenView.style.display = "flex";
     notesView.classList.add("hidden");
     notesView.style.display = "none";
-    const zenInput = document.getElementById("zen-input");
-    if (zenInput) zenInput.focus();
+    
+    // Smooth scroll and focus
+    const history = document.getElementById("zen-chat-history");
+    if (history) history.scrollTop = history.scrollHeight;
+    
+    setTimeout(() => {
+      const zenInput = document.getElementById("zen-input");
+      if (zenInput) zenInput.focus();
+    }, 100);
   }
 }
 
 async function sendZenMessage() {
   const input = document.getElementById("zen-input");
   const text = input.value.trim();
-  if (!text) return;
+  if (!text || !ACCESS_TOKEN) return;
+
+  // Abort previous
+  if (currentChatController) currentChatController.abort();
+  currentChatController = new AbortController();
 
   input.value = "";
   appendZenMessage(text, "user");
+
+  const welcome = document.querySelector("#zen-chat-history .welcome-chat");
+  if (welcome) welcome.remove();
 
   try {
     const response = await fetch(`${API_URL}/study-buddy/zen`, {
@@ -5283,6 +5436,7 @@ async function sendZenMessage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${ACCESS_TOKEN}`,
       },
+      signal: currentChatController.signal,
       body: JSON.stringify({
         query: text,
         history: zenChatHistory,
@@ -5310,18 +5464,12 @@ function appendZenMessage(text, role) {
   const history = document.getElementById("zen-chat-history");
   if (!history) return;
 
-  const welcome = history.querySelector(".welcome-chat");
-  if (welcome) welcome.remove();
-
-  // Create Item Wrapper
   const messageItem = document.createElement("div");
   messageItem.className = `zen-message-item ${role}`;
 
-  // Create Message Bubble
   const bubble = document.createElement("div");
   bubble.className = `zen-message ${role}`;
 
-  // Process for formatting
   let displayText = text;
   let followups = null;
 
@@ -5329,6 +5477,7 @@ function appendZenMessage(text, role) {
   const followupMatch =
     text.match(/Follow-up questions:[\s\S]*$/i) ||
     text.match(/Would you like to know about:[\s\S]*$/i);
+
   if (followupMatch && role === "zen") {
     const followupText = followupMatch[0];
     displayText = text.replace(followupText, "");
@@ -5357,39 +5506,32 @@ function appendZenMessage(text, role) {
   bubble.innerHTML = formatText(displayText);
   messageItem.appendChild(bubble);
 
-  // Create Actions Bar
-  const actions = document.createElement("div");
-  actions.className = "zen-actions";
+  if (role === "zen") {
+    const actions = document.createElement("div");
+    actions.className = "zen-actions";
 
-  // Copy Button
-  const copyBtn = document.createElement("button");
-  copyBtn.className = "zen-action-btn";
-  copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
-  copyBtn.title = "Copy";
-  copyBtn.onclick = () => {
-    const tempTextArea = document.createElement("textarea");
-    tempTextArea.value = displayText;
-    document.body.appendChild(tempTextArea);
-    tempTextArea.select();
-    document.execCommand("copy");
-    document.body.removeChild(tempTextArea);
-    showStatusPopup("Copied to clipboard!", 1500);
-  };
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "zen-action-btn";
+    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
+    copyBtn.title = "Copy";
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(displayText);
+      showStatusPopup("Copied to clipboard!", 1000);
+    };
 
-  // Speak Button
-  const speakBtn = document.createElement("button");
-  speakBtn.className = "zen-action-btn";
-  speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-  speakBtn.title = "Listen";
-  speakBtn.onclick = () => speakText(displayText, bubble, speakBtn);
+    const speakBtn = document.createElement("button");
+    speakBtn.className = "zen-action-btn";
+    speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    speakBtn.title = "Listen";
+    speakBtn.onclick = () => speakText(displayText, bubble, speakBtn);
 
-  actions.appendChild(copyBtn);
-  actions.appendChild(speakBtn);
-  messageItem.appendChild(actions);
+    actions.appendChild(copyBtn);
+    actions.appendChild(speakBtn);
+    messageItem.appendChild(actions);
 
-  // Add Follow-ups if Zen
-  if (followups) {
-    messageItem.appendChild(followups);
+    if (followups) {
+      messageItem.appendChild(followups);
+    }
   }
 
   history.appendChild(messageItem);
@@ -5456,21 +5598,24 @@ let notificationPollInterval = null;
 
 function toggleNotifications() {
   const dropdown = document.getElementById("notification-dropdown");
+  const bell = document.getElementById("notification-bell");
   if (!dropdown) return;
 
-  if (dropdown.style.display === "none") {
+  if (dropdown.classList.contains("hidden") || dropdown.style.display === "none") {
+    dropdown.classList.remove("hidden");
     dropdown.style.display = "flex";
-    fetchNotifications(); // Refresh when opening
+    fetchNotifications(); 
 
-    // Close on outside click
     const closeDropdown = (e) => {
-      if (!dropdown.contains(e.target) && e.target.id !== "notification-bell") {
+      if (!dropdown.contains(e.target) && e.target !== bell) {
+        dropdown.classList.add("hidden");
         dropdown.style.display = "none";
         document.removeEventListener("click", closeDropdown);
       }
     };
-    setTimeout(() => document.addEventListener("click", closeDropdown), 10);
+    setTimeout(() => document.addEventListener("click", closeDropdown), 50);
   } else {
+    dropdown.classList.add("hidden");
     dropdown.style.display = "none";
   }
 }

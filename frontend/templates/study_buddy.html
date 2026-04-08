@@ -2,14 +2,20 @@
           id="study-section"
           class="content-section hidden"
         >
-          <div class="header">
-            <div class="flex-center-gap-15">
+          <div class="header flex-col items-start gap-12 py-20">
+            <div class="flex items-center gap-15">
               <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
-              <h3 class="m-0">Study Buddy AI</h3>
+              <h2 class="m-0 font-bold text-accent">Study Buddy AI</h2>
             </div>
-            <div class="auth-tabs m-0 justify-start border-none">
-              <button id="tab-study-notes" class="auth-tab active" onclick="switchStudyTab('notes')">Lecture Notes</button>
-              <button id="tab-study-zen" class="auth-tab" onclick="switchStudyTab('zen')">Zen AI</button>
+            <div class="mode-toggle-container">
+              <div class="auth-tabs m-0 justify-start border-none bg-ghost p-4 rounded-50">
+                <button id="tab-study-notes" class="auth-tab active px-24 py-10 rounded-50" onclick="switchStudyTab('notes')">
+                  <i class="fa-solid fa-book-open mr-8"></i> Lecture Notes
+                </button>
+                <button id="tab-study-zen" class="auth-tab px-24 py-10 rounded-50" onclick="switchStudyTab('zen')">
+                  <i class="fa-solid fa-brain mr-8"></i> Zen AI Assistant
+                </button>
+              </div>
             </div>
           </div>
             <div id="study-notes-view" class="flex flex-col gap-24">
@@ -102,41 +108,58 @@
           </div>
 
           <!-- Zen AI Chat View -->
-          <div id="study-zen-view" class="hidden flex-col zen-view-wrapper">
-              <div class="settings-card flex-1 flex flex-col h-full">
-                  <div class="card-header">
-                      <div class="card-icon modal-header-primary">
-                          <i class="fa-solid fa-brain"></i>
+          <div id="study-zen-view" class="hidden flex-col zen-view-wrapper h-full">
+              <div class="settings-card flex-1 flex flex-col h-full glass-panel border-none shadow-lg">
+                  <div class="card-header border-bottom p-20-30 bg-white-opacity-5">
+                      <div class="flex items-center gap-15">
+                        <div class="card-icon modal-header-primary shadow-teal">
+                            <i class="fa-solid fa-brain"></i>
+                        </div>
+                        <div>
+                            <h4 class="m-0 font-bold">Zen AI Assistant</h4>
+                            <p class="text-xs text-secondary m-0">Powered by advanced linguistics</p>
+                        </div>
                       </div>
-                      <h4>Zen Assistant</h4>
-                      <div class="ml-auto flex gap-10">
-                          <button class="btn-secondary btn-small" onclick="newZenChat()" title="New Chat">
-                              <i class="fa-solid fa-plus"></i> New Chat
+                      <div class="ml-auto flex gap-12">
+                          <button class="btn-secondary btn-small px-20 rounded-10 shadow-sm" onclick="newZenChat()" title="New Chat">
+                              <i class="fa-solid fa-plus mr-8"></i> New Session
                           </button>
-                          <button class="btn-secondary btn-icon-sq-small" onclick="refreshZenChat()" title="Refresh">
+                          <button class="btn-secondary btn-icon-square bg-ghost rounded-10 border-none" onclick="refreshZenChat()" title="Refresh">
                               <i class="fa-solid fa-arrows-rotate"></i>
                           </button>
                       </div>
                   </div>
                   
-                  <div id="zen-chat-history" class="chat-history-zen">
-                      <div class="welcome-chat m-auto p-20 text-center">
-                           <i class="fa-solid fa-brain opacity-8 text-40 text-accent mb-15"></i>
-                           <h4 class="mb-8">I am Zen</h4>
-                           <p class="text-secondary text-md">Your generative AI partner for academic brilliance. Ask me anything!</p>
+                  <div id="zen-chat-history" class="chat-history-zen flex-1 p-30 overflow-y-auto">
+                      <div class="welcome-chat">
+                           <div class="floating-icon-container">
+                             <i class="fa-solid fa-brain"></i>
+                           </div>
+                           <h2 class="mb-12 font-bold ls-neg-01 text-accent">I am Zen</h2>
+                           <p class="text-secondary text-lg lh-1-6">Your generative AI partner for academic brilliance. <br>Ask me for summaries, explanations, or research help!</p>
+                           <div class="flex justify-center gap-15 mt-30">
+                              <div class="tool-chip bg-white border-standard px-20 py-10 rounded-12 shadow-sm cursor-pointer hover-scale" onclick="setZenInput('Explain the concept of quantum computing simply')">
+                                <i class="fa-solid fa-bolt text-amber mr-8"></i> Quick Explain
+                              </div>
+                              <div class="tool-chip bg-white border-standard px-20 py-10 rounded-12 shadow-sm cursor-pointer hover-scale" onclick="setZenInput('Help me draft an abstract for my research paper')">
+                                <i class="fa-solid fa-pen-nib text-purple mr-8"></i> Research Lite
+                              </div>
+                           </div>
                       </div>
                   </div>
                   
-                  <div class="zen-input-area flex gap-10 items-center">
-                      <button class="btn-secondary btn-icon-round" id="zen-mic-btn" onclick="startZenSTT()" title="Voice Input">
-                          <i class="fa-solid fa-microphone"></i>
-                      </button>
-                      <input type="text" id="zen-input" placeholder="Ask Zen..." 
-                          class="form-input-p12"
-                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
-                      <button class="btn-primary btn-icon-square" onclick="sendZenMessage()" title="Send Message">
-                          <i class="fa-solid fa-paper-plane"></i>
-                      </button>
+                  <div class="zen-input-area p-20-30 border-top bg-white-opacity-5">
+                      <div class="input-glass-container flex gap-12 items-center p-8 pr-12 rounded-20 bg-ghost border-standard">
+                          <button class="btn-ghost btn-icon-round hover-scale" id="zen-mic-btn" onclick="startZenSTT()" title="Voice Input">
+                              <i class="fa-solid fa-microphone text-accent"></i>
+                          </button>
+                          <input type="text" id="zen-input" placeholder="Type a message or task for Zen..." 
+                              class="flex-1 bg-transparent border-none outline-none text-primary text-md px-10"
+                              onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                          <button id="zen-send-btn" class="btn-primary btn-icon-square rounded-12 shadow-teal" onclick="sendZenMessage()" title="Send Message">
+                              <i class="fa-solid fa-paper-plane"></i>
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>

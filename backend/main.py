@@ -11,8 +11,16 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:     %(message)s')
 logger = logging.getLogger("uvicorn")
+
+# Suppress noisy third-party logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # Handle asyncio loop policy for Windows and suppress deprecation warnings in Python 3.12+
 if platform.system() == 'Windows':
@@ -146,8 +154,8 @@ async def read_root(request: Request):
     return response
 
 if __name__ == "__main__":
+    # Port configuration from environment or default
     port = int(os.getenv("PORT", 8888))
-    print(f"Running on http://127.0.0.1:{port}")
     # Use import string for better reload support
     uvicorn.run("backend.main:app", host="127.0.0.1", port=port, reload=True)
 

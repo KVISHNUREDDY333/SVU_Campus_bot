@@ -5,10 +5,10 @@
           <div class="header">
             <div class="flex-center-gap-15">
               <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
-              <h3 class="m-0">System Configuration</h3>
+              <h4 class="m-0 font-bold text-xl">System Configuration</h4>
             </div>
             <button id="admin-refresh-all" class="btn-primary btn-small btn-icon-label" onclick="refreshAllAdminData()">
-              <i class="fa-solid fa-rotate"></i> Refresh
+              <i class="fa-solid fa-rotate"></i> Refresh Dashboard
             </button>
           </div>
           <div class="admin-content">
@@ -59,13 +59,19 @@
                   </div>
                 </div>
                 <div
-                  class="border-t-p15"
+                  class="border-t-p15 flex gap-10"
                 >
                   <button
-                    class="btn-secondary w-full text-center text-sm"
+                    class="btn-secondary flex-1 text-center text-sm"
                     onclick="reindexData()"
                   >
                     <i class="fa-solid fa-sync"></i> Re-index Knowledge Base
+                  </button>
+                  <button
+                    class="btn-cancel btn-small"
+                    onclick="refreshAllAdminData()"
+                  >
+                    Cancel
                   </button>
                 </div>
               </div>
@@ -75,19 +81,20 @@
 
             <!-- Trending Queries Management -->
             <div class="settings-card">
-              <div class="setting-card-header flex items-center border-bottom p-20-25">
-                <div class="modal-icon-container modal-header-amber mr-15">
-                  <i class="fa-solid fa-fire text-white text-xl"></i>
+              <div class="card-header">
+                <div class="card-icon modal-header-amber">
+                  <i class="fa-solid fa-fire"></i>
                 </div>
-                <div class="setting-info flex-1">
-                  <h3 class="m-0">Trending Queries Setup</h3>
+                <div class="flex-1">
+                   <h4 class="m-0">Trending Queries Setup</h4>
+                   <p class="text-xs text-secondary mt-2">Manage quick-access queries on the main chat screen</p>
                 </div>
-                <div class="flex gap-12">
-                    <button class="btn-secondary btn-icon-label rounded-10 text-sm p-10" onclick="loadAdminTrending()" title="Refresh List">
-                      <i class="fa-solid fa-rotate-right"></i> Refresh
+                <div class="flex gap-12 ml-auto">
+                    <button class="btn-secondary btn-icon-label" onclick="loadAdminTrending()" title="Refresh List">
+                      <i class="fa-solid fa-rotate"></i> Refresh
                     </button>
-                    <button class="btn-teal rounded-10 text-sm font-semibold border-none p-10 px-24" onclick="openAddTrendingModal()">
-                      <i class="fa-solid fa-plus mr-6"></i> Add Query
+                    <button class="btn-primary btn-small" onclick="openAddTrendingModal()">
+                      <i class="fa-solid fa-plus"></i> Add
                     </button>
                 </div>
               </div>
@@ -95,10 +102,10 @@
                 <table class="documents-table">
                   <thead>
                     <tr>
-                      <th class="th-w-60 text-center">Icon</th>
-                      <th class="th-w-250 text-left">Query</th>
-                      <th class="text-left">Subtext / Link</th>
-                      <th class="th-w-120 text-right">Action</th>
+                      <th class="text-center w-10p pl-16">Icon</th>
+                      <th class="text-left w-30p">Trending Query</th>
+                      <th class="text-left w-45p">Description / Target</th>
+                      <th class="text-right w-15p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="admin-trending-list">
@@ -136,10 +143,10 @@
                 >
                   <thead>
                     <tr>
-                      <th class="th-w-300 text-left">User</th>
-                      <th class="th-w-150 text-left">Role</th>
-                      <th class="th-w-150 text-left">Joined</th>
-                      <th class="th-w-100 text-right">Action</th>
+                      <th class="text-left w-45p pl-16">User Details</th>
+                      <th class="text-left w-20p">Role</th>
+                      <th class="text-left w-20p">Date Joined</th>
+                      <th class="text-right w-15p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="users-table-body">
@@ -211,12 +218,12 @@
                 <table class="documents-table">
                   <thead>
                     <tr>
-                      <th class="th-w-300 text-left">Document Name</th>
-                      <th class="th-w-120 text-left">Type</th>
-                      <th class="th-w-80 text-center">Chunks</th>
-                      <th class="th-w-80 text-center">FAQs</th>
-                      <th class="th-w-150 text-center">Uploaded By</th>
-                      <th class="th-w-100 text-right">Action</th>
+                      <th class="text-left w-35p pl-16">Document Name</th>
+                      <th class="text-left w-10p">Format</th>
+                      <th class="text-center w-10p">Chunks</th>
+                      <th class="text-center w-10p">FAQs</th>
+                      <th class="text-center w-20p">Contributor</th>
+                      <th class="text-right w-15p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="documents-table-body">
@@ -240,12 +247,14 @@
             <!-- System Logs -->
             <div class="settings-card">
               <div class="card-header">
-                <div
-                  class="card-icon modal-header-slate"
-                >
-                  <i class="fa-solid fa-terminal"></i>
+                <div class="flex items-center gap-12">
+                  <div
+                    class="card-icon modal-header-slate"
+                  >
+                    <i class="fa-solid fa-terminal"></i>
+                  </div>
+                  <h4 class="m-0">System Logs</h4>
                 </div>
-                <h4>System Logs</h4>
               </div>
               <div
                 id="system-logs-container"
@@ -265,7 +274,7 @@
                 >
                   <i class="fa-solid fa-calendar-check"></i>
                 </div>
-                <h4>Academic Calendar Management</h4>
+                <h4 class="m-0">Academic Calendar Management</h4>
                 <div class="ml-auto flex gap-10 items-center">
                   <div class="admin-search-container m-0 w-200">
                     <input type="text" id="calendar-search-input" placeholder="Search events..." class="admin-search-input text-sm p-12-8" oninput="filterAdminCalendar()" aria-label="Search Academic Events">
@@ -283,10 +292,10 @@
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="th-w-200 text-left">Date</th>
-                      <th class="text-left">Event</th>
-                      <th class="th-w-150 text-left">Type</th>
-                      <th class="th-w-120 text-right">Action</th>
+                      <th class="text-left w-20p pl-16">Date</th>
+                      <th class="text-left w-50p">Event</th>
+                      <th class="text-left w-15p">Type</th>
+                      <th class="text-right w-15p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="calendar-admin-table-body">
@@ -306,7 +315,7 @@
                 <div class="card-icon modal-header-blue">
                   <i class="fa-solid fa-map-location-dot"></i>
                 </div>
-                <h4>Location Management</h4>
+                <h4 class="m-0">Location Management</h4>
                 <div class="ml-auto flex gap-10 items-center">
                   <div class="admin-search-container m-0 w-200">
                     <input type="text" id="location-search-input" placeholder="Search locations..." class="admin-search-input text-sm p-12-8" oninput="filterAdminLocations()" aria-label="Search Campus Locations">
@@ -324,9 +333,9 @@
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="text-left">Location Name</th>
-                      <th class="th-w-200 text-left">Category</th>
-                      <th class="th-w-120 text-right">Action</th>
+                      <th class="text-left w-55p pl-16">Location Name</th>
+                      <th class="text-left w-30p">Category</th>
+                      <th class="text-right w-15p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="locations-admin-table-body">
@@ -348,7 +357,7 @@
                 >
                   <i class="fa-solid fa-ticket"></i>
                 </div>
-                <h4>Student Support Tickets</h4>
+                <h4 class="m-0">Student Support Tickets</h4>
                 <div class="ml-auto flex gap-10 items-center">
                   <div class="admin-search-container m-0 w-200">
                     <input type="text" id="ticket-search-input" placeholder="Search tickets..." class="admin-search-input text-sm p-12-8" oninput="filterAdminTickets()" aria-label="Search Student Support Tickets">
@@ -368,12 +377,12 @@
                 >
                   <thead>
                     <tr>
-                      <th class="th-w-60 text-left">ID</th>
-                      <th class="text-left">Subject</th>
-                      <th class="th-w-150 text-left">Category</th>
-                      <th class="th-w-200 text-left">User</th>
-                      <th class="th-w-100 text-center">Status</th>
-                      <th class="th-w-100 text-right">Action</th>
+                      <th class="text-left w-10p pl-16">ID</th>
+                      <th class="text-left w-30p">Subject</th>
+                      <th class="text-left w-12p">Category</th>
+                      <th class="text-left w-20p">Created By</th>
+                      <th class="text-left w-12p">Status</th>
+                      <th class="text-right w-16p pr-16">Action</th>
                     </tr>
                   </thead>
                   <tbody id="tickets-table-body">
@@ -397,7 +406,7 @@
                 </div>
                 <div class="flex-1 flex items-center gap-15">
                   <div>
-                    <h4>Community Contributions</h4>
+                    <h4 class="m-0">Community Contributions</h4>
                     <p class="text-xs text-secondary mt-2">
                       Review and approve user-suggested FAQs
                     </p>
@@ -411,9 +420,9 @@
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="text-left">Suggested Content</th>
-                      <th class="th-w-200 text-left">Contributor</th>
-                      <th class="th-w-120 text-right">Action</th>
+                      <th class="text-left pl-16 w-45p">Suggested FAQ Content</th>
+                      <th class="text-left w-35p">Contributor</th>
+                      <th class="text-right pr-16 w-20p">Action</th>
                     </tr>
                   </thead>
                   <tbody id="suggested-faqs-table-body">

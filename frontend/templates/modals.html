@@ -1016,8 +1016,8 @@
 
     <!-- View All FAQs Modal -->
     <div id="all-faqs-modal" class="modal">
-      <div class="modal-content premium-modal max-w-800 h-85vh flex flex-col">
-        <div class="modal-header modal-header-blue p-25-30 border-none flex-shrink-0">
+      <div class="modal-content premium-modal faq-modal-container h-85vh flex flex-col">
+        <div class="modal-header modal-header-blue p-22-30 border-none flex-shrink-0">
             <div class="flex items-center gap-15">
              <div class="modal-header-icon">
                 <i class="fa-solid fa-layer-group"></i>
@@ -1032,11 +1032,13 @@
         
         <div class="modal-body p-30 flex-1 overflow-y-hidden flex flex-col">
             <!-- Controls -->
-            <div class="flex gap-12 mb-20 flex-shrink-0">
-                <div class="modal-header-icon modal-header-slate">
+            <div class="faq-search-wrapper mb-24 flex-shrink-0">
+                <div class="faq-search-icon-box">
                     <i class="fa-solid fa-magnifying-glass"></i>
                 </div>
-                <select id="faq-category-filter" onchange="filterFAQs()" class="custom-select w-200 p-12-15 rounded-12 text-sm bg-primary border-standard text-primary" title="Filter FAQs by Category" aria-label="Filter FAQs by Category">
+                <input type="text" id="faq-search-input" placeholder="Search by question or answer keywords..." oninput="filterFAQs()" aria-label="Search FAQs" class="faq-search-input-premium">
+                <div class="divider-v"></div>
+                <select id="faq-category-filter" onchange="filterFAQs()" class="faq-filter-select-premium" title="Filter FAQs by Category" aria-label="Filter FAQs by Category">
                     <option value="">All Categories</option>
                     <option value="General">General Campus Info</option>
                     <option value="Academic">Academics & Exams</option>
@@ -1046,11 +1048,13 @@
                     <option value="Placements">Placements & Career</option>
                     <option value="User added faqs">User Contributions</option>
                 </select>
-                <input type="text" id="faq-search-input" placeholder="Search FAQs..." oninput="filterFAQs()" aria-label="Search FAQs" class="flex-1 p-12-15 rounded-12 border-standard bg-primary text-primary outline-none text-sm">
             </div>
 
             <!-- Count -->
-            <div id="faq-count" class="text-xs text-secondary mb-15 flex-shrink-0">Loading...</div>
+            <div id="faq-count" class="inline-flex items-center px-12 py-6 rounded-8 bg-ghost text-xs font-semibold text-secondary mb-15 flex-shrink-0 border-standard">
+                <i class="fa-solid fa-list-check mr-8 opacity-7"></i>
+                <span>Loading Knowledge Base...</span>
+            </div>
 
             <!-- List -->
             <div id="all-faqs-list" class="flex-1 overflow-y-auto pr-10">
@@ -1110,39 +1114,39 @@
 
     <!-- Add Trending Query Modal -->
     <div id="trending-modal" class="modal">
-      <div class="modal-content premium-modal max-w-500">
+      <div class="modal-content premium-modal max-w-550">
         <div class="modal-header modal-header-primary p-22-30 border-none">
           <h3 class="modal-title-white text-lg font-bold ls-neg-01">Add Trending Query</h3>
         </div>
-        <div class="premium-modal-body">
-          <div class="premium-form-group">
-            <label class="premium-label">Main Text</label>
+        <div class="premium-modal-body p-20-30">
+          <div class="premium-form-group mb-16">
+            <label class="premium-label mb-6">Main Text</label>
             <input type="hidden" id="trending-id" />
             <div class="premium-input-wrapper">
                <input type="text" id="trending-text" class="premium-input pl-20" placeholder="e.g., Academic Programs" />
             </div>
           </div>
-          <div class="premium-form-group">
-            <label class="premium-label">Subtext</label>
+          <div class="premium-form-group mb-16">
+            <label class="premium-label mb-6">Subtext</label>
             <div class="premium-input-wrapper">
                <input type="text" id="trending-subtext" class="premium-input pl-20" placeholder="e.g., Explore courses" />
             </div>
           </div>
-          <div class="premium-form-group">
-            <label class="premium-label">Pre-defined Response (Optional)</label>
+          <div class="premium-form-group mb-16">
+            <label class="premium-label mb-6">Pre-defined Response (Optional)</label>
             <div class="premium-input-wrapper">
-               <textarea id="trending-response" class="premium-textarea pl-20" rows="3" placeholder="If set, this response will be shown immediately instead of asking AI."></textarea>
+               <textarea id="trending-response" class="premium-textarea pl-20" rows="2" placeholder="If set, this response will be shown immediately instead of asking AI."></textarea>
             </div>
           </div>
-          <div class="premium-form-group">
-            <label class="premium-label">Related Link (Optional)</label>
+          <div class="premium-form-group mb-16">
+            <label class="premium-label mb-6">Related Link (Optional)</label>
             <div class="premium-input-wrapper">
                <input type="url" id="trending-link" class="premium-input pl-20" placeholder="e.g., https://svuniversity.edu.in/" />
             </div>
           </div>
-          <div class="premium-form-group">
-            <label class="premium-label">Select Icon</label>
-            <div id="icon-picker" class="grid-6-gap10 max-h-180 overflow-y-auto pr-5">
+          <div class="premium-form-group mb-10">
+            <label class="premium-label mb-6">Select Icon</label>
+            <div id="icon-picker" class="grid-6-gap10 max-h-120 overflow-y-auto pr-5">
               <!-- Icons injected by JS -->
             </div>
             <input type="hidden" id="trending-icon" />

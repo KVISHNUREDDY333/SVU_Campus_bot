@@ -271,7 +271,8 @@ def setup_rag_chain(force_reload: bool = False):
     global vector_db, smart_llm, fast_llm, retrieval_chain, llm
     log_event("INFO", "Starting RAG Pipeline init...")
     try:
-        logger.info(f"Initializing Groq Models: Smart={Config.GROQ_MODEL_ID}, Fast={Config.GROQ_FAST_MODEL_ID}")
+        # Streamlined startup logs
+        logger.info("Initializing Intelligence Engine (Groq)...")
         smart_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID, 
             groq_api_key=Config.GROQ_API_KEY, 
