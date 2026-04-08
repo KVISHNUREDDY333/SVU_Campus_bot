@@ -1,0 +1,1173 @@
+<!-- Information Modal (Enhanced User/Admin Shared) -->
+    <div id="faq-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div class="modal-header shared-modal-header">
+          <div class="flex-center-gap-15">
+            <div class="modal-icon-container">
+              <i class="fa-solid fa-lightbulb"></i>
+            </div>
+            <div>
+              <h3 class="modal-title-text">
+                Suggest Information
+              </h3>
+              <p class="modal-subtitle-text">
+                Help improve the campus assistant's knowledge.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body p-30">
+          <input type="hidden" id="edit-id" />
+
+          <div class="form-group mb-24">
+            <label class="form-label-flex">
+              <i class="fa-solid fa-heading text-accent"></i>
+              Title / Question
+            </label>
+            <input
+              type="text"
+              id="faq-question"
+              class="search-input p-15 rounded-12"
+              placeholder="e.g., What are the library timings?"
+            />
+          </div>
+
+          <div class="form-group mb-24">
+            <label class="form-label-flex">
+              <i class="fa-solid fa-tags text-accent"></i>
+              Select Category
+            </label>
+            <select
+              id="faq-category"
+              class="custom-select p-15 rounded-12"
+              title="Select FAQ category"
+            >
+              <option value="General">General Campus Info</option>
+              <option value="Academic">Academics & Exams</option>
+              <option value="Admissions">Admissions & Eligibility</option>
+              <option value="Facilities">Campus Facilities</option>
+              <option value="Hostels">Hostels & Accommodation</option>
+              <option value="Placements">Placements & Career</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label-flex">
+              <i class="fa-solid fa-align-left text-accent"></i>
+              Information / Detailed Answer
+            </label>
+            <textarea
+              id="faq-answer"
+              class="search-input form-input-p15 min-h-120 resize-v"
+              placeholder="Provide clear and accurate details here..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-shared">
+          <button
+            class="btn-ghost btn-small px-30"
+            onclick="closeModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn-submit btn-small px-30 rounded-12 items-center gap-10 font-bold"
+            id="faq-submit-btn"
+            onclick="saveFAQ()"
+          >
+            <i class="fa-solid fa-paper-plane"></i> <span>Submit</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendar Event Modal -->
+    <div id="calendar-event-modal" class="modal">
+      <div class="modal-content premium-modal max-w-550">
+        <div
+          class="modal-header modal-header-pink"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-calendar-plus"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Add Calendar Event
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Schedule a new academic event
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body p-30">
+          <div class="form-group mb-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-heading icon-accent"></i>
+              Event Title
+            </label>
+            <input
+              type="text"
+              id="event-title"
+              class="input-premium"
+              placeholder="e.g., Mid-Semester Examinations"
+            />
+          </div>
+
+          <div class="grid-2-gap16 mb-20">
+            <div class="form-group">
+              <label class="label-premium">
+                <i class="fa-solid fa-calendar-day icon-accent"></i>
+                From Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                id="event-from-date"
+                class="input-premium"
+                title="From date and time"
+                placeholder="From date and time"
+              />
+            </div>
+            <div class="form-group">
+              <label class="label-premium">
+                <i class="fa-solid fa-calendar-check icon-accent"></i>
+                To Date & Time
+              </label>
+              <input
+                type="datetime-local"
+                id="event-to-date"
+                class="input-premium"
+                title="To date and time"
+                placeholder="To date and time"
+              />
+            </div>
+          </div>
+
+          <div class="form-group mb-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-tags icon-accent"></i>
+              Event Type
+            </label>
+            <select
+              id="calendar-event-type"
+              class="custom-select input-premium"
+              title="Select event type"
+              onchange="toggleCustomEventType()"
+            >
+              <option value="Event">General Event</option>
+              <option value="Exam">Examination</option>
+              <option value="Holiday">Holiday</option>
+              <option value="Custom">Custom Type</option>
+            </select>
+          </div>
+
+          <div
+            id="custom-event-type-container"
+            class="form-group mb-20 hidden"
+          >
+            <label class="label-premium">
+              <i class="fa-solid fa-pen icon-accent"></i>
+              Custom Type Name
+            </label>
+            <input
+              type="text"
+              id="custom-event-type-input"
+              class="input-premium"
+              placeholder="Enter custom event type (e.g., Workshop, Seminar)"
+            />
+          </div>
+
+          <div class="form-group mb-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-map-location-dot icon-accent"></i>
+              Location (Optional)
+            </label>
+            <input
+              type="text"
+              id="event-location"
+              class="input-premium"
+              placeholder="e.g., Auditorium, Room 101"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="label-premium">
+              <i class="fa-solid fa-align-left icon-accent"></i>
+              Description (Optional)
+            </label>
+            <textarea
+              id="event-desc"
+              class="input-premium resize-v"
+              rows="3"
+              placeholder="Brief description of the event..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-shared-bg border-bottom p-20-25">
+          <button
+            class="btn-ghost px-24 py-12"
+            onclick="closeCalendarModal()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn-submit modal-header-pink shadow-pink rounded-12 flex items-center gap-10 font-bold p-12-28 border-none"
+            onclick="saveCalendarEvent()"
+          >
+            <i class="fa-solid fa-calendar-plus"></i> <span>Post Event</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="review-suggestion-modal" class="modal">
+      <div class="modal-content premium-modal max-w-600">
+        <div
+          class="modal-header modal-header-amber"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-file-signature"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Review FAQ Suggestion
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Proposed contribution from the community
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body p-30">
+          <div
+            class="glass-panel p-20 mb-24"
+          >
+            <div class="contributor-item">
+              <div
+                id="review-avatar"
+                class="contributor-avatar avatar-sm"
+              >
+                V
+              </div>
+              <div class="contributor-info">
+                <div
+                  class="text-label-xs mb-4"
+                >
+                  Suggested By
+                </div>
+                <div
+                  id="review-contributor"
+                  class="contributor-name text-md"
+                >
+                  Vishnu Reddy
+                </div>
+              </div>
+              <div
+                id="review-date"
+                class="ml-auto text-xs text-secondary"
+              >
+                2024-01-06
+              </div>
+            </div>
+          </div>
+
+          <div class="review-field mb-24">
+            <label class="text-xs font-bold text-accent uppercase mb-8 block">Proposed Question</label>
+            <div
+              id="review-question"
+              class="text-md font-semibold text-primary lh-1-4 p-12 bg-ghost rounded-10"
+            ></div>
+          </div>
+
+          <div class="review-field">
+            <label class="text-xs font-bold text-accent uppercase mb-8 block">Proposed Answer / Content</label>
+            <div
+              id="review-answer"
+              class="text-sm text-secondary leading-relaxed p-15 bg-ghost rounded-10 overflow-y-auto max-h-200"
+            ></div>
+          </div>
+        </div>
+
+        <div
+          class="modal-footer modal-footer-standard flex gap-12"
+        >
+          <button
+            class="btn-ghost mr-auto"
+            onclick="closeReviewModal()"
+          >
+            Close
+          </button>
+          <button
+            class="btn-reject btn-small px-24 rounded-12 font-bold"
+            id="review-reject-btn"
+          >
+            <i class="fa-solid fa-trash-can"></i> Reject
+          </button>
+          <button
+            class="btn-approve btn-small px-30 rounded-12 font-bold"
+            id="review-approve-btn"
+          >
+            <i class="fa-solid fa-check-double"></i> Approve & Publish
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <!-- Text Input Modal -->
+    <div id="text-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div
+          class="modal-header modal-header-teal"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-file-lines"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Ingest Text Content
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Add raw text directly to the Knowledge Base
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <div class="form-group mb-15">
+            <label>Title / Source Name</label>
+            <input
+              type="text"
+              id="text-title"
+              class="input-premium"
+              placeholder="e.g., Department Overview"
+            />
+          </div>
+          <div class="form-group">
+            <label>Content</label>
+            <textarea
+              id="text-content"
+              class="input-premium resize-v"
+              rows="8"
+              placeholder="Paste text content here to generate FAQs and add to knowledge base..."
+            ></textarea>
+          </div>
+
+          <div id="text-progress" class="mt-15 hidden">
+            <p
+              id="text-status"
+              class="text-sm text-center text-accent font-medium"
+            >
+              <i class="fa-solid fa-circle-notch fa-spin"></i> Processing
+              Text...
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-standard">
+          <button class="btn-ghost btn-small px-24" onclick="closeTextModal()">Cancel</button>
+          <button
+            class="btn-primary btn-small px-24 rounded-10"
+            onclick="submitText()"
+          >
+            <i class="fa-solid fa-file-import"></i> Ingest Text
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div id="upload-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div
+          class="modal-header modal-header-red"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-file-pdf"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Upload Admin Document
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Upload official PDF documents to the system
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body p-30">
+          <div class="file-drop-zone" id="pdf-drop-zone">
+            <input
+              type="file"
+              id="upload-file"
+              accept=".pdf"
+              hidden
+              onchange="handleFileSelect(this)"
+            />
+            <label for="upload-file">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span id="file-label-text">Click to upload PDF</span>
+            </label>
+          </div>
+
+          <div id="upload-progress" class="mt-15 hidden">
+            <div
+              class="progress-container-xs"
+            >
+              <div
+                id="upload-bar"
+                class="progress-bar-teal"
+              ></div>
+            </div>
+            <p
+              id="upload-status"
+              class="text-xs text-center mt-8 text-secondary"
+            >
+              Uploading...
+            </p>
+          </div>
+        </div>
+
+        <div class="modal-footer modal-footer-standard">
+          <button class="btn-ghost btn-small px-24" onclick="closeUploadModal()">Cancel</button>
+          <button
+            class="btn-primary btn-small px-24 rounded-10"
+            onclick="submitDocument()"
+          >
+            <i class="fa-solid fa-bolt"></i> Process PDF
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- URL Input Modal -->
+    <!-- URL Input Modal -->
+    <div id="url-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div
+          class="modal-header modal-header-blue"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-globe"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Ingest Website
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Scrape and ingest content from a URL
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <div class="form-group">
+            <label>Website URL</label>
+            <div class="relative">
+              <i class="fa-solid fa-link icon-input-left"></i>
+              <input
+                type="text"
+                id="url-input"
+                class="search-input p-14-14-14-42 rounded-12"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+          <p class="text-xs text-secondary opacity-8 lh-1-5">
+            The system will scrape the page text and add it to the active
+            Knowledge Base instantly.
+          </p>
+          <div id="url-progress" class="mt-15 hidden">
+            <p
+              id="url-status"
+              class="text-sm text-center text-accent font-medium"
+            >
+              <i class="fa-solid fa-circle-notch fa-spin"></i> Processing URL...
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-standard">
+          <button class="btn-ghost" onclick="closeUrlModal()">Cancel</button>
+          <button
+            class="btn-primary btn-small px-24 rounded-10"
+            onclick="submitUrl()"
+          >
+            <i class="fa-solid fa-globe"></i> Ingest
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Auth Overlay -->
+    <div id="auth-overlay" class="auth-overlay">
+      <div class="auth-card">
+        <img
+          src="/static/images/svu_logo_final_v2.jpg"
+          alt="Logo"
+          class="welcome-logo"
+        />
+        <h2>Welcome to Intelligent Campus Assistant Chatbot</h2>
+        <p>Please log in to access your personalized assistant.</p>
+
+        <div class="auth-tabs">
+          <button
+            id="tab-login"
+            class="auth-tab active"
+            onclick="switchAuthTab('login')"
+          >
+            Login
+          </button>
+          <button
+            id="tab-register"
+            class="auth-tab"
+            onclick="switchAuthTab('register')"
+          >
+            Register
+          </button>
+        </div>
+
+        <!-- Login Form -->
+        <form id="login-form" onsubmit="handleLogin(event)" autocomplete="on">
+          <div class="form-group">
+            <label>Email Address</label>
+            <input
+              type="email"
+              id="login-username"
+              name="email"
+              required
+              placeholder="Enter your email"
+              autocomplete="username"
+            />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              id="login-password"
+              name="password"
+              required
+              placeholder="Enter Password"
+              autocomplete="current-password"
+            />
+            <div class="text-right mt-5">
+              <a
+                href="#"
+                onclick="showForgotPassword()"
+                class="text-accent text-sm no-underline"
+                >Forgot Password?</a
+              >
+            </div>
+          </div>
+          <button type="submit" class="auth-btn-primary">Log In</button>
+
+          <div class="auth-separator">OR</div>
+          
+          <button
+            type="button"
+            class="google-auth-btn"
+            onclick="window.location.href = '/login/google'"
+          >
+            <img src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" alt="G" class="w-18 h-18">
+            Continue with Google
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form
+          id="register-form"
+          class="hidden"
+          onsubmit="handleRegister(event)"
+          autocomplete="off"
+        >
+          <div class="form-group">
+            <label>Email Address</label>
+            <input
+              type="email"
+              id="reg-username"
+              name="new-email"
+              required
+              placeholder="Enter your email"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Full Name</label>
+            <input
+              type="text"
+              id="reg-fullname"
+              name="new-fullname"
+              required
+              placeholder="Enter your full name"
+              autocomplete="off"
+            />
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              id="reg-password"
+              name="new-password"
+              required
+              placeholder="Create password"
+              autocomplete="new-password"
+            />
+          </div>
+          <button type="submit" class="btn-submit auth-btn">
+            Create Account
+          </button>
+        </form>
+
+        <!-- Forgot Password Form -->
+        <form id="forgot-form" class="hidden" autocomplete="off">
+          <h3 class="text-center mb-20 text-lg">
+            Reset Password
+          </h3>
+
+          <div id="step-email">
+            <div class="form-group">
+              <label>Enter your registrered email</label>
+              <input
+                type="email"
+                id="forgot-email"
+                placeholder="vishwureddy@example.com"
+                autocomplete="new-password"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn-submit auth-btn"
+              onclick="handleForgotPassword(event)"
+            >
+              Send OTP
+            </button>
+            <div class="text-center mt-15">
+              <a
+                href="#"
+                onclick="switchAuthTab('login')"
+                class="text-secondary text-sm no-underline"
+                >Back to Login</a
+              >
+            </div>
+          </div>
+
+          <div id="step-otp" class="hidden">
+            <div class="form-group">
+              <label>Enter OTP (sent to email)</label>
+              <input
+                type="text"
+                id="forgot-otp"
+                placeholder="Enter 6-digit OTP"
+                autocomplete="off"
+              />
+            </div>
+            <div class="form-group">
+              <label>New Password</label>
+              <input
+                type="password"
+                id="forgot-new-password"
+                placeholder="New secure password"
+                autocomplete="new-password"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn-submit auth-btn"
+              onclick="handleResetPassword(event)"
+            >
+              Update Password
+            </button>
+          </div>
+        </form>
+        <p
+          id="auth-error"
+          class="text-red text-center mt-10 hidden"
+        ></p>
+      </div>
+    </div>
+
+    <!-- View Ticket Details Modal -->
+    <div id="ticket-view-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div
+          class="modal-header modal-header-indigo p-25-30 border-none"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-ticket"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Ticket Details
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                View details and status of the selected ticket
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <div class="form-group">
+            <label class="text-secondary text-12">Ticket ID</label>
+            <p
+              id="view-ticket-id"
+              class="font-bold font-mono text-accent"
+            >
+              #
+            </p>
+          </div>
+
+          <div class="flex gap-20 mt-15">
+            <div class="form-group flex-1">
+              <label class="text-secondary text-12">Status</label>
+              <span id="view-ticket-status" class="badge"></span>
+            </div>
+          </div>
+
+          <div class="form-group mt-15">
+            <label class="text-secondary text-12">Subject</label>
+            <p id="view-ticket-subject" class="font-medium text-15 text-primary m-0"></p>
+          </div>
+
+          <div class="form-group mt-15">
+            <label class="text-secondary text-12">Description</label>
+            <div id="view-ticket-desc" class="bg-ghost p-12 rounded-8 text-14 lh-1-5"></div>
+          </div>
+
+          <div class="form-group mt-15">
+            <label class="text-secondary text-12">Resolution / Admin Response</label>
+            <div id="view-ticket-resolution" class="bg-success-light border-success-light p-12 rounded-8 text-14"></div>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-shared-bg border-top p-20-30">
+          <button
+            class="btn-primary"
+            onclick="closeTicketViewModal()"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ticket Response Modal -->
+    <div id="ticket-response-modal" class="modal">
+      <div class="modal-content premium-modal">
+        <div
+          class="modal-header modal-header-emerald"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-reply"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Submit Response
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Respond to the student's ticket
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <input type="hidden" id="resp-ticket-id" />
+          <div class="form-group">
+            <label>Subject</label>
+            <input
+              type="text"
+              id="resp-ticket-subject"
+              readonly
+              class="input-premium bg-ghost"
+              placeholder="Ticket subject"
+              title="Ticket subject"
+            />
+          </div>
+          <div class="form-group">
+            <label>Admin Resolution / Answer</label>
+            <textarea
+              id="resp-ticket-answer"
+              rows="5"
+              class="input-premium resize-v"
+              placeholder="Type your response to the student here..."
+            ></textarea>
+          </div>
+          <!-- Save as FAQ Checkbox -->
+          <div class="form-group">
+            <label
+              class="checkbox-container flex items-center gap-10 cursor-pointer text-sm text-primary mt-15"
+            >
+              <input type="checkbox" id="resp-save-faq" checked />
+              Save as verified FAQ in Knowledge Base
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-shared-bg border-top p-20-25">
+          <button class="btn-ghost" onclick="closeTicketResponseModal()">
+            Cancel
+          </button>
+          <button class="btn-primary" onclick="submitTicketResponse()">
+            Send Response
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+
+
+
+
+
+    <!-- Add User Modal -->
+    <div id="add-user-modal" class="modal">
+      <div class="modal-content premium-user-modal">
+        <div class="premium-modal-header">
+          <div class="modal-header-content">
+            <div class="modal-icon-wrapper">
+              <i class="fa-solid fa-user-plus"></i>
+            </div>
+            <div class="modal-title-section">
+              <h3 class="modal-title">Add New User</h3>
+              <p class="modal-subtitle">Create a new account for the platform</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" onclick="closeAddUserModal()" title="Close Modal">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div class="premium-modal-body">
+          <div class="premium-form-group">
+            <label class="premium-label">Email Address</label>
+            <div class="premium-input-wrapper">
+              <i class="fa-solid fa-envelope input-icon"></i>
+              <input
+                type="email"
+                id="new-user-email"
+                placeholder="student@svu.edu.in"
+                class="premium-input"
+              />
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Password</label>
+            <div class="premium-input-wrapper">
+              <i class="fa-solid fa-lock input-icon"></i>
+              <input
+                type="password"
+                id="new-user-pass"
+                placeholder="Enter a secure password"
+                class="premium-input"
+              />
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Role</label>
+            <div class="premium-select-wrapper">
+              <i class="fa-solid fa-user-tag input-icon"></i>
+              <select
+                id="new-user-role"
+                class="premium-select"
+                title="Select user role"
+              >
+                <option value="student">Student</option>
+                <option value="admin">Admin</option>
+              </select>
+              <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+          </div>
+        </div>
+        <div class="premium-modal-footer">
+          <button class="btn-modal-cancel" onclick="closeAddUserModal()">
+            Cancel
+          </button>
+          <button class="btn-modal-submit" onclick="submitAddUser()">
+            <i class="fa-solid fa-user-check"></i>
+            Create User
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Study Text Modal -->
+    <div id="study-text-modal" class="modal">
+      <div class="modal-content premium-modal max-w-600">
+        <div
+          class="modal-header modal-header-violet"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Add Lecture Notes (Text)
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Paste your notes here for smart AI analysis.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <div class="form-group mb-24">
+            <label class="label-premium">
+              <i class="fa-solid fa-heading text-primary"></i>
+              Title / Topic
+            </label>
+            <input
+              type="text"
+              id="study-text-title"
+              class="input-premium"
+              placeholder="e.g., Physics Chapter 1: Thermodynamics"
+            />
+          </div>
+          <div class="form-group mt-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-align-left text-primary"></i>
+              Content
+            </label>
+            <textarea
+              id="study-text-content"
+              class="input-premium resize-v min-h-200"
+              rows="12"
+              placeholder="Paste your text here to generate a smart AI summary and flashcards..."
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-shared-bg border-top p-20-25 flex justify-end gap-12">
+          <button
+            class="btn-ghost px-24 py-12 rounded-10"
+            onclick="closeStudyTextModal()"
+          >
+            Close
+          </button>
+          <button
+            class="btn-primary modal-header-violet shadow-violet rounded-12 flex items-center gap-10 font-bold p-12-28 border-none"
+            onclick="submitStudyText()"
+          >
+            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Analyze Text</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- END Study Text Modal -->
+
+
+    <!-- View All FAQs Modal -->
+    <div id="all-faqs-modal" class="modal">
+      <div class="modal-content premium-modal max-w-800 h-85vh flex flex-col">
+        <div class="modal-header modal-header-blue p-25-30 border-none flex-shrink-0">
+            <div class="flex items-center gap-15">
+             <div class="modal-header-icon">
+                <i class="fa-solid fa-layer-group"></i>
+             </div>
+             <div>
+                <h3 id="faq-modal-title" class="modal-title-white">Knowledge Base FAQs</h3>
+                <p id="faq-modal-subtitle" class="modal-subtitle-white">Browse, edit, and manage all extracted FAQs</p>
+             </div>
+          </div>
+          <div id="modal-action-container" class="ml-auto mr-20"></div>
+        </div>
+        
+        <div class="modal-body p-30 flex-1 overflow-y-hidden flex flex-col">
+            <!-- Controls -->
+            <div class="flex gap-12 mb-20 flex-shrink-0">
+                <div class="modal-header-icon modal-header-slate">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+                <select id="faq-category-filter" onchange="filterFAQs()" class="custom-select w-200 p-12-15 rounded-12 text-sm bg-primary border-standard text-primary" title="Filter FAQs by Category" aria-label="Filter FAQs by Category">
+                    <option value="">All Categories</option>
+                    <option value="General">General Campus Info</option>
+                    <option value="Academic">Academics & Exams</option>
+                    <option value="Admissions">Admissions & Eligibility</option>
+                    <option value="Facilities">Campus Facilities</option>
+                    <option value="Hostels">Hostels & Accommodation</option>
+                    <option value="Placements">Placements & Career</option>
+                    <option value="User added faqs">User Contributions</option>
+                </select>
+                <input type="text" id="faq-search-input" placeholder="Search FAQs..." oninput="filterFAQs()" aria-label="Search FAQs" class="flex-1 p-12-15 rounded-12 border-standard bg-primary text-primary outline-none text-sm">
+            </div>
+
+            <!-- Count -->
+            <div id="faq-count" class="text-xs text-secondary mb-15 flex-shrink-0">Loading...</div>
+
+            <!-- List -->
+            <div id="all-faqs-list" class="flex-1 overflow-y-auto pr-10">
+                <!-- Content injected by JS -->
+            </div>
+             <!-- Empty State -->
+            <div id="all-faqs-empty" class="text-center p-40 hidden">
+                <i class="fa-solid fa-search text-40 text-secondary opacity-3"></i>
+                <p class="mt-15 text-secondary">No FAQs found matching your search.</p>
+            </div>
+        </div>
+
+        <div class="modal-footer modal-footer-shared-bg border-top p-20-30 flex justify-end flex-shrink-0">
+            <button class="btn-primary p-10-24 rounded-10" onclick="closeAllFaqsModal()">Close Knowledge Base</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/script.js?v=35"></script>
+    <!-- Location Modal -->
+    <div id="location-modal" class="modal">
+      <div class="modal-content premium-modal max-w-500">
+        <div class="modal-header modal-header-primary p-20-25">
+          <h3 class="modal-title-white" id="location-modal-title">Add New Location</h3>
+        </div>
+        <div class="modal-body p-25">
+          <input type="hidden" id="location-id" />
+          <div class="form-group mb-20">
+            <label class="font-bold mb-8 block">Location Name</label>
+            <input type="text" id="location-name" class="input-premium" placeholder="e.g., Dept. of Physics" />
+          </div>
+          <div class="form-group mb-20">
+            <label class="font-bold mb-8 block">Category</label>
+            <select id="location-category" class="custom-select w-full p-12 rounded-12" title="Select Location Category">
+              <option value="Constituent Colleges">Constituent Colleges</option>
+              <option value="Administration">Administration</option>
+              <option value="Engineering Departments">Engineering Departments</option>
+              <option value="Science Departments">Science Departments</option>
+              <option value="Arts & Humanities">Arts & Humanities</option>
+              <option value="Men's Hostels">Men's Hostels</option>
+              <option value="Women's Hostels">Women's Hostels</option>
+              <option value="Campus Facilities">Campus Facilities</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="font-bold mb-8 block">Description (Optional)</label>
+            <textarea id="location-description" class="input-premium resize-v" rows="3" placeholder="Additional details..."></textarea>
+          </div>
+          <div class="flex gap-12 mt-30">
+            <button class="btn-secondary flex-1" onclick="closeLocationModal()">Cancel</button>
+            <button class="btn-primary flex-2" onclick="saveLocation()">Save Location</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Trending Query Modal -->
+    <div id="trending-modal" class="modal">
+      <div class="modal-content premium-modal max-w-500">
+        <div class="modal-header modal-header-primary p-22-30 border-none">
+          <h3 class="modal-title-white text-lg font-bold ls-neg-01">Add Trending Query</h3>
+        </div>
+        <div class="premium-modal-body">
+          <div class="premium-form-group">
+            <label class="premium-label">Main Text</label>
+            <input type="hidden" id="trending-id" />
+            <div class="premium-input-wrapper">
+               <input type="text" id="trending-text" class="premium-input pl-20" placeholder="e.g., Academic Programs" />
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Subtext</label>
+            <div class="premium-input-wrapper">
+               <input type="text" id="trending-subtext" class="premium-input pl-20" placeholder="e.g., Explore courses" />
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Pre-defined Response (Optional)</label>
+            <div class="premium-input-wrapper">
+               <textarea id="trending-response" class="premium-textarea pl-20" rows="3" placeholder="If set, this response will be shown immediately instead of asking AI."></textarea>
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Related Link (Optional)</label>
+            <div class="premium-input-wrapper">
+               <input type="url" id="trending-link" class="premium-input pl-20" placeholder="e.g., https://svuniversity.edu.in/" />
+            </div>
+          </div>
+          <div class="premium-form-group">
+            <label class="premium-label">Select Icon</label>
+            <div id="icon-picker" class="grid-6-gap10 max-h-180 overflow-y-auto pr-5">
+              <!-- Icons injected by JS -->
+            </div>
+            <input type="hidden" id="trending-icon" />
+          </div>
+        </div>
+        <div class="premium-modal-footer">
+          <button class="btn-modal-cancel" onclick="closeTrendingModal()">Cancel</button>
+          <button class="btn-modal-submit" id="btn-trending-submit" onclick="addTrendingQuery()">Add Query</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic Dialog Modal (Custom Alert/Confirm) -->
+    <div id="dialog-modal" class="modal">
+      <div class="modal-content premium-modal dialog-content max-w-450">
+        <div class="dialog-body p-40-30 text-center">
+          <div id="dialog-icon" class="dialog-icon-circle">
+            <i class="fa-solid fa-circle-info"></i>
+          </div>
+          <h3 id="dialog-title" class="dialog-title">Confirm Action</h3>
+          <p id="dialog-message" class="dialog-message">Are you sure you want to proceed with this action?</p>
+        </div>
+        <div class="dialog-footer">
+          <button id="dialog-cancel-btn" class="btn-dialog-ghost">Cancel</button>
+          <button id="dialog-confirm-btn" class="btn-dialog-primary">Confirm</button>
+        </div>
+      </div>
+    </div>

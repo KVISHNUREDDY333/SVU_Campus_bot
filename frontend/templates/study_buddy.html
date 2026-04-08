@@ -1,0 +1,143 @@
+<section
+          id="study-section"
+          class="content-section hidden"
+        >
+          <div class="header">
+            <div class="flex-center-gap-15">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 class="m-0">Study Buddy AI</h3>
+            </div>
+            <div class="auth-tabs m-0 justify-start border-none">
+              <button id="tab-study-notes" class="auth-tab active" onclick="switchStudyTab('notes')">Lecture Notes</button>
+              <button id="tab-study-zen" class="auth-tab" onclick="switchStudyTab('zen')">Zen AI</button>
+            </div>
+          </div>
+            <div id="study-notes-view" class="flex flex-col gap-24">
+                <div class="study-main">
+              <div class="settings-card">
+                <div class="card-header">
+                  <div
+                    class="card-icon modal-header-primary"
+                  >
+                    <i class="fa-solid fa-book-open"></i>
+                  </div>
+                  <h4>My Lecture Notes</h4>
+                  <button
+                    class="btn-primary ml-auto"
+                    onclick="openUploadModal('study')"
+                  >
+                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload Notes
+                  </button>
+                  <button
+                    class="btn-secondary ml-10"
+                    onclick="openStudyTextModal()"
+                  >
+                    <i class="fa-solid fa-keyboard"></i> Add Text
+                  </button>
+                </div>
+                <div id="study-materials-list" class="mt-20">
+                  <p class="text-center text-secondary p-40"
+                  >
+                    No notes uploaded yet. Start by uploading a PDF!
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="study-sidebar">
+              <div class="settings-card mb-20">
+                <div class="card-header">
+                  <div class="card-icon modal-header-amber">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  </div>
+                  <h4>AI Summary</h4>
+                </div>
+                <div
+                  id="material-summary-content"
+                  class="text-md text-primary leading-relaxed min-h-200"
+                >
+                  Select a document to generate a smart AI summary.
+                </div>
+              </div>
+
+              <!-- Specialized AI Chat for Document -->
+              <div
+                class="settings-card hidden flex-col h-350"
+                id="document-chat-card"
+              >
+                <div class="card-header">
+                  <div
+                    class="card-icon modal-header-primary"
+                  >
+                    <i class="fa-solid fa-message"></i>
+                  </div>
+                  <h4>Ask this Document</h4>
+                </div>
+                <div
+                  id="document-chat-history"
+                  class="chat-history-container"
+                >
+                  <p class="text-secondary text-center m-auto">
+                    Ask me anything about these notes!
+                  </p>
+                </div>
+                <div class="flex-gap-8">
+                  <input
+                    type="text"
+                    id="document-chat-input"
+                    placeholder="Ask specific questions..."
+                    class="form-input-p12 text-sm"
+                    title="Ask a question about this document"
+                    onkeypress="if (event.key === 'Enter') askStudyBuddy();"
+                  />
+                  <button
+                    class="btn-primary btn-icon-square"
+                    onclick="askStudyBuddy()"
+                    title="Send Question"
+                  >
+                    <i class="fa-solid fa-paper-plane"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zen AI Chat View -->
+          <div id="study-zen-view" class="hidden flex-col zen-view-wrapper">
+              <div class="settings-card flex-1 flex flex-col h-full">
+                  <div class="card-header">
+                      <div class="card-icon modal-header-primary">
+                          <i class="fa-solid fa-brain"></i>
+                      </div>
+                      <h4>Zen Assistant</h4>
+                      <div class="ml-auto flex gap-10">
+                          <button class="btn-secondary btn-small" onclick="newZenChat()" title="New Chat">
+                              <i class="fa-solid fa-plus"></i> New Chat
+                          </button>
+                          <button class="btn-secondary btn-icon-sq-small" onclick="refreshZenChat()" title="Refresh">
+                              <i class="fa-solid fa-arrows-rotate"></i>
+                          </button>
+                      </div>
+                  </div>
+                  
+                  <div id="zen-chat-history" class="chat-history-zen">
+                      <div class="welcome-chat m-auto p-20 text-center">
+                           <i class="fa-solid fa-brain opacity-8 text-40 text-accent mb-15"></i>
+                           <h4 class="mb-8">I am Zen</h4>
+                           <p class="text-secondary text-md">Your generative AI partner for academic brilliance. Ask me anything!</p>
+                      </div>
+                  </div>
+                  
+                  <div class="zen-input-area flex gap-10 items-center">
+                      <button class="btn-secondary btn-icon-round" id="zen-mic-btn" onclick="startZenSTT()" title="Voice Input">
+                          <i class="fa-solid fa-microphone"></i>
+                      </button>
+                      <input type="text" id="zen-input" placeholder="Ask Zen..." 
+                          class="form-input-p12"
+                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                      <button class="btn-primary btn-icon-square" onclick="sendZenMessage()" title="Send Message">
+                          <i class="fa-solid fa-paper-plane"></i>
+                      </button>
+                  </div>
+              </div>
+          </div>
+        </section>

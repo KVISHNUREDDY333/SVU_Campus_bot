@@ -1,23 +1,16 @@
 <section
           id="career-section"
-          class="content-section"
-          style="display: none"
+          class="content-section hidden"
         >
-          <div class="header">
-            <div style="display: flex; align-items: center; gap: 15px;">
-              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
-              <h3 style="margin: 0;">Career & Placement Hub</h3>
-            </div>
-          </div>
-          <div
-            class="career-container"
-            style="padding: 24px; max-width: auto; margin: 0 auto"
-          >
-            <!-- Career Tabs -->
-            <div
-              class="auth-tabs"
-              style="margin-bottom: 20px; justify-content: flex-start"
-            >
+  <div class="header">
+    <div class="flex-center-gap-15">
+      <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+      <h3 class="m-0">Career & Placement Hub</h3>
+    </div>
+  </div>
+  <div class="career-container p-24 m-auto">
+    <!-- Career Tabs -->
+    <div class="auth-tabs mb-20 justify-start">
               <button
                 id="tab-resume-checker"
                 class="auth-tab active"
@@ -37,108 +30,57 @@
             <!-- Resume Checker View -->
             <div id="resume-checker-view" class="settings-card">
               <div class="card-header">
-                <div class="card-icon" style="background: #6366f1">
+                <div class="card-icon modal-header-indigo">
                   <i class="fa-solid fa-file-invoice"></i>
                 </div>
                 <h4>AI Resume Checker</h4>
               </div>
-              <div class="form-group" style="margin-bottom: 15px">
-                <label
-                  style="
-                    display: block;
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: var(--text-secondary);
-                    margin-bottom: 8px;
-                  "
-                  >Target Job Role (Optional)</label
-                >
-                <input
-                  type="text"
-                  id="resume-target-role"
-                  placeholder="e.g., Software Engineer, Data Analyst..."
-                  style="
-                    width: 100%;
-                    padding: 12px;
-                    border-radius: 12px;
-                    border: 1px solid var(--border-color);
-                    background: var(--glass-bg);
-                    color: var(--text-primary);
-                    outline: none;
-                  "
-                />
-              </div>
-              <p
-                style="
-                  font-size: 13px;
-                  color: var(--text-secondary);
-                  margin: 10px 0;
-                "
-              >
-                Paste your resume text below for instant feedback based on SVU
-                guidelines and industry standards.
-              </p>
-              <textarea
-                id="resume-text-input"
-                rows="12"
-                placeholder="Paste resume content here..."
-                style="
-                  width: 100%;
-                  padding: 15px;
-                  border-radius: 12px;
-                  border: 1px solid var(--border-color);
-                  background: var(--glass-bg);
-                  color: var(--text-primary);
-                  margin-bottom: 15px;
-                "
-              ></textarea>
-              <button
-                class="btn-primary"
-                onclick="checkResume()"
-                style="width: 100%"
-              >
-                <i class="fa-solid fa-microscope"></i> Analyze Resume
-              </button>
-              <div
-                id="resume-feedback"
-                style="
-                  margin-top: 20px;
-                  font-size: 14px;
-                  line-height: 1.6;
-                  color: var(--text-primary);
-                "
-              ></div>
-            </div>
+      <div class="form-group mb-15">
+        <label class="form-label-flex text-secondary text-sm">Target Job Role (Optional)</label>
+        <input
+          type="text"
+          id="resume-target-role"
+          placeholder="e.g., Software Engineer, Data Analyst..."
+          class="form-input-p12"
+        />
+      </div>
+      <p class="text-secondary text-sm my-10">
+        Paste your resume text below for instant feedback based on SVU guidelines and industry standards.
+      </p>
+      <textarea
+        id="resume-text-input"
+        rows="12"
+        placeholder="Paste resume content here..."
+        class="form-input-p15 mb-15"
+      ></textarea>
+      <button
+        class="btn-primary w-full"
+        onclick="checkResume()"
+      >
+        <i class="fa-solid fa-microscope"></i> Analyze Resume
+      </button>
+      <div id="resume-feedback" class="mt-20 text-md leading-relaxed text-primary"></div>
+    </div>
 
             <!-- Resume Maker View -->
             <div
               id="resume-maker-view"
-              class="settings-card"
-              style="display: none"
+              class="settings-card hidden"
             >
               <div class="card-header">
                 <div
-                  class="card-icon"
-                  style="background: var(--gradient-primary)"
+                  class="card-icon modal-header-primary"
                 >
                   <i class="fa-solid fa-pen-nib"></i>
                 </div>
                 <h4>AI Resume Maker</h4>
               </div>
-              <p
-                style="
-                  color: var(--text-secondary);
-                  font-size: 13px;
-                  margin-bottom: 20px;
-                "
-              >
+              <p class="text-secondary text-sm mb-20">
                 Fill in the details to generate a professional, ATS-friendly
                 resume prototype.
               </p>
 
-              <div
-                style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px"
-              >
+              <div class="grid-2">
                 <div class="form-group">
                   <label>Full Name</label>
                   <input
@@ -177,14 +119,7 @@
                 </div>
               </div>
 
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: 2fr 1fr;
-                  gap: 15px;
-                  margin-top: 15px;
-                "
-              >
+              <div class="grid-2-1 mt-15">
                 <div class="form-group">
                   <label>Highest Qualification</label>
                   <input
@@ -205,7 +140,7 @@
                 </div>
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Target Job Role</label>
                 <input
                   type="text"
@@ -215,12 +150,11 @@
                 />
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Experience Level</label>
                 <select
                   id="maker-level"
-                  class="custom-select"
-                  style="width: 100%; padding: 12px; border-radius: 12px"
+                  class="custom-select w-full p-12 rounded-12"
                   title="Select Experience Level"
                 >
                   <option value="Beginner">Beginner (Student / Fresher)</option>
@@ -229,7 +163,7 @@
                 </select>
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Technical Skills (Comma separated)</label>
                 <input
                   type="text"
@@ -239,7 +173,7 @@
                 />
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Coding Skills (Comma separated)</label>
                 <input
                   type="text"
@@ -249,7 +183,7 @@
                 />
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Soft Skills</label>
                 <input
                   type="text"
@@ -259,7 +193,7 @@
                 />
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Research Papers / Publications (Optional)</label>
                 <textarea
                   id="maker-research"
@@ -269,7 +203,7 @@
                 ></textarea>
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Industry / Internship Experience (Optional)</label>
                 <textarea
                   id="maker-experience"
@@ -279,7 +213,7 @@
                 ></textarea>
               </div>
 
-              <div class="form-group" style="margin-top: 15px">
+              <div class="form-group mt-15">
                 <label>Projects (Academic / Personal) (Optional)</label>
                 <textarea
                   id="maker-projects"
@@ -290,9 +224,8 @@
               </div>
 
               <button
-                class="btn-primary"
+                class="btn-primary w-full mt-20"
                 onclick="generateResume()"
-                style="width: 100%; margin-top: 20px"
               >
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Resume
                 Prototype
@@ -300,16 +233,7 @@
 
               <div
                 id="resume-generation-feedback"
-                style="
-                  margin-top: 20px;
-                  font-size: 14px;
-                  line-height: 1.6;
-                  color: var(--text-primary);
-                  background: var(--bg-secondary);
-                  padding: 20px;
-                  border-radius: 12px;
-                  display: none;
-                "
+                class="mt-20 text-md leading-relaxed text-primary bg-secondary p-20 rounded-12 hidden"
               ></div>
             </div>
           </div>

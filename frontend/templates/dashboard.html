@@ -1,12 +1,11 @@
 <section
           id="dashboard-section"
-          class="content-section"
-          style="display: none"
+          class="content-section hidden"
         >
           <div class="header">
-            <div style="display: flex; align-items: center; gap: 15px;">
+            <div class="flex-center-gap-15">
               <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
-              <h3 style="margin: 0;">Analytics Dashboard</h3>
+              <h3 class="m-0">Analytics Dashboard</h3>
             </div>
           </div>
           <div class="admin-content">
@@ -27,7 +26,7 @@
                 <div class="stat-info">
                   <h3>Active Users</h3>
                   <p id="active-users">Loading...</p>
-                  <div style="font-size: 11px; color: #10b981; margin-top: 4px">
+                  <div class="text-xs text-success mt-4">
                     <i class="fa-solid fa-arrow-up"></i> 5 new today
                   </div>
                 </div>
@@ -39,13 +38,7 @@
                 <div class="stat-info">
                   <h3>Documents</h3>
                   <p id="total-documents">...</p>
-                  <div
-                    style="
-                      font-size: 11px;
-                      color: #10b981;
-                      margin-top: 4px;
-                    "
-                  >
+                  <div class="text-xs text-success mt-4">
                     <i class="fa-solid fa-check-circle"></i> Live Data
                   </div>
                 </div>
@@ -54,43 +47,19 @@
                 <!-- Dynamic Content Loading... -->
               </div>
             </div>
-            <div
-              class="dashboard-grid"
-              style="
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
-                gap: 24px;
-                margin-top: 32px;
-              "
-            >
+            <div class="dashboard-grid dashboard-grid-main">
               <div class="chart-container">
                 <canvas id="roleChart"></canvas>
               </div>
               <div class="chart-container">
-                <div
-                  class="chart-header"
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 12px;
-                    padding: 0 10px;
-                  "
-                >
-                  <h4
-                    style="
-                      margin: 0;
-                      font-size: 14px;
-                      color: var(--text-primary);
-                    "
-                  >
+                <div class="chart-header chart-header-flex">
+                  <h4 class="m-0 text-sm text-primary">
                     User Sentiment Analysis
                   </h4>
                   <button
-                    class="speech-btn"
+                    class="speech-btn icon-small"
                     onclick="loadDashboard()"
                     title="Refresh Analytics"
-                    style="width: 28px; height: 28px; font-size: 12px"
                   >
                     <i class="fa-solid fa-rotate"></i>
                   </button>
@@ -100,24 +69,20 @@
             </div>
 
             <!-- Knowledge Base Quick Access -->
-            <div class="settings-card" style="margin-top: 32px">
+            <div class="settings-card mt-32">
               <div class="card-header">
-                <div
-                  class="card-icon"
-                  style="background: linear-gradient(135deg, #8b5cf6, #7c3aed)"
-                >
+                <div class="card-icon modal-header-purple">
                   <i class="fa-solid fa-book-open"></i>
                 </div>
                 <h4>Knowledge Base</h4>
                 <button
-                  class="btn-primary"
+                  class="btn-primary ml-auto text-sm py-8 px-16"
                   onclick="showSection('admin')"
-                  style="margin-left: auto; font-size: 13px; padding: 8px 16px"
                 >
                   <i class="fa-solid fa-gears"></i> Manage All Data
                 </button>
               </div>
-              <p style="color: var(--text-secondary); margin-bottom: 20px">
+              <p class="text-secondary mb-20">
                 View your documents in knowledge base
               </p>
             </div>

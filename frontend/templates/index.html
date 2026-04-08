@@ -8,7 +8,7 @@
       content="Official AI Assistant for Sri Venkateswara University (SVU). Get instant answers about admissions, courses, campus facilities, and more."
     />
     <title>Intelligent Campus Assistant Chatbot</title>
-    <link rel="stylesheet" href="/static/style.css?v=27" />
+    <link rel="stylesheet" href="/static/style.css?v=28" />
 
     <link
       rel="stylesheet"
@@ -49,40 +49,41 @@
       </div>
     </div>
 
-    {% include 'components/loading_overlay.html' %}
+    {% include 'loading_overlay.html' %}
 
     <div class="container">
       <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
       <!-- Sidebar -->
-      {% include 'components/sidebar.html' %}
+      {% include 'sidebar.html' %}
 
       <!-- Main Content -->
       <main class="main-content">
         <!-- Chat Interface -->
-        {% include 'components/chat.html' %}
+        {% include 'chat.html' %}
 
         <!-- Admin Configuration Section -->
-        {% include 'components/admin.html' %}
+        {% include 'admin.html' %}
 
         <!-- Dashboard Section -->
-        {% include 'components/dashboard.html' %}
+        {% include 'dashboard.html' %}
 
         <!-- Academic Calendar Section -->
-        {% include 'components/calendar.html' %}
+        {% include 'calendar.html' %}
 
         <!-- Study Buddy Section -->
-        {% include 'components/study_buddy.html' %}
+        {% include 'study_buddy.html' %}
 
         <!-- Locations Section -->
-        {% include 'components/locations.html' %}
+        {% include 'locations.html' %}
 
         <!-- Career Center Section -->
-        {% include 'components/career.html' %}
+        {% include 'career.html' %}
       </main>
     </div>
 
-    {% include 'components/modals.html' %}
+    {% include 'modals.html' %}
 
+    <script src="/static/script.js?v=35"></script>
   </body>
 </html>
 

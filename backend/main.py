@@ -11,6 +11,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("uvicorn")
+
 # Handle asyncio loop policy for Windows and suppress deprecation warnings in Python 3.12+
 if platform.system() == 'Windows':
     import warnings
@@ -27,6 +30,7 @@ if platform.system() == 'Windows':
     except Exception as e:
         logger.warning(f"Loop policy configuration skipped: {e}")
 
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
 
@@ -38,9 +42,6 @@ from backend.app.core.security import get_password_hash
 from backend.app.services.logging_service import log_event
 from backend.app.core import database
 from datetime import datetime
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("uvicorn")
 
 async def seed_admin():
     email = "vishnureddyk3333@gmail.com"

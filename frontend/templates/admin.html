@@ -1,0 +1,439 @@
+<section
+          id="admin-section"
+          class="content-section hidden"
+        >
+          <div class="header">
+            <div class="flex-center-gap-15">
+              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+              <h3 class="m-0">System Configuration</h3>
+            </div>
+            <button id="admin-refresh-all" class="btn-primary btn-small btn-icon-label" onclick="refreshAllAdminData()">
+              <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+          </div>
+          <div class="admin-content">
+            <!-- Top Row: Config & Health -->
+            <div
+              class="grid-autofit-350"
+            >
+              <!-- Configuration Card -->
+
+              <!-- System Health & Governance (Moved) -->
+              <div class="settings-card">
+                <div class="card-header">
+                  <div
+                    class="card-icon modal-header-green"
+                  >
+                    <i class="fa-solid fa-heart-pulse"></i>
+                  </div>
+                  <h4>System Health & Governance</h4>
+                  <button
+                    class="btn-danger-sm ml-auto btn-icon-label"
+                    onclick="clearCache()"
+                  >
+                    <i class="fa-solid fa-trash-can"></i> Cache
+                  </button>
+                </div>
+                <div
+                  class="health-grid mt-15 grid-2-gap12"
+                >
+                  <div class="health-item">
+                    <span class="text-xs">API Gateway</span>
+                    <span class="badge success" id="health-api">Healthy</span>
+                  </div>
+                  <div class="health-item">
+                    <span class="text-xs">Vector DB</span>
+                    <span class="badge success" id="health-vector"
+                      >Connected</span
+                    >
+                  </div>
+                  <div class="health-item">
+                    <span class="text-xs">LLM Service</span>
+                    <span class="badge success" id="health-llm">Online</span>
+                  </div>
+                  <div class="health-item">
+                    <span class="text-xs">MongoDB</span>
+                    <span class="badge success" id="health-mongo"
+                      >Connected</span
+                    >
+                  </div>
+                </div>
+                <div
+                  class="border-t-p15"
+                >
+                  <button
+                    class="btn-secondary w-full text-center text-sm"
+                    onclick="reindexData()"
+                  >
+                    <i class="fa-solid fa-sync"></i> Re-index Knowledge Base
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trending Queries Management -->
+
+            <!-- Trending Queries Management -->
+            <div class="settings-card">
+              <div class="setting-card-header flex items-center border-bottom p-20-25">
+                <div class="modal-icon-container modal-header-amber mr-15">
+                  <i class="fa-solid fa-fire text-white text-xl"></i>
+                </div>
+                <div class="setting-info flex-1">
+                  <h3 class="m-0">Trending Queries Setup</h3>
+                </div>
+                <div class="flex gap-12">
+                    <button class="btn-secondary btn-icon-label rounded-10 text-sm p-10" onclick="loadAdminTrending()" title="Refresh List">
+                      <i class="fa-solid fa-rotate-right"></i> Refresh
+                    </button>
+                    <button class="btn-teal shadow-teal rounded-10 text-sm font-semibold border-none p-10 px-24" onclick="openAddTrendingModal()">
+                      <i class="fa-solid fa-plus mr-6"></i> Add Query
+                    </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <div class="trending-list min-w-600" id="admin-trending-list">
+                  <!-- Dynamic Content -->
+                </div>
+              </div>
+              <div id="trending-view-more" class="text-center mt-10 hidden">
+                  <span class="text-accent-link" onclick="toggleTrendingView()">View All</span>
+              </div>
+            </div>
+
+            <!-- User Management Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-pink"
+                >
+                  <i class="fa-solid fa-users-gear"></i>
+                </div>
+                <h4>User Management</h4>
+                <div class="ml-auto flex gap-10 items-center">
+                  <div class="admin-search-container m-0 w-200">
+                    <input type="text" id="user-search-input" placeholder="Search users..." class="admin-search-input text-sm p-12-8" oninput="filterAdminUsers()">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
+                  </div>
+                  <button class="btn-primary btn-small" onclick="loadUsers()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary btn-small" onclick="openAddUserModal()">
+                    <i class="fa-solid fa-user-plus"></i> Add User
+                  </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table table-standard"
+                >
+                  <thead>
+                    <tr>
+                      <th class="th-left">User</th>
+                      <th class="th-left">Role</th>
+                      <th class="th-left">Joined</th>
+                      <th class="th-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body">
+                    <tr>
+                      <td colspan="4" class="td-center-p20">
+                        Loading users...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Knowledge Base Management -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-purple"
+                >
+                  <i class="fa-solid fa-book-open"></i>
+                </div>
+                <h4>Knowledge Base</h4>
+                <div class="ml-auto flex gap-10 items-center">
+                  <button class="btn-primary btn-small" onclick="loadDocuments()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <div
+                    class="admin-search-container m-0 w-250"
+                  >
+                    <input
+                      type="text"
+                      id="admin-search-input"
+                      placeholder="Search docs..."
+                      class="admin-search-input text-sm p-12-8"
+                    />
+                    <i
+                      class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"
+                    ></i>
+                  </div>
+
+                  <button
+                    class="btn-submit btn-small btn-icon-label modal-header-purple shadow-purple"
+                    onclick="openAllFaqsModal()"
+                  >
+                    <i class="fa-solid fa-list-check"></i> View All FAQs
+                  </button>
+                  <button
+                    class="btn-submit btn-small btn-icon-label bg-red shadow-red border-none"
+                    onclick="openUploadModal()"
+                  >
+                    <i class="fa-solid fa-file-pdf"></i> Upload PDF
+                  </button>
+                  <button
+                    class="btn-submit btn-small btn-icon-label bg-blue shadow-blue border-none"
+                    onclick="openUrlModal()"
+                  >
+                    <i class="fa-solid fa-link"></i> Add URL
+                  </button>
+                  <button
+                    class="btn-submit btn-small btn-icon-label glass-btn-shared"
+                    onclick="openTextModal()"
+                  >
+                    <i class="fa-solid fa-file-lines"></i> Add Text
+                  </button>
+                </div>
+              </div>
+
+              <div class="documents-list-container responsive-scroll-container">
+                <table class="documents-table">
+                  <thead>
+                    <tr>
+                      <th class="text-left">Document Name</th>
+                      <th class="text-left">Type</th>
+                      <th class="text-center">Chunks</th>
+                      <th class="text-center">FAQs</th>
+                      <th class="text-center">Uploaded By</th>
+                      <th class="text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="documents-table-body">
+                    <tr>
+                      <td
+                        colspan="6"
+                        class="text-center p-30 text-secondary"
+                      >
+                        <i
+                          class="fa-solid fa-spinner fa-spin mr-8"
+                        ></i>
+                        Loading knowledge base...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+
+            <!-- System Logs -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-slate"
+                >
+                  <i class="fa-solid fa-terminal"></i>
+                </div>
+                <h4>System Logs</h4>
+              </div>
+              <div
+                id="system-logs-container"
+                class="bg-dark-slate text-slate-300 p-16 rounded-12 text-xs overflow-y-auto leading-relaxed h-180 fira-code pre-wrap"
+              >
+                <div class="text-secondary text-center pt-60">
+                  Waiting for system events...
+                </div>
+              </div>
+            </div>
+
+            <!-- Academic Calendar Management -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-pink"
+                >
+                  <i class="fa-solid fa-calendar-check"></i>
+                </div>
+                <h4>Academic Calendar Management</h4>
+                <div class="ml-auto flex gap-10 items-center">
+                  <div class="admin-search-container m-0 w-200">
+                    <input type="text" id="calendar-search-input" placeholder="Search events..." class="admin-search-input text-sm p-12-8" oninput="filterAdminCalendar()" aria-label="Search Academic Events">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
+                  </div>
+                  <button class="btn-primary btn-small" onclick="loadCalendarAdmin()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary btn-small" onclick="openCalendarModal()">
+                    <i class="fa-solid fa-plus"></i> Add Event
+                  </button>
+                </div>
+              </div>
+              <div
+                class="calendar-admin-list responsive-scroll-container mt-20"
+                id="calendar-admin-list"
+              >
+                <table class="documents-table min-w-600">
+                  <thead>
+                    <tr>
+                      <th class="th-left">Date</th>
+                      <th class="th-left">Event</th>
+                      <th class="th-left">Type</th>
+                      <th class="th-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="calendar-admin-table-body">
+                    <tr>
+                      <td colspan="4" class="td-center-p20">
+                        Loading events...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Location Management Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div class="card-icon modal-header-blue">
+                  <i class="fa-solid fa-map-location-dot"></i>
+                </div>
+                <h4>Location Management</h4>
+                <div class="ml-auto flex gap-10 items-center">
+                  <div class="admin-search-container m-0 w-200">
+                    <input type="text" id="location-search-input" placeholder="Search locations..." class="admin-search-input text-sm p-12-8" oninput="filterAdminLocations()" aria-label="Search Campus Locations">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
+                  </div>
+                  <button class="btn-primary btn-small" onclick="fetchLocations()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary btn-small" onclick="openLocationModal()">
+                    <i class="fa-solid fa-plus"></i> Add Location
+                  </button>
+                </div>
+              </div>
+              <div class="documents-list-container responsive-scroll-container mt-20">
+                <table class="documents-table min-w-600">
+                  <thead>
+                    <tr>
+                      <th class="th-left">Location Name</th>
+                      <th class="th-left">Category</th>
+                      <th class="th-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="locations-admin-table-body">
+                    <tr>
+                      <td colspan="3" class="td-center-p20">
+                        Loading locations...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <!-- View More Toggle -->
+              <div id="location-admin-view-toggle" class="text-center mt-15 hidden">
+                <button class="btn-secondary btn-small px-20">
+                  <span id="location-view-btn-text" onclick="toggleAdminLocationsView()">View More</span>
+                  <i id="location-view-btn-icon" class="fa-solid fa-chevron-down ml-8"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Support Tickets Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-amber"
+                >
+                  <i class="fa-solid fa-ticket"></i>
+                </div>
+                <h4>Student Support Tickets</h4>
+                <div class="ml-auto flex gap-10 items-center">
+                  <div class="admin-search-container m-0 w-200">
+                    <input type="text" id="ticket-search-input" placeholder="Search tickets..." class="admin-search-input text-sm p-12-8" oninput="filterAdminTickets()" aria-label="Search Student Support Tickets">
+                    <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
+                  </div>
+                  <button class="btn-primary btn-small" onclick="loadAllTickets()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                  <button class="btn-primary btn-small bg-red border-none" onclick="deleteAllClosedTickets()">
+                    <i class="fa-solid fa-trash-can"></i> Delete Closed
+                  </button>
+                </div>
+              </div>
+              <div class="responsive-scroll-container">
+                <table
+                  class="documents-table table-standard mt-15 min-w-700"
+                >
+                  <thead>
+                    <tr>
+                      <th class="th-left">ID</th>
+                      <th class="th-left">Subject</th>
+                      <th class="th-left">Category</th>
+                      <th class="th-left">User</th>
+                      <th class="th-center">Status</th>
+                      <th class="th-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tickets-table-body">
+                    <tr>
+                      <td colspan="6" class="td-center-p20">
+                        Loading tickets...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Suggested FAQs Section -->
+            <div class="settings-card">
+              <div class="card-header">
+                <div
+                  class="card-icon modal-header-yellow"
+                >
+                  <i class="fa-solid fa-lightbulb"></i>
+                </div>
+                <div class="flex-1 flex items-center gap-15">
+                  <div>
+                    <h4>Community Contributions</h4>
+                    <p class="text-xs text-secondary mt-2">
+                      Review and approve user-suggested FAQs
+                    </p>
+                  </div>
+                  <button class="btn-primary btn-small ml-auto" onclick="loadSuggestedFAQs()">
+                    <i class="fa-solid fa-rotate"></i> Refresh
+                  </button>
+                </div>
+              </div>
+              <div class="documents-list-container responsive-scroll-container">
+                <table class="documents-table min-w-600">
+                  <thead>
+                    <tr>
+                      <th class="th-left">Suggested Content</th>
+                      <th class="th-left">Contributor</th>
+                      <th class="th-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="suggested-faqs-table-body">
+                    <tr>
+                      <td
+                        colspan="3"
+                        class="td-center-p40 text-secondary"
+                      >
+                        <i
+                          class="fa-solid fa-check-circle text-xl block mb-12 text-success opacity-5"
+                        ></i>
+                        No pending suggestions. All caught up!
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>

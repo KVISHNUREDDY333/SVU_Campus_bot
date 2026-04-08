@@ -126,8 +126,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Check Auth first
   if (checkAuth()) {
+    initRoleUI();
     loadChatHistory();
     populateSidebarProfile();
+    startNotificationPolling();
   }
 
   // Force Unregister Service Worker to clear cache
@@ -196,6 +198,33 @@ function checkAuth() {
   } else {
     if (overlay) overlay.classList.remove("active");
     return true;
+  }
+}
+
+function initRoleUI() {
+  if (USER_ROLE === "admin") {
+    const navAdmin = document.getElementById("nav-admin");
+    const navDashboard = document.getElementById("nav-dashboard");
+    if (navAdmin) {
+      navAdmin.classList.remove("hidden");
+      navAdmin.style.display = "block";
+    }
+    if (navDashboard) {
+      navDashboard.classList.remove("hidden");
+      navDashboard.style.display = "block";
+    }
+  } else {
+    // Ensure admin links are hidden for non-admins (e.g. after logout/login swap)
+    const navAdmin = document.getElementById("nav-admin");
+    const navDashboard = document.getElementById("nav-dashboard");
+    if (navAdmin) {
+      navAdmin.classList.add("hidden");
+      navAdmin.style.display = "none";
+    }
+    if (navDashboard) {
+      navDashboard.classList.add("hidden");
+      navDashboard.style.display = "none";
+    }
   }
 }
 
@@ -418,16 +447,7 @@ function saveSession(data) {
 
   showSection("chat");
   populateSidebarProfile();
-
-  // Refresh admin/dashboard views if needed
-  if (USER_ROLE === "admin") {
-    const navAdmin = document.getElementById("nav-admin");
-    const navDashboard = document.getElementById("nav-dashboard");
-    if (navAdmin) navAdmin.style.display = "block";
-    if (navDashboard) navDashboard.style.display = "block";
-  }
-
-  // Start notification polling
+  initRoleUI();
   startNotificationPolling();
 
   // Reset chat to "New Chat" on login
@@ -490,21 +510,13 @@ function populateSidebarProfile() {
     const nameEl = document.getElementById("profile-name");
     const roleEl = document.getElementById("profile-role");
     const avatarEl = document.getElementById("profile-avatar");
-    const navAdmin = document.getElementById("nav-admin");
-    const navDashboard = document.getElementById("nav-dashboard");
 
     if (nameEl) nameEl.textContent = fullName;
     if (roleEl) roleEl.textContent = role;
     if (avatarEl) avatarEl.textContent = fullName.charAt(0).toUpperCase();
 
-    // Show/Hide admin features
-    if (role === "admin") {
-      if (navAdmin) navAdmin.style.display = "block";
-      if (navDashboard) navDashboard.style.display = "block";
-    } else {
-      if (navAdmin) navAdmin.style.display = "none";
-      if (navDashboard) navDashboard.style.display = "none";
-    }
+    // Delegate to shared role UI initializer
+    initRoleUI();
   } else if (profileEl) {
     profileEl.style.display = "none";
   }
@@ -602,7 +614,10 @@ function showSection(section) {
 
   sections.forEach((s) => {
     const el = document.getElementById(`${s}-section`);
-    if (el) el.style.display = "none";
+    if (el) {
+      el.classList.add("hidden");
+      el.style.display = "none";
+    }
 
     const nav = document.getElementById(`nav-${s}`);
     if (nav) nav.classList.remove("active");
@@ -610,6 +625,7 @@ function showSection(section) {
 
   const activeSection = document.getElementById(`${section}-section`);
   if (activeSection) {
+    activeSection.classList.remove("hidden");
     // We use flex for chat and locations sections to maintain layout, block for others
     activeSection.style.display =
       section === "chat" || section === "locations" ? "flex" : "block";
@@ -4643,13 +4659,17 @@ function switchCareerTab(tab) {
   if (tab === "checker") {
     checkerTab.classList.add("active");
     makerTab.classList.remove("active");
+    checkerView.classList.remove("hidden");
     checkerView.style.display = "block";
+    makerView.classList.add("hidden");
     makerView.style.display = "none";
   } else {
     checkerTab.classList.remove("active");
     makerTab.classList.add("active");
-    checkerView.style.display = "none";
+    makerView.classList.remove("hidden");
     makerView.style.display = "block";
+    checkerView.classList.add("hidden");
+    checkerView.style.display = "none";
   }
 }
 window.switchCareerTab = switchCareerTab;
@@ -5610,14 +5630,19 @@ function switchStudyTab(tab) {
   if (tab === "notes") {
     notesTab.classList.add("active");
     zenTab.classList.remove("active");
+    notesView.classList.remove("hidden");
     notesView.style.display = "flex";
+    zenView.classList.add("hidden");
     zenView.style.display = "none";
   } else {
     zenTab.classList.add("active");
     notesTab.classList.remove("active");
+    zenView.classList.remove("hidden");
     zenView.style.display = "flex";
+    notesView.classList.add("hidden");
     notesView.style.display = "none";
-    document.getElementById("zen-input").focus();
+    const zenInput = document.getElementById("zen-input");
+    if (zenInput) zenInput.focus();
   }
 }
 

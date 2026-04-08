@@ -1,0 +1,31 @@
+<section id="locations-section" class="content-section hidden">
+  <div class="locations-container">
+    <div class="header">
+      <div class="locations-header-flex">
+        <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+        <div>
+          <h2 class="locations-title m-0">
+            <i class="fa-solid fa-location-dot mr-8 text-lg"></i>
+            University Locations
+          </h2>
+          <p class="locations-desc m-0 text-md">Select a facility or department to ask for location.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search Box -->
+    <div class="locations-search-container">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" id="locations-search" class="locations-search-input" placeholder="Search for departments, blocks, or facilities..." oninput="filterLocations(this.value)" />
+    </div>
+
+    <div class="locations-card">
+      <div class="locations-header">
+        <div class="uni-name">Sri Venkateswara University</div>
+        <div class="uni-sub">Tirupati, Andhra Pradesh</div>
+      </div>
+
+      <div class="locations-list" id="locations-list"></div>
+    </div>
+  </div>
+</section>

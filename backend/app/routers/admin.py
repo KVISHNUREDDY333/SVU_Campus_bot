@@ -307,7 +307,7 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
         return {
             "status": "success", 
             "message": f"Ingested text '{req.title}'",
-            "faqs_extracted": len(extracted_faqs)
+            "faqs_extracted": inserted_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
@@ -358,7 +358,7 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         return {
             "status": "success", 
             "message": f"Ingested {num_chunks} chunks from {file.filename}",
-            "faqs_extracted": len(extracted_faqs)
+            "faqs_extracted": inserted_count
         }
         
     except Exception as e:
@@ -401,7 +401,7 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         return {
             "status": "success", 
             "message": f"Ingested {num_chunks} chunks from URL",
-            "faqs_extracted": len(extracted_faqs)
+            "faqs_extracted": inserted_count
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"URL ingestion failed: {str(e)}")
