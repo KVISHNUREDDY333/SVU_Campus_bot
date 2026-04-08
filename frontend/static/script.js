@@ -927,48 +927,18 @@ function refreshAdminData() {
   if (typeof loadFAQs === "function") loadFAQs(); // Refresh the main FAQ list
 }
 
-function renderDocuments(docs, limit = null) {
+function renderDocuments(docs) {
   const tbody = document.getElementById("documents-table-body");
   if (!tbody) return;
-
-  // Safety check for container traversal
-  let container = tbody.parentElement;
-  if (container) container = container.parentElement;
-  if (container && !container.classList.contains("settings-card")) {
-    if (
-      container.parentElement &&
-      container.parentElement.classList.contains("settings-card")
-    ) {
-      container = container.parentElement;
-    }
-  }
-
-  // Add View More button if not exists
-  let btn = null;
-  if (container) {
-    btn = container.querySelector(".btn-view-more");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.className = "btn-secondary btn-view-more";
-      btn.style.width = "100%";
-      btn.style.marginTop = "15px";
-      btn.style.textAlign = "center";
-      container.appendChild(btn);
-    }
-  }
 
   tbody.innerHTML = "";
   if (docs.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="5" style="text-align: center; padding: 20px;">No documents found.</td></tr>';
-    btn.style.display = "none";
+      '<tr><td colspan="6" style="text-align: center; padding: 20px;">No documents found.</td></tr>';
     return;
   }
 
-  const showCount = limit ? limit : docs.length;
-  const visibleDocs = docs.slice(0, showCount);
-
-  visibleDocs.forEach((doc) => {
+  docs.forEach((doc) => {
     const dateStr = new Date(
       doc.uploaded_at || doc.upload_date,
     ).toLocaleDateString();
@@ -1008,19 +978,6 @@ function renderDocuments(docs, limit = null) {
         `;
   });
 
-  // Toggle Button Logic
-  if (docs.length <= 3) {
-    btn.style.display = "none";
-  } else {
-    btn.style.display = "block";
-    if (limit) {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${docs.length - 3} more)`;
-      btn.onclick = () => renderDocuments(docs, null);
-    } else {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
-      btn.onclick = () => renderDocuments(docs, 3);
-    }
-  }
 }
 
 async function deleteDocument(docId) {
@@ -2347,54 +2304,24 @@ async function loadSuggestedFAQs() {
 
     const suggestions = await res.json();
     window.allSuggestions = suggestions; // Store for lookup
-    renderSuggestedFAQsTable(suggestions, 3);
+    renderSuggestedFAQsTable(suggestions);
   } catch (e) {
     console.error("Load Suggestions Error", e);
   }
 }
 
-function renderSuggestedFAQsTable(suggestions, limit = null) {
+function renderSuggestedFAQsTable(suggestions) {
   const tbody = document.getElementById("suggested-faqs-table-body");
   if (!tbody) return;
-
-  // Safety check for container traversal
-  let container = tbody.parentElement;
-  if (container) container = container.parentElement;
-  if (container && !container.classList.contains("settings-card")) {
-    if (
-      container.parentElement &&
-      container.parentElement.classList.contains("settings-card")
-    ) {
-      container = container.parentElement;
-    }
-  }
-
-  // Add View More button if not exists
-  let btn = null;
-  if (container) {
-    btn = container.querySelector(".btn-view-more");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.className = "btn-secondary btn-view-more";
-      btn.style.width = "100%";
-      btn.style.marginTop = "15px";
-      btn.style.textAlign = "center";
-      container.appendChild(btn);
-    }
-  }
 
   tbody.innerHTML = "";
   if (suggestions.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="3" style="text-align: center; padding: 20px;">No suggestions pending.</td></tr>';
-    btn.style.display = "none";
     return;
   }
 
-  const showCount = limit ? limit : suggestions.length;
-  const visibleSuggestions = suggestions.slice(0, showCount);
-
-  visibleSuggestions.forEach((s) => {
+  suggestions.forEach((s) => {
     const dateStr = new Date(s.timestamp).toLocaleDateString();
     const initial = s.suggested_by.charAt(0).toUpperCase();
 
@@ -2433,19 +2360,6 @@ function renderSuggestedFAQsTable(suggestions, limit = null) {
         </tr>`;
   });
 
-  // Toggle Button Logic
-  if (suggestions.length <= 3) {
-    btn.style.display = "none";
-  } else {
-    btn.style.display = "block";
-    if (limit) {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${suggestions.length - 3} more)`;
-      btn.onclick = () => renderSuggestedFAQsTable(suggestions, null);
-    } else {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
-      btn.onclick = () => renderSuggestedFAQsTable(suggestions, 3);
-    }
-  }
 }
 
 function openReviewModal(id) {
@@ -2740,106 +2654,52 @@ async function loadCalendar() {
 
 function renderCalendar(events) {
   const list = document.getElementById("calendar-list");
+  if (!list) return;
+
   if (events.length === 0) {
-    list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
-            <i class="fa-solid fa-calendar-day fa-2x"></i>
-            <p style="margin-top: 10px;">No upcoming events scheduled at this moment.</p>
+    list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text-secondary);">
+            <i class="fa-solid fa-calendar-day fa-3x" style="opacity: 0.3; margin-bottom: 20px;"></i>
+            <p style="font-size: 1.1rem; font-weight: 500;">No upcoming events scheduled at this moment.</p>
         </div>`;
     return;
   }
 
-  // Display all events without pagination
   const cardsHtml = events
     .map((e) => {
       const fromDate = e.from_date || e.date || "";
       const toDate = e.to_date || e.date || "";
-
-      // Parse as datetime
       const fromDateTime = new Date(fromDate);
       const toDateTime = new Date(toDate);
 
-      // Validation check for dates
-      if (isNaN(fromDateTime.getTime()) || isNaN(toDateTime.getTime())) {
-        console.warn("Invalid date found in calendar event:", e);
-        return ""; // Skip this invalid card
-      }
+      if (isNaN(fromDateTime.getTime())) return "";
 
-      // Extract date parts for comparison
-      const fromDateOnly = fromDateTime.toISOString().split("T")[0];
-      const toDateOnly = toDateTime.toISOString().split("T")[0];
-      const isSingleDay = fromDateOnly === toDateOnly;
-
-      // Format time in 24-hour format
-      const formatTime = (date) => {
-        const hours = String(date.getHours()).padStart(2, "0");
-        const minutes = String(date.getMinutes()).padStart(2, "0");
-        return `${hours}:${minutes}`;
-      };
-
-      // Calendar card display (day/month)
       const day = fromDateTime.getDate();
-      const month = fromDateTime
-        .toLocaleString("default", { month: "short" })
-        .toUpperCase();
-
-      // Date range text with time
-      let dateRangeText;
-      if (isSingleDay) {
-        const dateFormatted = fromDateTime.toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
-        const startTime = formatTime(fromDateTime);
-        const endTime = formatTime(toDateTime);
-        dateRangeText = `${dateFormatted} | ${startTime} - ${endTime}`;
-      } else {
-        const fromFormatted = fromDateTime.toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
-        const toFormatted = toDateTime.toLocaleDateString("en-IN", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
-        const startTime = formatTime(fromDateTime);
-        const endTime = formatTime(toDateTime);
-        dateRangeText = `${fromFormatted} ${startTime} — ${toFormatted} ${endTime}`;
-      }
+      const month = fromDateTime.toLocaleString("default", { month: "short" }).toUpperCase();
 
       let colorClass = "event-holiday";
       if (e.type === "Exam") colorClass = "event-exam";
       if (e.type === "Event") colorClass = "event-general";
 
-      // Escaping for JS string literals in onclick
       const escapedTitle = escapeHtml(e.title).replace(/'/g, "\\'");
       const escapedDesc = escapeHtml(e.description || "").replace(/'/g, "\\'");
 
       return `
-            <div class="calendar-card ${colorClass}" onclick="addToGoogleCalendar('${escapedTitle}', '${fromDate}', '${toDate}', '${escapedDesc}')" style="cursor: pointer;" title="Add to Google Calendar">
+            <div class="calendar-card ${colorClass}">
                 <div class="calendar-date">
                     <span class="day">${day}</span>
                     <span class="month">${month}</span>
                 </div>
                 <div class="calendar-info">
-                    <span class="event-tag">${e.type}</span>
-                    <h4 class="event-title">${e.title}</h4>
-                    <p class="event-desc">${e.description || ""}</p>
-                    <div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
-                         <i class="fa-regular fa-calendar"></i> ${dateRangeText}
-                    </div>
-                    ${
-                      e.location
-                        ? `<div style="margin-top: 4px; font-size: 12px; color: var(--text-secondary);">
-                         <i class="fa-solid fa-map-pin"></i> ${escapeHtml(e.location)}
-                    </div>`
-                        : ""
-                    }
-                    <div style="margin-top: 8px; font-size: 11px; color: var(--text-secondary); display: flex; align-items: center; gap: 5px;">
-                         <i class="fa-brands fa-google"></i> <span style="text-decoration: underline;">Add to Calendar</span>
-                    </div>
+                    <span class="event-tag">${(e.type || "Event").toUpperCase()}</span>
+                    <h4 class="event-title">${escapeHtml(e.title)}</h4>
+                    <p class="event-desc">${escapeHtml(e.description || "No description available.")}</p>
+                    
+                    <a href="javascript:void(0)" 
+                       class="add-calendar-link" 
+                       onclick="addToGoogleCalendar('${escapedTitle}', '${fromDate}', '${toDate}', '${escapedDesc}')">
+                        <i class="fa-brands fa-google"></i>
+                        <span>Add to Calendar</span>
+                    </a>
                 </div>
             </div>
         `;
@@ -2886,45 +2746,18 @@ async function loadCalendarAdmin() {
   renderCalendarAdminTable(window.allAdminEvents);
 }
 
-function renderCalendarAdminTable(events, limit = null) {
+function renderCalendarAdminTable(events) {
   const tbody = document.getElementById("calendar-admin-table-body");
-  // Safety check for container traversal
-  let container = tbody.parentElement;
-  if (container) container = container.parentElement;
-  if (container && !container.classList.contains("settings-card")) {
-    if (
-      container.parentElement &&
-      container.parentElement.classList.contains("settings-card")
-    ) {
-      container = container.parentElement;
-    }
-  }
+  if (!tbody) return;
 
-  // Add View More button if not exists
-  let btn = null;
-  if (container) {
-    btn = container.querySelector(".btn-view-more");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.className = "btn-secondary btn-view-more";
-      btn.style.width = "100%";
-      btn.style.marginTop = "15px";
-      btn.style.textAlign = "center";
-      container.appendChild(btn);
-    }
-  }
-
+  tbody.innerHTML = "";
   if (events.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="4" style="text-align: center; padding: 20px;">No events posted.</td></tr>';
-    btn.style.display = "none";
     return;
   }
 
-  const showCount = limit ? limit : events.length;
-  const visibleEvents = events.slice(0, showCount);
-
-  tbody.innerHTML = visibleEvents
+  tbody.innerHTML = events
     .map((e) => {
       const fromDate = e.from_date || e.date || "";
       const toDate = e.to_date || e.date || "";
@@ -2983,39 +2816,27 @@ function renderCalendarAdminTable(events, limit = null) {
 
       return `
         <tr>
-            <td style="padding: 12px;">${dateDisplay}</td>
-            <td style="padding: 12px; font-weight: 500;">
-                ${escapeHtml(e.title)}
-                ${e.location ? `<div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;"><i class="fa-solid fa-map-pin"></i> ${escapeHtml(e.location)}</div>` : ""}
+            <td style="padding: 16px; font-size: 13px;">${dateDisplay}</td>
+            <td style="padding: 16px;">
+                <div style="font-weight: 700; color: #1e293b; font-size: 14px;">${escapeHtml(e.title)}</div>
+                ${e.location ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; display: flex; align-items: center; gap: 4px;"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(e.location)}</div>` : ""}
             </td>
-            <td style="padding: 12px;"><span class="event-tag" style="font-size: 10px; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.05);">${escapeHtml(e.type)}</span></td>
-            <td style="padding: 12px; text-align: right;">
-                <button onclick="editCalendarEvent('${escapedId}')" style="color: #6366f1; background: none; border: none; cursor: pointer; margin-right: 8px;" title="Edit event">
-                    <i class="fa-solid fa-pen-to-square"></i>
-                </button>
-                <button onclick="deleteCalendarEvent('${escapedId}')" style="color: #ef4444; background: none; border: none; cursor: pointer;" title="Delete event">
-                    <i class="fa-solid fa-trash-can"></i>
-                </button>
+            <td style="padding: 16px;"><span class="badge" style="background: rgba(0,0,0,0.05); color: #64748b; padding: 4px 12px; border-radius: 50px; font-size: 10px;">${escapeHtml(e.type || "Event")}</span></td>
+            <td style="padding: 16px; text-align: right;">
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                  <button class="icon-btn" onclick="editCalendarEvent('${escapedId}')" style="color: #6366f1;" title="Edit event">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button class="icon-btn" onclick="deleteCalendarEvent('${escapedId}')" style="color: #ef4444;" title="Delete event">
+                      <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
             </td>
         </tr>
     `;
     })
     .join("");
 
-  // Toggle Button Logic
-  if (events.length <= 3) {
-    btn.style.display = "none";
-  } else {
-    btn.style.display = "block";
-    if (limit) {
-      const hiddenCount = events.length - limit;
-      btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${hiddenCount})`;
-      btn.onclick = () => renderCalendarAdminTable(events, null); // Show all
-    } else {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> Show Less`;
-      btn.onclick = () => renderCalendarAdminTable(events, 3); // Show Less
-    }
-  }
 }
 
 let currentEditEventId = null;
@@ -3265,54 +3086,24 @@ async function loadAllTickets() {
     const tickets = await res.json();
     // Store globally
     window.allTickets = tickets;
-    renderTicketsTable(tickets, 3);
+    renderTicketsTable(tickets);
   } catch (e) {
     console.error("Load Tickets Error", e);
   }
 }
 
-function renderTicketsTable(tickets, limit = null) {
+function renderTicketsTable(tickets) {
   const tbody = document.getElementById("tickets-table-body");
   if (!tbody) return;
-
-  // Safety check for container traversal
-  let container = tbody.parentElement;
-  if (container) container = container.parentElement;
-  if (container && !container.classList.contains("settings-card")) {
-    if (
-      container.parentElement &&
-      container.parentElement.classList.contains("settings-card")
-    ) {
-      container = container.parentElement;
-    }
-  }
-
-  // Add View More button if not exists
-  let btn = null;
-  if (container) {
-    btn = container.querySelector(".btn-view-more");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.className = "btn-secondary btn-view-more";
-      btn.style.width = "100%";
-      btn.style.marginTop = "15px";
-      btn.style.textAlign = "center";
-      container.appendChild(btn);
-    }
-  }
 
   tbody.innerHTML = "";
   if (tickets.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="6" style="text-align: center; padding: 20px;">No support tickets found.</td></tr>';
-    btn.style.display = "none";
     return;
   }
 
-  const showCount = limit ? limit : tickets.length;
-  const visibleTickets = tickets.slice(0, showCount);
-
-  visibleTickets.forEach((t) => {
+  tickets.forEach((t) => {
     const badgeClass = t.status === "open" ? "warning" : "success";
 
     // Delete Button Logic (Only for Closed Tickets and Admins)
@@ -3329,36 +3120,25 @@ function renderTicketsTable(tickets, limit = null) {
 
     tbody.innerHTML += `
         <tr>
-            <td>#${t.id.substring(t.id.length - 6)}</td>
-            <td>${escapeHtml(t.subject)}</td>
-            <td>${escapeHtml(t.category)}</td>
-            <td>${escapeHtml(t.created_by)}</td>
-            <td><span class="badge ${badgeClass}" style="cursor:pointer;" onclick="toggleTicketStatus('${t.id}', '${t.status}')">${t.status.toUpperCase()}</span></td>
-            <td style="display: flex; gap: 5px; justify-content: flex-end;">
-                 <button class="icon-btn" title="Reply / Resolve" onclick="openTicketResponseModal('${t.id}', '${escapeHtml(t.subject)}')" style="color: var(--primary-color);">
-                    <i class="fa-solid fa-reply"></i>
-                </button>
-                <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}')">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
-                ${deleteBtn}
+            <td style="padding: 16px; color: #64748b; font-size: 13px;">#${t.id.substring(t.id.length - 6)}</td>
+            <td style="padding: 16px;">${escapeHtml(t.subject)}</td>
+            <td style="padding: 16px;">${escapeHtml(t.category)}</td>
+            <td style="padding: 16px; font-weight: 600;">${escapeHtml(t.created_by)}</td>
+            <td style="padding: 16px;"><span class="badge ${badgeClass}" style="cursor:pointer;" onclick="toggleTicketStatus('${t.id}', '${t.status}')">${t.status.toUpperCase()}</span></td>
+            <td style="padding: 16px;">
+                <div style="display: flex; gap: 12px; justify-content: flex-end; align-items: center;">
+                  <button class="icon-btn" title="Reply / Resolve" onclick="openTicketResponseModal('${t.id}', '${escapeHtml(t.subject)}')" style="color: #6366f1;">
+                      <i class="fa-solid fa-reply"></i>
+                  </button>
+                  <button class="icon-btn" title="View Details" onclick="viewTicketDetails('${t.id}')" style="color: #64748b;">
+                      <i class="fa-solid fa-eye"></i>
+                  </button>
+                  ${deleteBtn}
+                </div>
             </td>
         </tr>`;
   });
 
-  // Toggle Button Logic
-  if (tickets.length <= 3) {
-    btn.style.display = "none";
-  } else {
-    btn.style.display = "block";
-    if (limit) {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${tickets.length - 3} more)`;
-      btn.onclick = () => renderTicketsTable(tickets, null);
-    } else {
-      btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
-      btn.onclick = () => renderTicketsTable(tickets, 3);
-    }
-  }
 }
 
 async function toggleTicketStatus(id, currentStatus) {
@@ -4092,55 +3872,24 @@ async function loadUsers() {
     // Store globally for see more/less functionality
     window.allUsers = users;
     // Render only first 3 users initially
-    renderUsersTable(users, 3);
+    renderUsersTable(users);
   } catch (e) {
     console.error("Load Users Error", e);
   }
 }
 
-function renderUsersTable(users, limit = null) {
+function renderUsersTable(users) {
   const tbody = document.getElementById("users-table-body");
   if (!tbody) return;
-
-  // Safety check for container traversal
-  let container = tbody.parentElement;
-  if (container) container = container.parentElement;
-
-  if (container && !container.classList.contains("settings-card")) {
-    if (
-      container.parentElement &&
-      container.parentElement.classList.contains("settings-card")
-    ) {
-      container = container.parentElement;
-    }
-  }
-
-  // Add View More button if not exists
-  let btn = null;
-  if (container) {
-    btn = container.querySelector(".btn-view-more-users");
-    if (!btn) {
-      btn = document.createElement("button");
-      btn.className = "btn-secondary btn-view-more-users";
-      btn.style.width = "100%";
-      btn.style.marginTop = "15px";
-      btn.style.textAlign = "center";
-      container.appendChild(btn);
-    }
-  }
 
   tbody.innerHTML = "";
   if (users.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="4" style="text-align: center; padding: 20px;">No users found.</td></tr>';
-    if (btn) btn.style.display = "none";
     return;
   }
 
-  const showCount = limit ? limit : users.length;
-  const visibleUsers = users.slice(0, showCount);
-
-  visibleUsers.forEach((u) => {
+  users.forEach((u) => {
     const initial = u.username.charAt(0).toUpperCase();
     let roleBadge = "info";
     if (u.role === "admin") roleBadge = "success"; // Admin = Green
@@ -4173,20 +3922,6 @@ function renderUsersTable(users, limit = null) {
         </tr>`;
   });
 
-  if (btn) {
-    if (users.length <= 3) {
-      btn.style.display = "none";
-    } else {
-      btn.style.display = "block";
-      if (limit) {
-        btn.innerHTML = `<i class="fa-solid fa-chevron-down"></i> View More (${users.length - 3} more)`;
-        btn.onclick = () => renderUsersTable(users, null);
-      } else {
-        btn.innerHTML = `<i class="fa-solid fa-chevron-up"></i> View Less`;
-        btn.onclick = () => renderUsersTable(users, 3);
-      }
-    }
-  }
 }
 
 async function deleteUser(id) {
@@ -4963,92 +4698,58 @@ window.checkResume = checkResume;
 // --- University Locations Logic ---
 
 let locationsData = [];
-let isAdminLocationsExpanded = false;
 
 function renderLocations(data = locationsData) {
   const list = document.getElementById("locations-list");
   if (!list) return;
 
-  list.innerHTML = ""; // Clear existing content
-
-  // Add Highlighter Div
+  list.innerHTML = "";
   const highlighter = document.createElement("div");
   highlighter.id = "locations-highlighter";
   highlighter.className = "locations-highlighter";
   list.appendChild(highlighter);
 
   const categories = [...new Set(data.map((item) => item.category))];
-
   categories.forEach((category) => {
-    // Create Category Header
     const header = document.createElement("h3");
     header.className = "locations-category-header";
     header.textContent = category;
     list.appendChild(header);
 
-    // Create Grid for items
     const grid = document.createElement("div");
     grid.className = "locations-category-grid";
-
     const categoryItems = data.filter((item) => item.category === category);
-
     categoryItems.forEach((loc, index) => {
       const item = document.createElement("div");
       item.className = "location-item";
       item.textContent = loc.name;
-      item.style.animationDelay = `${index * 0.03}s`; // Stagger effect
+      item.style.animationDelay = `${index * 0.03}s`;
       item.onclick = (e) => {
         e.stopPropagation();
-        window.open(
-          `https://www.google.com/maps/search/?api=1&query=Sri+Venkateswara+University+${encodeURIComponent(loc.name)}`,
-          "_blank",
-        );
+        window.open(`https://www.google.com/maps/search/?api=1&query=Sri+Venkateswara+University+${encodeURIComponent(loc.name)}`, "_blank");
       };
-
-      // Hover logic for highlighter
-      item.onmouseenter = (e) => {
+      item.onmouseenter = () => {
         const rect = item.getBoundingClientRect();
-        const containerRect = list.getBoundingClientRect();
-
         highlighter.style.width = `${rect.width}px`;
         highlighter.style.height = `${rect.height}px`;
         highlighter.style.top = `${item.offsetTop}px`;
         highlighter.style.left = `${item.offsetLeft}px`;
         highlighter.style.opacity = "1";
       };
-
       grid.appendChild(item);
     });
-
     list.appendChild(grid);
   });
-
-  // Hide highlighter on mouse leave
-  list.onmouseleave = () => {
-    highlighter.style.opacity = "0";
-  };
+  list.onmouseleave = () => { highlighter.style.opacity = "0"; };
 }
 
 function filterLocations(query) {
   const term = query.toLowerCase();
-
-  // Filter data
-  const filtered = term
-    ? locationsData.filter(
-        (loc) =>
-          loc.name.toLowerCase().includes(term) ||
-          loc.category.toLowerCase().includes(term),
-      )
-    : locationsData;
-
+  const filtered = term ? locationsData.filter(loc => loc.name.toLowerCase().includes(term) || loc.category.toLowerCase().includes(term)) : locationsData;
   renderLocations(filtered);
-
-  // If search produced no results
   if (term && filtered.length === 0) {
     const list = document.getElementById("locations-list");
-    if (list) {
-      list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No locations found for "${query}"</div>`;
-    }
+    if (list) list.innerHTML = `<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No locations found for "${query}"</div>`;
   }
 }
 
@@ -5061,13 +4762,9 @@ function askLocation(locationName) {
   }
 }
 
-// --- Location CRUD Functions (Admin) ---
-
 async function fetchLocations() {
   try {
-    const res = await fetch(`${API_URL}/locations`, {
-      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
-    });
+    const res = await fetch(`${API_URL}/locations`, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
     if (res.ok) {
       locationsData = await res.json();
       renderLocations();
@@ -5078,45 +4775,24 @@ async function fetchLocations() {
   }
 }
 
-function renderAdminLocationsTable(data = locationsData, bypassExpand = false) {
+function renderAdminLocationsTable(data = locationsData) {
   const tbody = document.getElementById("locations-admin-table-body");
-  const toggleContainer = document.getElementById("location-admin-view-toggle");
   if (!tbody) return;
 
   tbody.innerHTML = "";
   if (data.length === 0) {
     tbody.innerHTML =
       '<tr><td colspan="3" style="text-align: center; padding: 20px;">No locations found.</td></tr>';
-    if (toggleContainer) toggleContainer.style.display = "none";
     return;
   }
 
-  // Show toggle button if there are many locations and we're not searching
-  if (toggleContainer) {
-    toggleContainer.style.display =
-      !bypassExpand && data.length > 3 ? "block" : "none"; // Changed from 5 to 3
-    const btnText = document.getElementById("location-view-btn-text");
-    const btnIcon = document.getElementById("location-view-btn-icon");
-    if (btnText)
-      btnText.textContent = isAdminLocationsExpanded
-        ? "View Less"
-        : "View More";
-    if (btnIcon)
-      btnIcon.className = isAdminLocationsExpanded
-        ? "fa-solid fa-chevron-up"
-        : "fa-solid fa-chevron-down";
-  }
-
-  const displayedData =
-    isAdminLocationsExpanded || bypassExpand ? data : data.slice(0, 3); // Changed default limit to 3
-
-  displayedData.forEach((loc) => {
+  data.forEach((loc) => {
     tbody.innerHTML += `
         <tr>
-            <td style="padding: 12px; font-weight: 500;">${escapeHtml(loc.name)}</td>
-            <td style="padding: 12px;"><span class="badge info">${escapeHtml(loc.category)}</span></td>
-            <td style="padding: 12px; text-align: right;">
-                <button class="icon-btn" onclick="openLocationModal('${loc.id}')" title="Edit">
+            <td style="padding: 16px; font-weight: 500;">${escapeHtml(loc.name)}</td>
+            <td style="padding: 16px; font-weight: 800; font-size: 11px; color: #334155; text-transform: uppercase;">${escapeHtml(loc.category)}</td>
+            <td style="padding: 16px; text-align: right;">
+                <button class="icon-btn" onclick="openLocationModal('${loc.id}')" title="Edit" style="color: #64748b;">
                     <i class="fa-solid fa-pen-to-square"></i>
                 </button>
                 <button class="icon-btn" onclick="deleteLocation('${loc.id}')" style="color: #ef4444;" title="Delete">
@@ -5126,13 +4802,6 @@ function renderAdminLocationsTable(data = locationsData, bypassExpand = false) {
         </tr>`;
   });
 }
-
-function toggleAdminLocationsView() {
-  isAdminLocationsExpanded = !isAdminLocationsExpanded;
-  renderAdminLocationsTable();
-}
-
-window.toggleAdminLocationsView = toggleAdminLocationsView;
 
 function openLocationModal(locId = null) {
   const modal = document.getElementById("location-modal");
@@ -5314,7 +4983,6 @@ window.filterAdminSuggestions = filterAdminSuggestions;
 
 // --- Trending Queries Logic ---
 
-let trendingShowAll = false;
 let currentTrendingQueries = [];
 
 async function loadAdminTrending() {
@@ -5330,85 +4998,39 @@ async function loadAdminTrending() {
 }
 
 function renderAdminTrendingList() {
-  const list = document.getElementById("admin-trending-list");
-  const viewMoreContainer = document.getElementById("trending-view-more");
-  if (!list) return;
+  const tbody = document.getElementById("admin-trending-list");
+  if (!tbody) return;
 
-  list.innerHTML = "";
+  tbody.innerHTML = "";
 
-  // Logic for View More/Less
-  const visibleQueries = trendingShowAll
-    ? currentTrendingQueries
-    : currentTrendingQueries.slice(0, 3);
-
-  visibleQueries.forEach((q) => {
-    const item = document.createElement("div");
-    item.className = "trending-item-card";
-    // Applying styles directly for immediate reflection, though external CSS is better
-    item.style.cssText = `
-            display: flex;
-            align-items: center;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 15px 20px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 12px;
-            transition: transform 0.2s, background 0.2s;
+  currentTrendingQueries.forEach((q) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+            <td class="text-center">
+                <div style='width:36px; height:36px; background: linear-gradient(135deg, #14b8a6, #0d9488); color:white; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; box-shadow: 0 4px 10px rgba(20, 184, 166, 0.2);'>
+                    <i class='${q.icon}' style='font-size: 16px;'></i>
+                </div>
+            </td>
+            <td>
+                <div style='font-weight:600; color:var(--text-primary); font-size:14px;'>${escapeHtml(q.text)}</div>
+            </td>
+            <td>
+                <div style='font-size:12px; color:var(--text-secondary); opacity: 0.8;'>${escapeHtml(q.subtext)}</div>
+                ${q.link ? `<div style='font-size:11px; color:var(--accent-color); margin-top:2px;'><i class='fa-solid fa-link'></i> ${escapeHtml(q.link)}</div>` : ""}
+            </td>
+            <td class="text-right">
+                <div style='display:flex; gap:8px; justify-content: flex-end;'>
+                    <button class="icon-btn" onclick='editTrendingQuery("${q.id}")' title='Edit'>
+                        <i class='fa-solid fa-pen' style='font-size: 13px;'></i>
+                    </button>
+                    <button class="icon-btn" onclick='deleteTrendingQuery("${q.id}")' style="color: #ef4444;" title='Delete'>
+                        <i class='fa-solid fa-trash' style='font-size: 13px;'></i>
+                    </button>
+                </div>
+            </td>
         `;
-
-    item.onmouseenter = () => {
-      item.style.background = "rgba(255, 255, 255, 0.08)";
-      item.style.transform = "translateY(-2px)";
-    };
-    item.onmouseleave = () => {
-      item.style.background = "rgba(255, 255, 255, 0.05)";
-      item.style.transform = "translateY(0)";
-    };
-
-    item.innerHTML = `
-            <div style='width:42px; height:42px; background: linear-gradient(135deg, #14b8a6, #0d9488); color:white; display:flex; align-items:center; justify-content:center; border-radius:10px; margin-right:18px; box-shadow: 0 4px 10px rgba(20, 184, 166, 0.2);'>
-                <i class='${q.icon}' style='font-size: 18px;'></i>
-            </div>
-            <div style='flex:1;'>
-                <div style='font-weight:600; color:var(--text-primary); font-size:15px; margin-bottom: 2px;'>${q.text}</div>
-                <div style='font-size:13px; color:var(--text-secondary); opacity: 0.8;'>${q.subtext}</div>
-                ${q.link ? `<div style='font-size:11px; color:var(--accent-color); margin-top:4px;'><i class='fa-solid fa-link'></i> ${q.link}</div>` : ""}
-            </div>
-            <div style='display:flex; gap:10px;'>
-                <button onclick='editTrendingQuery("${q.id}")' style='background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color:var(--text-secondary); cursor:pointer; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;' title='Edit'>
-                    <i class='fa-solid fa-pen' style='font-size: 13px;'></i>
-                </button>
-                <button onclick='deleteTrendingQuery("${q.id}")' style='background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color:#ef4444; cursor:pointer; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;' title='Delete'>
-                    <i class='fa-solid fa-trash' style='font-size: 13px;'></i>
-                </button>
-            </div>
-        `;
-    list.appendChild(item);
+    tbody.appendChild(row);
   });
-
-  // Update View More Link
-  if (viewMoreContainer) {
-    if (currentTrendingQueries.length > 3) {
-      viewMoreContainer.style.display = "block";
-      viewMoreContainer.querySelector("span").innerText = trendingShowAll
-        ? "View Less"
-        : "View All";
-    } else {
-      viewMoreContainer.style.display = "none";
-    }
-  }
-}
-
-function editTrendingQuery(id) {
-  const query = currentTrendingQueries.find((q) => q.id === id);
-  if (query) {
-    openAddTrendingModal(query);
-  }
-}
-
-function toggleTrendingView() {
-  trendingShowAll = !trendingShowAll;
-  renderAdminTrendingList();
 }
 
 function openAddTrendingModal(query = null) {

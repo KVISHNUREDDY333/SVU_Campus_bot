@@ -86,18 +86,25 @@
                     <button class="btn-secondary btn-icon-label rounded-10 text-sm p-10" onclick="loadAdminTrending()" title="Refresh List">
                       <i class="fa-solid fa-rotate-right"></i> Refresh
                     </button>
-                    <button class="btn-teal shadow-teal rounded-10 text-sm font-semibold border-none p-10 px-24" onclick="openAddTrendingModal()">
+                    <button class="btn-teal rounded-10 text-sm font-semibold border-none p-10 px-24" onclick="openAddTrendingModal()">
                       <i class="fa-solid fa-plus mr-6"></i> Add Query
                     </button>
                 </div>
               </div>
-              <div class="responsive-scroll-container">
-                <div class="trending-list min-w-600" id="admin-trending-list">
-                  <!-- Dynamic Content -->
-                </div>
-              </div>
-              <div id="trending-view-more" class="text-center mt-10 hidden">
-                  <span class="text-accent-link" onclick="toggleTrendingView()">View All</span>
+              <div class="admin-table-scroll">
+                <table class="documents-table">
+                  <thead>
+                    <tr>
+                      <th class="th-w-60 text-center">Icon</th>
+                      <th class="th-w-250 text-left">Query</th>
+                      <th class="text-left">Subtext / Link</th>
+                      <th class="th-w-120 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-trending-list">
+                    <!-- Dynamic Content -->
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -115,24 +122,24 @@
                     <input type="text" id="user-search-input" placeholder="Search users..." class="admin-search-input text-sm p-12-8" oninput="filterAdminUsers()">
                     <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
                   </div>
-                  <button class="btn-primary btn-small" onclick="loadUsers()">
+                  <button class="btn-teal btn-small" onclick="loadUsers()">
                     <i class="fa-solid fa-rotate"></i> Refresh
                   </button>
-                  <button class="btn-primary btn-small" onclick="openAddUserModal()">
+                  <button class="btn-teal btn-small" onclick="openAddUserModal()">
                     <i class="fa-solid fa-user-plus"></i> Add User
                   </button>
                 </div>
               </div>
-              <div class="responsive-scroll-container">
+              <div class="admin-table-scroll">
                 <table
                   class="documents-table table-standard"
                 >
                   <thead>
                     <tr>
-                      <th class="th-left">User</th>
-                      <th class="th-left">Role</th>
-                      <th class="th-left">Joined</th>
-                      <th class="th-right">Action</th>
+                      <th class="th-w-300 text-left">User</th>
+                      <th class="th-w-150 text-left">Role</th>
+                      <th class="th-w-150 text-left">Joined</th>
+                      <th class="th-w-100 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="users-table-body">
@@ -200,16 +207,16 @@
                 </div>
               </div>
 
-              <div class="documents-list-container responsive-scroll-container">
+              <div class="admin-table-scroll">
                 <table class="documents-table">
                   <thead>
                     <tr>
-                      <th class="text-left">Document Name</th>
-                      <th class="text-left">Type</th>
-                      <th class="text-center">Chunks</th>
-                      <th class="text-center">FAQs</th>
-                      <th class="text-center">Uploaded By</th>
-                      <th class="text-right">Action</th>
+                      <th class="th-w-300 text-left">Document Name</th>
+                      <th class="th-w-120 text-left">Type</th>
+                      <th class="th-w-80 text-center">Chunks</th>
+                      <th class="th-w-80 text-center">FAQs</th>
+                      <th class="th-w-150 text-center">Uploaded By</th>
+                      <th class="th-w-100 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="documents-table-body">
@@ -264,25 +271,22 @@
                     <input type="text" id="calendar-search-input" placeholder="Search events..." class="admin-search-input text-sm p-12-8" oninput="filterAdminCalendar()" aria-label="Search Academic Events">
                     <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
                   </div>
-                  <button class="btn-primary btn-small" onclick="loadCalendarAdmin()">
+                  <button class="btn-teal btn-small" onclick="loadCalendarAdmin()">
                     <i class="fa-solid fa-rotate"></i> Refresh
                   </button>
-                  <button class="btn-primary btn-small" onclick="openCalendarModal()">
+                  <button class="btn-teal btn-small" onclick="openCalendarModal()">
                     <i class="fa-solid fa-plus"></i> Add Event
                   </button>
                 </div>
               </div>
-              <div
-                class="calendar-admin-list responsive-scroll-container mt-20"
-                id="calendar-admin-list"
-              >
+              <div class="admin-table-scroll mt-20" id="calendar-admin-list">
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="th-left">Date</th>
-                      <th class="th-left">Event</th>
-                      <th class="th-left">Type</th>
-                      <th class="th-right">Action</th>
+                      <th class="th-w-200 text-left">Date</th>
+                      <th class="text-left">Event</th>
+                      <th class="th-w-150 text-left">Type</th>
+                      <th class="th-w-120 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="calendar-admin-table-body">
@@ -308,21 +312,21 @@
                     <input type="text" id="location-search-input" placeholder="Search locations..." class="admin-search-input text-sm p-12-8" oninput="filterAdminLocations()" aria-label="Search Campus Locations">
                     <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
                   </div>
-                  <button class="btn-primary btn-small" onclick="fetchLocations()">
+                  <button class="btn-teal btn-small" onclick="fetchLocations()">
                     <i class="fa-solid fa-rotate"></i> Refresh
                   </button>
-                  <button class="btn-primary btn-small" onclick="openLocationModal()">
+                  <button class="btn-teal btn-small" onclick="openLocationModal()">
                     <i class="fa-solid fa-plus"></i> Add Location
                   </button>
                 </div>
               </div>
-              <div class="documents-list-container responsive-scroll-container mt-20">
+              <div class="admin-table-scroll mt-20">
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="th-left">Location Name</th>
-                      <th class="th-left">Category</th>
-                      <th class="th-right">Action</th>
+                      <th class="text-left">Location Name</th>
+                      <th class="th-w-200 text-left">Category</th>
+                      <th class="th-w-120 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="locations-admin-table-body">
@@ -333,13 +337,6 @@
                     </tr>
                   </tbody>
                 </table>
-              </div>
-              <!-- View More Toggle -->
-              <div id="location-admin-view-toggle" class="text-center mt-15 hidden">
-                <button class="btn-secondary btn-small px-20">
-                  <span id="location-view-btn-text" onclick="toggleAdminLocationsView()">View More</span>
-                  <i id="location-view-btn-icon" class="fa-solid fa-chevron-down ml-8"></i>
-                </button>
               </div>
             </div>
 
@@ -357,26 +354,26 @@
                     <input type="text" id="ticket-search-input" placeholder="Search tickets..." class="admin-search-input text-sm p-12-8" oninput="filterAdminTickets()" aria-label="Search Student Support Tickets">
                     <i class="fa-solid fa-magnifying-glass admin-search-icon icon-centered-right"></i>
                   </div>
-                  <button class="btn-primary btn-small" onclick="loadAllTickets()">
+                  <button class="btn-teal btn-small" onclick="loadAllTickets()">
                     <i class="fa-solid fa-rotate"></i> Refresh
                   </button>
-                  <button class="btn-primary btn-small bg-red border-none" onclick="deleteAllClosedTickets()">
+                  <button class="btn-red btn-small" onclick="deleteAllClosedTickets()">
                     <i class="fa-solid fa-trash-can"></i> Delete Closed
                   </button>
                 </div>
               </div>
-              <div class="responsive-scroll-container">
+              <div class="admin-table-scroll">
                 <table
                   class="documents-table table-standard mt-15 min-w-700"
                 >
                   <thead>
                     <tr>
-                      <th class="th-left">ID</th>
-                      <th class="th-left">Subject</th>
-                      <th class="th-left">Category</th>
-                      <th class="th-left">User</th>
-                      <th class="th-center">Status</th>
-                      <th class="th-right">Action</th>
+                      <th class="th-w-60 text-left">ID</th>
+                      <th class="text-left">Subject</th>
+                      <th class="th-w-150 text-left">Category</th>
+                      <th class="th-w-200 text-left">User</th>
+                      <th class="th-w-100 text-center">Status</th>
+                      <th class="th-w-100 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="tickets-table-body">
@@ -405,18 +402,18 @@
                       Review and approve user-suggested FAQs
                     </p>
                   </div>
-                  <button class="btn-primary btn-small ml-auto" onclick="loadSuggestedFAQs()">
+                  <button class="btn-teal btn-small ml-auto" onclick="loadSuggestedFAQs()">
                     <i class="fa-solid fa-rotate"></i> Refresh
                   </button>
                 </div>
               </div>
-              <div class="documents-list-container responsive-scroll-container">
+              <div class="admin-table-scroll">
                 <table class="documents-table min-w-600">
                   <thead>
                     <tr>
-                      <th class="th-left">Suggested Content</th>
-                      <th class="th-left">Contributor</th>
-                      <th class="th-right">Action</th>
+                      <th class="text-left">Suggested Content</th>
+                      <th class="th-w-200 text-left">Contributor</th>
+                      <th class="th-w-120 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody id="suggested-faqs-table-body">
