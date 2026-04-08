@@ -43,7 +43,7 @@ async def get_faqs():
     if database.svu_vectors_db is None:
         return []
     # Query svu_vectors for FAQ-type documents
-    faqs = list(database.svu_vectors_db.find({"type": "faq"}).sort("created_at", -1).limit(500))
+    faqs = list(database.svu_vectors_db.find({"type": "faq"}).sort("created_at", -1))
     results = []
     for f in faqs:
         text = f.get("text", "")

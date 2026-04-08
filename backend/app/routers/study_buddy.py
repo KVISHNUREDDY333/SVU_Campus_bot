@@ -169,28 +169,28 @@ async def upload_material(file: UploadFile = File(...), current_user: User = Dep
             
             OUTPUT FORMAT (Strictly follow this structure):
             
-            ### 📝 Summary
+            **📝 Summary**
             [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
 
-            ### 🔑 Key Points
+            **🔑 Key Points**
             [List 5-8 most critical concepts or takeaways from the text.]
             - Point 1
             - Point 2
             ...
 
-            ### ✅ Advantages / Benefits
+            **✅ Advantages / Benefits**
             [List the positive aspects, pros, or benefits discussed in the text.]
             - Advantage 1
             - Advantage 2
             ...
 
-            ### ⚠️ Limitations / Challenges
+            **⚠️ Limitations / Challenges**
             [List the negative aspects, cons, limitations, or challenges discussed.]
             - Limitation 1
             - Limitation 2
             ...
 
-            ### 💡 Examples
+            **💡 Examples**
             [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
             - **Example 1**: [Brief explanation]
             - **Example 2**: [Brief explanation]
@@ -262,28 +262,28 @@ async def upload_text_material(req: StudyMaterialTextRequest, current_user: User
             
             OUTPUT FORMAT (Strictly follow this structure):
             
-            ### 📝 Summary
+            **📝 Summary**
             [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
 
-            ### 🔑 Key Points
+            **🔑 Key Points**
             [List 5-8 most critical concepts or takeaways from the text.]
             - Point 1
             - Point 2
             ...
 
-            ### ✅ Advantages / Benefits
+            **✅ Advantages / Benefits**
             [List the positive aspects, pros, or benefits discussed in the text.]
             - Advantage 1
             - Advantage 2
             ...
 
-            ### ⚠️ Limitations / Challenges
+            **⚠️ Limitations / Challenges**
             [List the negative aspects, cons, limitations, or challenges discussed.]
             - Limitation 1
             - Limitation 2
             ...
 
-            ### 💡 Examples
+            **💡 Examples**
             [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
             - **Example 1**: [Brief explanation]
             - **Example 2**: [Brief explanation]
@@ -359,28 +359,28 @@ async def summarize_material(material_id: str, current_user: User = Depends(get_
         
         OUTPUT FORMAT (Strictly follow this structure):
         
-        ### 📝 Summary
+        **📝 Summary**
         [Provide a concise overview of the document's main topic and purpose in 3-5 sentences.]
 
-        ### 🔑 Key Points
+        **🔑 Key Points**
         [List 5-8 most critical concepts or takeaways from the text.]
         - Point 1
         - Point 2
         ...
 
-        ### ✅ Advantages / Benefits
+        **✅ Advantages / Benefits**
         [List the positive aspects, pros, or benefits discussed in the text.]
         - Advantage 1
         - Advantage 2
         ...
 
-        ### ⚠️ Limitations / Challenges
+        **⚠️ Limitations / Challenges**
         [List the negative aspects, cons, limitations, or challenges discussed.]
         - Limitation 1
         - Limitation 2
         ...
 
-        ### 💡 Examples
+        **💡 Examples**
         [Provide 3-4 concrete examples mentioned in the text (or relevant analogies if none exist), with a simple and brief explanation for each.]
         - **Example 1**: [Brief explanation]
         - **Example 2**: [Brief explanation]

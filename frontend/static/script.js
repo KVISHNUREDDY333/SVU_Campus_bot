@@ -68,7 +68,7 @@ function updateThemeUI(isDark) {
 let ACCESS_TOKEN = sessionStorage.getItem("access_token");
 let USER_ROLE = sessionStorage.getItem("user_role");
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   const splashScreen = document.getElementById("splash-screen");
 
   if (splashScreen) {
@@ -105,7 +105,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const error = urlParams.get("error");
 
   if (error) {
-    alert("Authentication Failed: " + error);
+    await CustomDialog.alert("Authentication Failed: " + error, "Auth Error", "error");
     window.history.replaceState({}, document.title, "/");
   } else if (token) {
     const role = urlParams.get("role");
@@ -243,7 +243,7 @@ async function handleResetPassword(e) {
 
     const data = await res.json();
     if (data.status === "success") {
-      alert("Password reset successful! Please log in.");
+      await CustomDialog.alert("Password reset successful! Please log in.", "Success", "success");
       location.reload();
     } else {
       throw new Error(data.detail || "Failed to reset password");
@@ -388,7 +388,7 @@ async function handleRegister(e) {
 
     // Success Popup & Redirect to Login
     console.info("Registration successful, alerting user.");
-    alert("User registration successful! Please log in with your credentials.");
+    await CustomDialog.alert("User registration successful! Please log in with your credentials.", "Registration Success", "success");
     switchAuthTab("login");
   } catch (err) {
     console.error("Registration error:", err.message);
@@ -755,7 +755,7 @@ async function sendMessage() {
     });
 
     if (response.status === 401) {
-      alert("Session expired. Please log in again.");
+      await CustomDialog.alert("Session expired. Please log in again.", "Session Expired", "warning");
       logout();
       return;
     }
@@ -1008,7 +1008,8 @@ function renderDocuments(docs, limit = null) {
 }
 
 async function deleteDocument(docId) {
-  if (!confirm("Are you sure you want to delete this document?")) return;
+  if (!(await CustomDialog.confirm("Are you sure you want to delete this document?")))
+    return;
   try {
     const res = await fetch(`${API_URL}/admin/documents/${docId}`, {
       method: "DELETE",
@@ -1055,20 +1056,19 @@ async function loadAllFAQs() {
   }
 
   try {
-    const res = await fetch(`${API_URL}/admin/faqs`);
+    let url = `${API_URL}/admin/faqs`;
+    if (activeFAQFilterDocId) {
+      url = `${API_URL}/admin/documents/${activeFAQFilterDocId}/faqs`;
+    }
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
     if (!res.ok) throw new Error("Failed to fetch FAQs: " + res.status);
     const faqs = await res.json();
 
     allFaqsData = Array.isArray(faqs) ? faqs : [];
-
-    // Apply Source Filter if active
-    if (activeFAQFilterSource) {
-      currentFilteredFAQs = allFaqsData.filter(
-        (f) => f.source_urls && f.source_urls.includes(activeFAQFilterSource),
-      );
-    } else {
-      currentFilteredFAQs = allFaqsData;
-    }
+    currentFilteredFAQs = allFaqsData; // Backend already filtered if needed
 
     currentFAQPage = 0;
     renderAllFAQs(true);
@@ -1228,8 +1228,9 @@ function renderFAQItem(f) {
         <div class="faq-display-mode">
             <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 8px; font-size: 15px;">Q: ${escapeHtml(f.question)}</div>
             <div style="color: var(--text-primary); line-height: 1.5; font-size: 14px;">A: ${escapeHtml(f.answer)}</div>
-            <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center;">
+            <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                 <span class="badge info" style="font-size: 10px; padding: 4px 8px;">${escapeHtml(f.category || "General")}</span>
+                ${f.source_urls && f.source_urls.length > 0 ? `<span style="font-size: 11px; color: var(--text-secondary); border-left: 1px solid var(--border-color); padding-left: 10px; margin-left: 5px;">Source: ${escapeHtml(f.source_urls[0])}</span>` : ""}
                 <div style="margin-left: auto; display: flex; gap: 12px;">
                     <button onclick="enableEditAllFAQ('${f.id}')" style="background: none; border: none; color: var(--primary-color); cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
                         <i class="fa-solid fa-pen"></i> Edit
@@ -1283,7 +1284,8 @@ async function updateAllFAQ(id) {
   const a = document.getElementById(`all-edit-a-${id}`).value;
   const c = document.getElementById(`all-edit-c-${id}`).value;
 
-  if (!q || !a) return alert("Question and Answer are required");
+  if (!q || !a)
+    return await CustomDialog.alert("Question and Answer are required", "Validation Error", "error");
 
   try {
     const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
@@ -1299,7 +1301,7 @@ async function updateAllFAQ(id) {
       showStatusPopup("FAQ Updated Successfully");
       refreshAdminData(); // Refresh both KB and Train tables
     } else {
-      alert("Failed to update FAQ");
+      await CustomDialog.alert("Failed to update FAQ", "Update Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -1307,7 +1309,7 @@ async function updateAllFAQ(id) {
 }
 
 async function deleteAllFAQ(id) {
-  if (!confirm("Delete this FAQ?")) return;
+  if (!(await CustomDialog.confirm("Delete this FAQ?"))) return;
 
   try {
     const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
@@ -1319,7 +1321,7 @@ async function deleteAllFAQ(id) {
       showStatusPopup("FAQ Deleted");
       refreshAdminData(); // Refresh both KB and Train tables
     } else {
-      alert("Failed to delete FAQ");
+      await CustomDialog.alert("Failed to delete FAQ", "Delete Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2287,7 +2289,7 @@ async function submitFAQSuggestion() {
   const suggested_by = sessionStorage.getItem("username") || "Anonymous";
 
   if (!question || !answer) {
-    alert("Please fill all fields.");
+    await CustomDialog.alert("Please fill all fields.", "Validation Error", "warning");
     return;
   }
 
@@ -2310,7 +2312,7 @@ async function submitFAQSuggestion() {
       document.getElementById("faq-answer").value = "";
       refreshAdminData(); // Refresh suggested FAQs in admin panel
     } else {
-      alert("Failed to submit suggestion.");
+      await CustomDialog.alert("Failed to submit suggestion.", "Submission Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2464,7 +2466,8 @@ function closeReviewModal() {
 }
 
 async function approveSuggestion(id, fromModal = false) {
-  if (!confirm("Approve this FAQ and publish it?")) return;
+  if (!(await CustomDialog.confirm("Approve this FAQ and publish it?")))
+    return;
 
   try {
     const res = await fetch(`${API_URL}/admin/suggested-faqs/${id}/approve`, {
@@ -2477,7 +2480,7 @@ async function approveSuggestion(id, fromModal = false) {
       if (fromModal) closeReviewModal();
       refreshAdminData(); // Refresh all relevant FAQ lists
     } else {
-      alert("Failed to approve suggestion.");
+      await CustomDialog.alert("Failed to approve suggestion.", "Approval Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2485,7 +2488,7 @@ async function approveSuggestion(id, fromModal = false) {
 }
 
 async function rejectSuggestion(id, fromModal = false) {
-  if (!confirm("Are you sure you want to reject and delete this suggestion?"))
+  if (!(await CustomDialog.confirm("Are you sure you want to reject and delete this suggestion?")))
     return;
 
   try {
@@ -2499,7 +2502,7 @@ async function rejectSuggestion(id, fromModal = false) {
       if (fromModal) closeReviewModal();
       refreshAdminData(); // Refresh suggested FAQs
     } else {
-      alert("Failed to reject suggestion.");
+      await CustomDialog.alert("Failed to reject suggestion.", "Action Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2512,7 +2515,7 @@ async function saveFAQ() {
   const category = document.getElementById("faq-category").value;
 
   if (!question || !answer) {
-    alert("Please fill all fields.");
+    await CustomDialog.alert("Please fill all fields.", "Validation Error", "warning");
     return;
   }
 
@@ -2533,7 +2536,7 @@ async function saveFAQ() {
       document.getElementById("faq-question").value = "";
       document.getElementById("faq-answer").value = "";
     } else {
-      alert("Failed to save FAQ");
+      await CustomDialog.alert("Failed to save FAQ", "Save Error", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2541,7 +2544,8 @@ async function saveFAQ() {
 }
 
 async function deleteFAQ(id) {
-  if (!confirm("Are you sure you want to delete this FAQ?")) return;
+  if (!(await CustomDialog.confirm("Are you sure you want to delete this FAQ?")))
+    return;
 
   try {
     const res = await fetch(`${API_URL}/admin/faqs/${id}`, {
@@ -2552,7 +2556,7 @@ async function deleteFAQ(id) {
     if (res.ok) {
       refreshAdminData(); // Refresh all relevant FAQ lists
     } else {
-      alert("Failed to delete FAQ");
+      await CustomDialog.alert("Failed to delete FAQ", "Delete Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -2664,7 +2668,7 @@ async function submitTicket() {
   const cat = document.getElementById("ticket-cat").value;
 
   if (!subject || !desc) {
-    alert("Please fill all fields.");
+    await CustomDialog.alert("Please fill all fields.", "Validation Error", "warning");
     return;
   }
 
@@ -2683,14 +2687,14 @@ async function submitTicket() {
     });
 
     if (res.ok) {
-      alert("Ticket raised successfully! Support team will contact you.");
+      await CustomDialog.alert("Ticket raised successfully! Support team will contact you.", "Ticket Raised", "success");
       closeTicketModal();
     } else {
-      alert("Failed to raise ticket.");
+      await CustomDialog.alert("Failed to raise ticket.", "Ticket Error", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error raising ticket.");
+    await CustomDialog.alert("Error raising ticket.", "System Error", "error");
   }
 }
 
@@ -2829,7 +2833,7 @@ function renderCalendar(events) {
   list.innerHTML = cardsHtml;
 }
 
-function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
+async function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
   const fromDate = new Date(fromDateStr);
   const toDate = new Date(toDateStr);
 
@@ -2849,10 +2853,10 @@ function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
 
   const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${start}/${end}&details=${encodeURIComponent(desc)}`;
 
-  if (confirm(`Add "${title}" to your Google Calendar?`)) {
+  if (await CustomDialog.confirm(`Add "${title}" to your Google Calendar?`, "Add to Calendar", "info")) {
     window.open(url, "_blank");
   }
-}
+}window.addToGoogleCalendar = addToGoogleCalendar;
 
 // --- Calendar Admin Logic ---
 
@@ -3095,19 +3099,19 @@ async function saveCalendarEvent() {
       .getElementById("custom-event-type-input")
       .value.trim();
     if (!customType) {
-      alert("Please enter a custom event type name.");
+      await CustomDialog.alert("Please enter a custom event type name.", "Validation Error", "warning");
       return;
     }
     type = customType;
   }
 
   if (!title || !fromDate || !toDate) {
-    alert("Please provide title, from date (and) to date.");
+    await CustomDialog.alert("Please provide title, from date (and) to date.", "Validation Error", "warning");
     return;
   }
 
   if (new Date(toDate) < new Date(fromDate)) {
-    alert("To Date cannot be before From Date.");
+    await CustomDialog.alert("To Date cannot be before From Date.", "Validation Error", "warning");
     return;
   }
 
@@ -3142,11 +3146,11 @@ async function saveCalendarEvent() {
       );
     } else {
       const data = await res.json();
-      alert(`Failed to save event: ${data.detail || res.statusText}`);
+      await CustomDialog.alert(`Failed to save event: ${data.detail || res.statusText}`, "Save Error", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error saving event");
+    await CustomDialog.alert("Error saving event", "System Error", "error");
   }
 }
 
@@ -3156,7 +3160,7 @@ async function editCalendarEvent(eventId) {
   if (event) {
     openCalendarModal(event);
   } else {
-    alert("Event not found");
+    await CustomDialog.alert("Event not found", "Error", "error");
   }
 }
 window.editCalendarEvent = editCalendarEvent;
@@ -3211,7 +3215,7 @@ function getEventTypeBadge(type) {
 }
 
 async function deleteCalendarEvent(eventId) {
-  if (!confirm("Are you sure you want to delete this event?")) return;
+  if (!(await CustomDialog.confirm("Are you sure you want to delete this event?", "Delete Event", "warning"))) return;
 
   try {
     const res = await fetch(`${API_URL}/admin/calendar/${eventId}`, {
@@ -3343,7 +3347,7 @@ function renderTicketsTable(tickets, limit = null) {
 
 async function toggleTicketStatus(id, currentStatus) {
   const newStatus = currentStatus === "open" ? "closed" : "open";
-  if (!confirm(`Mark ticket as ${newStatus.toUpperCase()}?`)) return;
+  if (!(await CustomDialog.confirm(`Mark ticket as ${newStatus.toUpperCase()}?`, "Update Status", "info"))) return;
 
   try {
     const res = await fetch(`${API_URL}/admin/tickets/${id}`, {
@@ -3364,7 +3368,7 @@ async function toggleTicketStatus(id, currentStatus) {
 }
 
 async function deleteTicket(id) {
-  if (!confirm("Are you sure you want to delete this ticket permanently?"))
+  if (!(await CustomDialog.confirm("Are you sure you want to delete this ticket permanently?", "Delete Ticket", "error")))
     return;
 
   try {
@@ -3378,19 +3382,21 @@ async function deleteTicket(id) {
       loadAllTickets();
     } else {
       const data = await res.json();
-      alert(data.detail || "Failed to delete ticket.");
+      await CustomDialog.alert(data.detail || "Failed to delete ticket.", "Delete Failed", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error deleting ticket.");
+    await CustomDialog.alert("Error deleting ticket.", "System Error", "error");
   }
 }
 
 async function deleteAllClosedTickets() {
   if (
-    !confirm(
+    !(await CustomDialog.confirm(
       "Are you sure you want to delete ALL closed tickets permanently? This action cannot be undone.",
-    )
+      "Bulk Delete Tickets",
+      "error",
+    ))
   )
     return;
 
@@ -3405,11 +3411,11 @@ async function deleteAllClosedTickets() {
       showStatusPopup(data.message || "All closed tickets deleted.");
       loadAllTickets();
     } else {
-      alert(data.detail || "Failed to delete closed tickets.");
+      await CustomDialog.alert(data.detail || "Failed to delete closed tickets.", "Action Failed", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error during bulk deletion.");
+    await CustomDialog.alert("Error during bulk deletion.", "System Error", "error");
   }
 }
 
@@ -3466,7 +3472,7 @@ async function submitTicketResponse() {
   const saveFaq = document.getElementById("resp-save-faq").checked;
 
   if (!resolution) {
-    alert("Please provide a response.");
+    await CustomDialog.alert("Please provide a response.", "Feedback Required", "warning");
     return;
   }
 
@@ -3492,7 +3498,7 @@ async function submitTicketResponse() {
         refreshAdminData(); // Refresh FAQs if a new one was saved
       }
     } else {
-      alert("Failed to submit response");
+      await CustomDialog.alert("Failed to submit response", "Submit Error", "error");
     }
   } catch (e) {
     console.error(e);
@@ -3585,7 +3591,7 @@ async function submitDocument() {
   const progressDiv = document.getElementById("upload-progress");
 
   if (!file) {
-    alert("Please select a PDF file first.");
+    await CustomDialog.alert("Please select a PDF file first.", "File Required", "warning");
     return;
   }
 
@@ -3672,7 +3678,7 @@ async function submitUrl() {
   const statusText = document.getElementById("url-status");
 
   if (!url) {
-    alert("Please enter a valid URL.");
+    await CustomDialog.alert("Please enter a valid URL.", "URL Required", "warning");
     return;
   }
 
@@ -3726,7 +3732,7 @@ async function submitText() {
   const statusText = document.getElementById("text-status");
 
   if (!title || !content) {
-    alert("Please provide both a Title and Content.");
+    await CustomDialog.alert("Please provide both a Title and Content.", "Validation Error", "warning");
     return;
   }
 
@@ -3905,9 +3911,11 @@ setInterval(() => {
 
 async function clearCache() {
   if (
-    !confirm(
+    !(await CustomDialog.confirm(
       "Are you sure you want to clear the system cache? This will reset all active chat sessions.",
-    )
+      "Clear System Cache",
+      "warning",
+    ))
   )
     return;
 
@@ -3920,19 +3928,21 @@ async function clearCache() {
     if (res.ok) {
       showStatusPopup("System cache cleared successfully!");
     } else {
-      alert("Failed to clear cache.");
+      await CustomDialog.alert("Failed to clear cache.", "Clear Cache Failed", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error clearing cache.");
+    await CustomDialog.alert("Error clearing cache.", "System Error", "error");
   }
 }
 
 async function reindexData() {
   if (
-    !confirm(
+    !(await CustomDialog.confirm(
       "Refresh knowledge base connection?\n(This re-initializes the RAG pipeline)",
-    )
+      "Reindex Knowledge Base",
+      "info",
+    ))
   )
     return;
 
@@ -3949,11 +3959,11 @@ async function reindexData() {
       // Refresh health status to show new state
       loadSystemHealth();
     } else {
-      alert("Failed to refresh connection.");
+      await CustomDialog.alert("Failed to refresh connection.", "Refresh Failed", "error");
     }
   } catch (e) {
     console.error(e);
-    alert("Error refreshing knowledge base.");
+    await CustomDialog.alert("Error refreshing knowledge base.", "System Error", "error");
   }
 }
 
@@ -4165,9 +4175,11 @@ function renderUsersTable(users, limit = null) {
 
 async function deleteUser(id) {
   if (
-    !confirm(
+    !(await CustomDialog.confirm(
       "Are you sure you want to delete this user? This action cannot be undone.",
-    )
+      "Delete User Account",
+      "error",
+    ))
   )
     return;
 
@@ -4182,7 +4194,7 @@ async function deleteUser(id) {
       showStatusPopup("User deleted successfully");
       loadUsers();
     } else {
-      alert(data.detail || "Failed to delete user");
+      await CustomDialog.alert(data.detail || "Failed to delete user", "Delete Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -4196,7 +4208,7 @@ const addUserModal = document.getElementById("add-user-modal");
 
 async function toggleUserRole(id, currentRole) {
   const newRole = currentRole === "admin" ? "student" : "admin";
-  if (!confirm(`Switch this user's role to ${newRole.toUpperCase()}?`)) return;
+  if (!(await CustomDialog.confirm(`Switch this user's role to ${newRole.toUpperCase()}?`, "Update User Role", "info"))) return;
 
   try {
     const res = await fetch(`${API_URL}/admin/users/${id}/role`, {
@@ -4212,7 +4224,7 @@ async function toggleUserRole(id, currentRole) {
       showStatusPopup(`User is now ${newRole}`);
       loadUsers();
     } else {
-      alert("Failed to update role");
+      await CustomDialog.alert("Failed to update role", "Role Update Failed", "error");
     }
   } catch (e) {
     console.error(e);
@@ -4442,7 +4454,7 @@ async function loadStudyBuddy() {
 window.loadStudyBuddy = loadStudyBuddy;
 
 async function deleteStudyMaterial(id) {
-  if (!confirm("Are you sure you want to delete this material?")) return;
+  if (!(await CustomDialog.confirm("Are you sure you want to delete this material?", "Delete Material", "warning"))) return;
 
   try {
     const res = await fetch(`${API_URL}/study-buddy/materials/${id}`, {
@@ -4482,7 +4494,7 @@ async function submitStudyText() {
   const content = document.getElementById("study-text-content").value.trim();
 
   if (!title || !content) {
-    alert("Please enter both a title and some content.");
+    await CustomDialog.alert("Please enter both a title and some content.", "Validation Error", "warning");
     return;
   }
 
@@ -4512,7 +4524,7 @@ async function submitStudyText() {
     closeStudyTextModal();
     loadStudyBuddy();
   } catch (e) {
-    alert("Error: " + e.message);
+    await CustomDialog.alert("Error: " + e.message, "Upload Failed", "error");
   } finally {
     btn.innerHTML = originalText;
     btn.disabled = false;
@@ -4648,7 +4660,7 @@ let currentAnalysisResult = "";
 
 async function downloadAnalysis(format) {
   if (!currentAnalysisResult) {
-    alert("Please analyze a resume first.");
+    await CustomDialog.alert("Please analyze a resume first.", "Incomplete Action", "info");
     return;
   }
 
@@ -4683,7 +4695,7 @@ async function downloadAnalysis(format) {
     document.body.removeChild(a);
   } catch (e) {
     console.error("Download Error:", e);
-    alert("Failed to download analysis. Please try again.");
+    await CustomDialog.alert("Failed to download analysis. Please try again.", "Download Error", "error");
   } finally {
     btn.innerHTML = originalText;
     btn.disabled = false;
@@ -4693,7 +4705,7 @@ window.downloadAnalysis = downloadAnalysis;
 
 async function downloadResume(format) {
   if (!currentGeneratedResume) {
-    alert("Please generate a resume first.");
+    await CustomDialog.alert("Please generate a resume first.", "Incomplete Action", "info");
     return;
   }
 
@@ -4728,7 +4740,7 @@ async function downloadResume(format) {
     document.body.removeChild(a);
   } catch (e) {
     console.error("Download Error:", e);
-    alert("Failed to download resume. Please try again.");
+    await CustomDialog.alert("Failed to download resume. Please try again.", "Download Error", "error");
   } finally {
     btn.innerHTML = originalText;
     btn.disabled = false;
@@ -4756,14 +4768,13 @@ async function generateResume() {
   const skillsSoft = document.getElementById("maker-skills-soft").value.trim();
   const research = document.getElementById("maker-research").value.trim();
   const experience = document.getElementById("maker-experience").value.trim();
+  const projects = document.getElementById("maker-projects").value.trim();
 
   const feedbackEl = document.getElementById("resume-generation-feedback");
 
   // Validation
   if (!fullName || !email || !qualification || !role || !skillsTech) {
-    alert(
-      "Please fill in all required fields (Name, Email, Qualification, Role, Technical Skills).",
-    );
+    await CustomDialog.alert("Please fill in all required fields (Name, Email, Qualification, Role, Technical Skills).", "Validation Error", "warning");
     return;
   }
 
@@ -4792,6 +4803,7 @@ async function generateResume() {
         target_role: role,
         research_publications: research,
         industry_experience: experience,
+        projects: projects,
       }),
     });
 
@@ -4856,7 +4868,7 @@ async function checkResume() {
     ?.value.trim();
 
   if (!text) {
-    alert("Please paste your resume text first.");
+    await CustomDialog.alert("Please paste your resume text first.", "Validation Error", "warning");
     return;
   }
 
@@ -5180,7 +5192,7 @@ async function saveLocation() {
 }
 
 async function deleteLocation(id) {
-  if (!confirm("Delete this location?")) return;
+  if (!(await CustomDialog.confirm("Delete this location?", "Delete Location", "warning"))) return;
 
   try {
     const res = await fetch(`${API_URL}/admin/locations/${id}`, {
@@ -5555,7 +5567,7 @@ async function addTrendingQuery() {
       );
     } else {
       const data = await res.json();
-      alert(`Failed to save query: ${data.detail || res.statusText}`);
+      await CustomDialog.alert(`Failed to save query: ${data.detail || res.statusText}`, "Save Error", "error");
       console.error("Save Query Error:", data);
     }
   } catch (e) {
@@ -5564,7 +5576,7 @@ async function addTrendingQuery() {
 }
 
 async function deleteTrendingQuery(id) {
-  if (!confirm("Delete this query?")) return;
+  if (!(await CustomDialog.confirm("Delete this query?", "Delete Trending Query", "warning"))) return;
   try {
     const res = await fetch(`${API_URL}/admin/trending/${id}`, {
       method: "DELETE",
@@ -5947,9 +5959,11 @@ async function clearAllNotifications() {
   if (!ACCESS_TOKEN) return;
 
   if (
-    !confirm(
+    !(await CustomDialog.confirm(
       "Are you sure you want to clear your notifications? This will delete your personal alerts.",
-    )
+      "Clear Notifications",
+      "warning",
+    ))
   )
     return;
 
@@ -6050,7 +6064,81 @@ window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
 window.deleteNotification = deleteNotification;
 
+
+/* --- Custom Dialog System --- */
+const CustomDialog = {
+  modal: null,
+  confirmBtn: null,
+  cancelBtn: null,
+  titleEl: null,
+  msgEl: null,
+  iconContainer: null,
+
+  init() {
+    this.modal = document.getElementById("dialog-modal");
+    this.confirmBtn = document.getElementById("dialog-confirm-btn");
+    this.cancelBtn = document.getElementById("dialog-cancel-btn");
+    this.titleEl = document.getElementById("dialog-title");
+    this.msgEl = document.getElementById("dialog-message");
+    this.iconContainer = document.getElementById("dialog-icon");
+  },
+
+  show({ message, title = "Confirm Action", icon = "info", showCancel = true }) {
+    if (!this.modal) this.init();
+
+    return new Promise((resolve) => {
+      this.titleEl.textContent = title;
+      this.msgEl.textContent = message;
+      this.cancelBtn.style.display = showCancel ? "block" : "none";
+
+      // Reset icon classes
+      this.iconContainer.className = "dialog-icon-circle";
+      const iconClasses = {
+        success: "fa-circle-check",
+        warning: "fa-triangle-exclamation",
+        error: "fa-circle-xmark",
+        info: "fa-circle-info"
+      };
+      
+      const iconColorClass = `dialog-icon-${icon}`;
+      this.iconContainer.classList.add(iconColorClass);
+      
+      const iconI = this.iconContainer.querySelector("i");
+      iconI.className = `fa-solid ${iconClasses[icon] || iconClasses.info}`;
+
+      const handleConfirm = () => {
+        this.close();
+        resolve(true);
+      };
+
+      const handleCancel = () => {
+        this.close();
+        resolve(false);
+      };
+
+      this.confirmBtn.onclick = handleConfirm;
+      this.cancelBtn.onclick = handleCancel;
+
+      this.modal.classList.add("active");
+    });
+  },
+
+  alert(message, title = "Alert", icon = "info") {
+    return this.show({ message, title, icon, showCancel: false });
+  },
+
+  confirm(message, title = "Confirm", icon = "warning") {
+    return this.show({ message, title, icon, showCancel: true });
+  },
+
+  close() {
+    if (this.modal) this.modal.classList.remove("active");
+  }
+};
+window.CustomDialog = CustomDialog;
+
 // Initialize if already logged in
+
 if (ACCESS_TOKEN) {
   if (typeof startNotificationPolling === "function")
     startNotificationPolling();

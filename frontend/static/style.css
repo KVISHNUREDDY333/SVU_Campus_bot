@@ -4152,3 +4152,123 @@ body.dark-mode .mobile-menu-btn:hover {
     overflow: hidden;
   }
 }
+
+/* --- Custom Dialog Modal Styles --- */
+.dialog-content {
+  border-radius: 28px !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--glass-border) !important;
+  background: var(--glass-bg) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  backdrop-filter: blur(20px) !important;
+  border: none !important;
+  animation: dialogZoom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialogZoom {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.dialog-icon-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--accent-color);
+  font-size: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  transition: all 0.3s ease;
+}
+
+.dialog-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.dialog-message {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.dialog-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 30px 30px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.btn-dialog-ghost {
+  flex: 1;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-dialog-ghost:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--text-secondary);
+}
+
+.btn-dialog-primary {
+  flex: 2;
+  padding: 14px;
+  border-radius: 16px;
+  border: none;
+  background: var(--gradient-primary);
+  color: white;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  box-shadow: 0 8px 16px -4px rgba(13, 148, 136, 0.4);
+  transition: all 0.2s;
+}
+
+.btn-dialog-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 20px -5px rgba(13, 148, 136, 0.5);
+  filter: brightness(1.1);
+}
+
+.btn-dialog-primary:active {
+  transform: translateY(0);
+}
+
+/* Icon Variations */
+.dialog-icon-success { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.dialog-icon-warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.dialog-icon-error { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.dialog-icon-info { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+
+body.dark-mode .dialog-footer {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body.dark-mode .btn-dialog-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Shared Modal Styles */
+.premium-modal {
+  max-width: 600px !important;
+}
+
+.shared-modal-header {
+  background: var(--gradient-primary) !important;
+  padding: 25px 30px !important;
+  border-bottom: none !important;
+}

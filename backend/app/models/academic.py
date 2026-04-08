@@ -33,6 +33,7 @@ class ResumeGenerationRequest(BaseModel):
     target_role: str
     research_publications: Optional[str] = None
     industry_experience: Optional[str] = None
+    projects: Optional[str] = None
 
 
 class StudyBuddyChatRequest(BaseModel):

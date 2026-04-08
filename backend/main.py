@@ -138,14 +138,17 @@ templates = Jinja2Templates(directory=templates_dir)
 
 @app.get("/")
 async def read_root(request: Request):
-    response = templates.TemplateResponse("index.html", {"request": request})
+    response = templates.TemplateResponse(request=request, name="index.html", context={})
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8888))
     print(f"Running on http://127.0.0.1:{port}")
     # Use import string for better reload support
     uvicorn.run("backend.main:app", host="127.0.0.1", port=port, reload=True)
+
+
+# .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8888 --reload

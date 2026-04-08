@@ -36,22 +36,22 @@ async def check_resume(req: ResumeAnalysisRequest):
     
     Please structure your response with the following sections using clear Markdown:
     
-    ### 📊 Resume Score: [X/10]
+    **📊 Resume Score: [X/10]**
     Provide a justification for this score based on completeness and impact.
     
-    ### 🌟 Key Strengths
+    **🌟 Key Strengths**
     Highlight the most marketable aspects of the resume. What makes this candidate stand out?
     
-    ### 🔍 Opportunity for Improvement (Weaknesses)
+    **🔍 Opportunity for Improvement (Weaknesses)**
     Point out missing keywords, vague duty descriptions, or gaps in information specific to SVU guidelines.
     
-    ### 💻 Technical & Soft Skills Analysis
+    **💻 Technical & Soft Skills Analysis**
     Evaluate the skills listed. Are they relevant for the target role? Suggest 3-5 high-demand skills to add based on the candidate's field and target role.
     
-    ### 🚀 Actionable Roadmap
+    **🚀 Actionable Roadmap**
     Provide 5 specific, high-impact bullet points the candidate should change or add IMMEDIATELY to double their interview chances for the target role.
     
-    ### 🛠 ATS Compatibility Check
+    **🛠 ATS Compatibility Check**
     Analyze how well this resume would be parsed by Applicant Tracking Systems. 
     
     Resume Text:
@@ -90,14 +90,15 @@ async def generate_resume(req: ResumeGenerationRequest):
     - **Soft Skills:** {req.skills_soft}
     - **Research/Publications:** {req.research_publications or "None"}
     - **Industry Experience:** {req.industry_experience or "Fresher/None"}
+    - **Projects/Personal Portfolio:** {req.projects or "None"}
 
     **Instructions:**
     1.  **Structure:** use standard professional resume sections: Header, Professional Summary, Skills, Experience (or Projects for freshers), Education, Certifications/Achievements.
     2.  **Professional Summary:** Write a compelling summary tailored to the '{req.target_role}'.
     3.  **Skills:** Organize skills logically.
     4.  **Content:** 
-        - If the candidate is a 'Beginner' or 'Fresher', focus on Projects and Academic Achievements. Invent realistic, relevant academic projects if specific project details aren't provided, based on their skills and target role.
-        - If 'Intermediate' or 'Professional', focus on Work Experience.
+        - If the candidate is a 'Beginner' or 'Fresher', focus on Projects and Academic Achievements. Prioritize the user-provided projects if available; otherwise, suggest realistic, high-impact academic projects based on their skills and target role.
+        - If 'Intermediate' or 'Professional', focus on Work Experience and significant Projects.
     5.  **Tone:** Professional, action-oriented, and concise.
     6.  **Format:** clean Markdown.
 

@@ -10,7 +10,7 @@ logger = logging.getLogger("uvicorn")
 BAD_WORDS = [
     "damn", "hell", "stupid", "idiot", "nonsense", "useless", "garbage", 
     "abuse", "hate", "kill", "die", "murder", "explicit", "porn", "sexy",
-    "dirty", "shutup", "f@ck", "s*it", "b*tch" # Standard censorship patterns
+    "dirty", "shutup", "f@ck", "s*it", "b*tch"
 ]
 
 UNIVERSITY_TOPICS = [

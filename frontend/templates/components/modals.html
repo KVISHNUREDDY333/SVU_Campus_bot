@@ -1,14 +1,7 @@
 <!-- Information Modal (Enhanced User/Admin Shared) -->
     <div id="faq-modal" class="modal">
-      <div class="modal-content premium-modal" style="max-width: 600px">
-        <div
-          class="modal-header"
-          style="
-            background: var(--gradient-primary);
-            padding: 25px 30px;
-            border-bottom: none;
-          "
-        >
+      <div class="modal-content premium-modal">
+        <div class="modal-header shared-modal-header">
           <div style="display: flex; align-items: center; gap: 15px">
             <div
               style="
@@ -1798,6 +1791,23 @@
         <div class="premium-modal-footer">
           <button class="btn-modal-cancel" onclick="closeTrendingModal()">Cancel</button>
           <button class="btn-modal-submit" id="btn-trending-submit" onclick="addTrendingQuery()">Add Query</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generic Dialog Modal (Custom Alert/Confirm) -->
+    <div id="dialog-modal" class="modal">
+      <div class="modal-content premium-modal dialog-content" style="max-width: 450px;">
+        <div class="dialog-body" style="padding: 40px 30px; text-align: center;">
+          <div id="dialog-icon" class="dialog-icon-circle">
+            <i class="fa-solid fa-circle-info"></i>
+          </div>
+          <h3 id="dialog-title" class="dialog-title">Confirm Action</h3>
+          <p id="dialog-message" class="dialog-message">Are you sure you want to proceed with this action?</p>
+        </div>
+        <div class="dialog-footer">
+          <button id="dialog-cancel-btn" class="btn-dialog-ghost">Cancel</button>
+          <button id="dialog-confirm-btn" class="btn-dialog-primary">Confirm</button>
         </div>
       </div>
     </div>

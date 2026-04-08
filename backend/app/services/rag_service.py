@@ -15,6 +15,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 import logging
 import os
+import json
+import re
 from datetime import datetime
 
 # Configure environment variables to suppress Hugging Face warnings
@@ -131,20 +133,19 @@ PHASE 7: RESPONSE GENERATION
 Generate a final answer that:
 
 - Uses ONLY verified FAQ data
-- Is clear, concise, and polite
+- Is clear, concise, and structured
 - Is student-friendly
-- Mentions official source implicitly
+- Mentions official source only when contextually necessary
 - Avoids hallucination
 - refine response based on user request by giving faq to llm
-Example ending:
-"According to the official SVU website..."
+
+Never include closing sentences like "If you have any other queries, feel free to ask" or "I'm here to help". End the message immediately after the final piece of information.
 
 --------------------------------------------------
 FAIL-SAFE RULES
 --------------------------------------------------
 If information is missing or unclear:
-Say:
-"This information is not officially available on the Sri Venkateswara University website at the moment."
+Acknowledge the question politely and state that you don't have the specific official details in your current records. Avoid using canned robotic disclaimers.
 
 Never:
 - Guess
@@ -332,7 +333,7 @@ def setup_rag_chain(force_reload: bool = False):
             | (lambda x: base_retriever.invoke(x["rephrased_query"]))
         )
 
-        qa_system_prompt = """You are Intelligent Campus Assistant Chatbot.
+        qa_system_prompt = """You are Intelligent Campus Assistant Chatbot for Sri Venkateswara University (SVU).
 
 Language Instruction: {language_instruction}
 Current Time: {current_time}
@@ -346,19 +347,16 @@ User Question:
 {input}
 
 Rules:
-1. **Use the Context**: Answer using the provided retrieved context. Extract and present the relevant information clearly.
-2. **Empty Context Only**: ONLY if the retrieved context is completely empty or contains absolutely no information related to the question, respond with:
-   "No relevant information was found in the university database."
-3. **Be Thorough**: If the context contains ANY information related to the question — even partial — use it to construct a helpful answer.
-4. **No Hallucinations**: Do not add facts that are not present in the context.
-5. **Professional Tone**: Be helpful, clear, and student-friendly.
-6. **Language**: Follow the Language Instruction above for your response language.
-7. **Structure**: Present key facts using bullet points or numbered lists where appropriate.
-
-Instructions:
-- Synthesize a well-structured answer from the context above.
-- If the context has partial info, provide what's available and note what's missing.
-- **IMPORTANT**: If the retrieved context contains "upcoming events" or "exams" (indexed from the calendar), you must present them clearly with their dates, times, and locations in your response.
+1. **High Quality & Reasoning**: Deliver responses with **exceptional logical reasoning** and perfect **grammar**. Use meaningful sentence formation and a professional tone.
+2. **Empty Context Only**: ONLY if the retrieved context is completely empty and you have NO base knowledge of the specific SVU detail, politely inform the user that those specific details are currently missing from the university records.
+3. **Direct Output**: End the response immediately after the final answer. **DO NOT include closing pleasantries or offers of further assistance** (e.g., "Let me know if you need anything else").
+4. **Be Thorough**: If the context contains ANY information related to the question, use it to construct a detailed and helpful answer.
+5. **Optimal Structure**:
+   - Use **Markdown Tables** for data-heavy info (fees, dates, statistics).
+   - Use **Numbered/Bullet Lists** for steps, features, or rules.
+   - Use **Detailed Paragraphs** for explanations.
+6. **No Hallucinations**: Do not add facts that are not present in the context or verified SVU knowledge.
+7. **Visual Highlights**: Use **BOLD TEXT** for key terms and titles. **DO NOT USE Markdown headers (###)** in the response.
 """
         
         qa_prompt = ChatPromptTemplate.from_messages(
@@ -383,7 +381,7 @@ Instructions:
             
             if len(context_str.strip()) < 20:
                 logger.warning("[RAG] Context too short, returning no-info message")
-                return "No relevant information was found in the university database."
+                return "I'm sorry, but I couldn't find any official records matching your query in the university database. Could you please rephrase or ask about another topic?"
             
             return await (qa_prompt | smart_llm | StrOutputParser()).ainvoke(input_dict)
 
@@ -414,7 +412,7 @@ Instructions:
 
 
 
-async def _search_keywords_directly(query: str, limit: int = 5, return_list: bool = False, doc_type: str = None):
+async def _search_keywords_directly(query: str, limit: int = 5, return_list: bool = False, doc_type: str = None, keywords: list = None):
     """
     Search by keyword directly in svu_vectors collection (useful if vector search misses exact terms).
     Optional 'doc_type' allows targeting specific results like 'faq'.
@@ -422,21 +420,28 @@ async def _search_keywords_directly(query: str, limit: int = 5, return_list: boo
     if database.svu_vectors_db is None:
         return [] if return_list else ""
     try:
-        import re
-        words = [w for w in query.split() if len(w) > 3]
-        if not words:
+        search_words = keywords if keywords else [w for w in query.split() if len(w) > 3]
+        if not search_words:
             return [] if return_list else ""
         
-        # Use OR logic to match any of the important keywords
-        regex_pattern = "|".join(re.escape(word) for word in words)
+        # Use OR logic to match any of the important keywords across multiple fields
+        regex_pattern = "|".join(re.escape(word) for word in search_words)
+        regex_obj = re.compile(regex_pattern, re.IGNORECASE)
         
-        search_query = {"text": {"$regex": re.compile(regex_pattern, re.IGNORECASE)}}
+        search_query = {
+            "$or": [
+                {"text": {"$regex": regex_obj}},
+                {"category": {"$regex": regex_obj}},
+                {"keywords": {"$in": [regex_obj]}} 
+            ]
+        }
+        
         if doc_type:
             search_query["type"] = doc_type
             
         results = list(database.svu_vectors_db.find(
             search_query,
-            {"text": 1, "_id": 0}
+            {"text": 1, "category": 1, "_id": 0}
         ).sort("created_at", -1).limit(limit)) # Prioritize newer records
         
         if not results:
@@ -448,7 +453,7 @@ async def _search_keywords_directly(query: str, limit: int = 5, return_list: boo
             
         context = "\n\n".join(texts)
         scope = f"(Type: {doc_type})" if doc_type else ""
-        logger.info(f"Keyword search {scope} found {len(results)} results for query: {query[:50]}")
+        logger.info(f"Keyword search {scope} found {len(results)} results using words: {search_words}")
         return context
     except Exception as e:
         logger.error(f"Keyword search error: {e}")
@@ -506,16 +511,16 @@ def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
     fused = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
     return [item["doc"] for item in fused]
 
-async def _hybrid_search(query: str, limit: int = 10):
+async def _hybrid_search(query: str, limit: int = 10, keywords: list = None):
     """
     Performs hybrid search combining Vector and Keyword retrieval via RRF.
     Prioritizes FAQ-specific keyword hits to ensure official answers are delivered first.
     """
     # 1. Targeted Keyword Search (FAQs only)
-    faq_keyword_results = await _search_keywords_directly(query, limit=5, return_list=True, doc_type="faq")
+    faq_keyword_results = await _search_keywords_directly(query, limit=5, return_list=True, doc_type="faq", keywords=keywords)
     
     # 2. Broader Keyword Search (All sources)
-    broad_keyword_results = await _search_keywords_directly(query, limit=limit, return_list=True)
+    broad_keyword_results = await _search_keywords_directly(query, limit=limit, return_list=True, keywords=keywords)
     
     # 3. Vector Similarity Search (All sources)
     # Note: _search_vectors_directly is currently sync but wrapped for future-proofing
@@ -557,64 +562,88 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         entities_str = str(get_session_entities(session_id))
 
         try:
-            # 1. RETRIEVAL PHASE: Hybrid Search with Query Rephrasing candidate
-            logger.info(f"[RAG] Hybrid Retrieval for query: {message[:50]}")
-            
-            # Use LLM to rephrase if history exists (Optional, depends on model speed)
+            # 1. QUERY ANALYSIS: Extract Keywords and Requirements
+            logger.info(f"[RAG] Analyzing query: {message[:50]}")
+            extracted_keywords = []
+            user_requirements = "None specified."
             rephrased_query = message
-            try:
-                if fast_llm:
-                    # Get history for context
-                    history = get_session_history(session_id).messages[-5:] # Last 5 turns
-                    if history:
-                        contextualize_prompt = f"""Given the chat history and the latest user question, 
-                        formulate a standalone question in English. 
-                        
-                        History: {history}
-                        Latest: {message}
-                        
-                        Standalone:"""
-                        rephrase_res = await fast_llm.ainvoke(contextualize_prompt)
-                        rephrased_query = rephrase_res.content if hasattr(rephrase_res, 'content') else str(rephrase_res)
-                        logger.info(f"[RAG] Rephrased Query: {rephrased_query}")
-            except Exception as re_e:
-                 logger.warning(f"Rephrasing failed: {re_e}")
+            
+            if fast_llm:
+                try:
+                    history = get_session_history(session_id).messages[-3:] # Last 3 turns for context
+                    analysis_prompt = f"""Analyze the User Request and Chat History.
+                    
+                    TASKS:
+                    1. SPLIT the user's request into core search concepts for শ্রীল Venkateswara University.
+                    2. EXTRACT precisely the keywords needed for Sri Venkateswara University database search.
+                    3. FORMULATE a standalone question in English.
+                    
+                    Chat History: {history}
+                    User Request: {message}
+                    
+                    Output format (JSON):
+                    {{
+                        "standalone_query": "rephrased question in English",
+                        "keywords": ["key", "words", "only"],
+                        "requirements": "any specific constraints or formatting requested"
+                    }}
+                    """
+                    import json
+                    analysis_res = await fast_llm.ainvoke(analysis_prompt)
+                    analysis_content = analysis_res.content if hasattr(analysis_res, 'content') else str(analysis_res)
+                    
+                    # Basic JSON extraction from LLM response
+                    if "{" in analysis_content and "}" in analysis_content:
+                        json_str = analysis_content[analysis_content.find("{"):analysis_content.rfind("}")+1]
+                        analysis_data = json.loads(json_str)
+                        rephrased_query = analysis_data.get("standalone_query", message)
+                        extracted_keywords = analysis_data.get("keywords", [])
+                        user_requirements = analysis_data.get("requirements", "None specified.")
+                        logger.info(f"[RAG] Keywords: {extracted_keywords}, Requirements: {user_requirements}")
+                except Exception as analysis_e:
+                    logger.warning(f"Query analysis failed: {analysis_e}")
 
-            # Hybrid Search
-            fused_docs = await _hybrid_search(rephrased_query, limit=10)
+            # 2. RETRIEVAL PHASE: Optimized Hybrid Search
+            fused_docs = await _hybrid_search(rephrased_query, limit=10, keywords=extracted_keywords)
             combined_context = "\n\n".join([doc.page_content for doc in fused_docs])
             
-            # 2. GENERATION PHASE: Direct, professional, and refined response
+            # 3. GENERATION PHASE: Direct, professional, and refined response
             master_prompt = f"""You are the official Intelligent Campus Assistant Chatbot for Sri Venkateswara University (SVU). 
 Your goal is to deliver an **Accurate and Refined Answer** based on the University Knowledge Base (FAQ & Campus Data).
 
 Current Time: {current_time}
 User Context: {personal_context_str}
 Language Rule: {lang_instruction}
+User Requirements: {user_requirements}
 
 University Knowledge Base (Refined Context):
 ---
-{combined_context if combined_context.strip() else "No specific records found in the database."}
+{combined_context if combined_context.strip() else "Please provide general guidance based on university standards if specific records are not retrieved."}
 ---
 
 User Request: {message}
 
-### CRITICAL INSTRUCTIONS FOR RESPONSE QUALITY:
-1. **FAQ & ACCURACY**: 
+--- CRITICAL INSTRUCTIONS FOR RESPONSE QUALITY ---
+1. **QUALITY & REASONING**: 
+   - Deliver responses with **exceptional logical reasoning** and step-by-step thinking.
+   - Maintain perfect **grammar, punctuation, and meaningful sentence formation**.
+   - Ensure the content is academically rigorous yet easy to understand.
+2. **MATCH REQUIREMENTS**: 
+   - Ensure your response directly addresses the **User Requirements**: {user_requirements}.
+   - If the context does not satisfy the requirements, state that clearly.
+3. **FAQ & ACCURACY**: 
    - Analyze the provided context carefully. If an official FAQ is present, prioritize its details.
-   - **REFINE the retrieved FAQ** to directly address the user's specific question. Do not just paste the FAQ; adapt it to the user's context.
-   - Deliver the **Exact Answer** prominently. No conversational fluff or preamble.
-2. **SITUATIONAL OPTIMAL FORMATTING**: 
-   - **Data/Comparison/Fee/Courses?** -> Use a **Markdown Table**.
-   - **Step-by-step or Features?** -> Use **Numbered/Bullet Lists**.
-   - **Concise Fact?** -> Use a **Single Clear Line** with bold highlights.
-   - **Complex Explanation?** -> Use **Short, Structured Paragraphs**.
-3. **REFINEMENT & LENGTH**:
-   - Synthesize information to a "proper length"—neither too short to be vague nor too long to be repetitive.
-   - If the user specifies a length (e.g. "in 3 lines"), adhere to it strictly.
-4. **CONTEXT SYNTHESIS**: Merge overlapping details from multiple context blocks into a single, cohesive, and accurate response.
-5. **MISSING DATA**: If the answer isn't in the provided context, say: "This information is not officially available in the university database at this time."
-6. **LLM REFINEMENT**: Use your intelligence to refine the response based on the relative keywords and meaning of the user's request.
+   - **REFINE the retrieved FAQ** to directly address the user's specific request. Deliver the **Exact Answer** prominently.
+4. **SITUATIONAL OPTIMAL FORMATTING**: 
+   - Choose the format that best suits the information provided.
+   - **Detailed Data (Fees/Eligibility/Courses/Statistics)?** -> Use a **Markdown Table**.
+   - **Steps/Processes/Features/Rules?** -> Use **Numbered/Bullet Lists**.
+   - **Explanations/Descriptions?** -> Use **Detailed, Well-Structured Paragraphs**.
+5. **REFINEMENT & DIRECTNESS**:
+   - Synthesize information to a "Sufficient and Suitable Length" as requested by the user.
+   - Use **BOLD TEXT** for titles and key facts. **DO NOT USE Markdown headers like ### or ##** in your response.
+   - **DO NOT include closing sentences that offer further help or invite more questions** (e.g., "Feel free to ask", "I am here to help"). Be direct and end with the answer.
+6. **MISSING DATA**: If the answer isn't in the provided context, provide a polite response explaining that the specific data is missing from the official database.
 """
             
             # Execute with the smartest model for quality refinement and formatting compliance
