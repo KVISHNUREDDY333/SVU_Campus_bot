@@ -2,7 +2,7 @@ const CACHE_NAME = 'svu-campus-bot-v3';
 const ASSETS = [
     '/',
     '/static/style.css',
-    '/static/script_v2.js',
+    '/static/script.js',
     '/static/images/svu_logo_final_v2.jpg',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
     'https://cdn.jsdelivr.net/npm/chart.js'

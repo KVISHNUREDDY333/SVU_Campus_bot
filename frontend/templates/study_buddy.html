@@ -1,8 +1,5 @@
-<section
-          id="study-section"
-          class="content-section hidden"
-        >
-          <div class="header flex-col items-start gap-12 py-20">
+        <section id="study-section" class="content-section hidden scroll-mini">
+          <div class="header-premium flex-col items-start vhd-header border-bottom bg-glass-nav sticky-top">
             <div class="flex items-center gap-15">
               <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
               <h2 class="m-0 font-bold text-accent">Study Buddy AI</h2>
@@ -18,148 +15,139 @@
               </div>
             </div>
           </div>
-            <div id="study-notes-view" class="flex flex-col gap-24">
-                <div class="study-main">
-              <div class="settings-card">
-                <div class="card-header">
-                  <div
-                    class="card-icon modal-header-primary"
-                  >
+
+          <!-- Lecture Notes View -->
+          <div id="study-notes-view" class="p-15 flex flex-col gap-15 study-tab-view notes mx-auto w-full premium-view-entrance">
+            <!-- Materials List -->
+            <div class="settings-card shadow-premium border-none bg-glass-nav">
+              <div class="card-header compact border-bottom">
+                <div class="flex items-center gap-15">
+                  <div class="card-icon modal-header-primary shadow-teal">
                     <i class="fa-solid fa-book-open"></i>
                   </div>
-                  <h4>My Lecture Notes</h4>
-                  <button
-                    class="btn-primary ml-auto"
-                    onclick="openUploadModal('study')"
-                  >
-                    <i class="fa-solid fa-cloud-arrow-up"></i> Upload Notes
+                  <div>
+                    <h4 class="m-0 font-bold">Lecture Archive</h4>
+                    <p class="text-xs text-secondary m-0">Synchronized academic material repository</p>
+                  </div>
+                </div>
+                <div class="ml-auto flex gap-10">
+                  <button class="btn-primary btn-small rounded-10" onclick="openUploadModal('study')">
+                    <i class="fa-solid fa-cloud-arrow-up mr-8"></i> Upload
                   </button>
-                  <button
-                    class="btn-secondary ml-10"
-                    onclick="openStudyTextModal()"
-                  >
-                    <i class="fa-solid fa-keyboard"></i> Add Text
+                  <button class="btn-secondary btn-small rounded-10" onclick="openStudyTextModal()">
+                    <i class="fa-solid fa-keyboard mr-8"></i> text
                   </button>
                 </div>
-                <div id="study-materials-list" class="mt-20">
-                  <p class="text-center text-secondary p-40"
-                  >
-                    No notes uploaded yet. Start by uploading a PDF!
-                  </p>
-                </div>
+              </div>
+              <div id="study-materials-list" class="mt-15 p-10">
+                <p class="text-center text-secondary p-40">Initializing material sync...</p>
               </div>
             </div>
-            <div class="study-sidebar">
-              <div class="settings-card mb-20">
-                <div class="card-header">
-                  <div class="card-icon modal-header-amber">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                  </div>
-                  <h4>AI Summary</h4>
-                </div>
-                <div
-                  id="material-summary-content"
-                  class="text-md text-primary leading-relaxed min-h-200"
-                >
-                  Select a document to generate a smart AI summary.
-                </div>
-              </div>
 
-              <!-- Specialized AI Chat for Document -->
-              <div
-                class="settings-card hidden flex-col h-350"
-                id="document-chat-card"
-              >
-                <div class="card-header">
-                  <div
-                    class="card-icon modal-header-primary"
-                  >
-                    <i class="fa-solid fa-message"></i>
-                  </div>
-                  <h4>Ask this Document</h4>
+            <!-- Analysis Workspace (Hidden until file selected) -->
+            <div id="analysis-workspace" class="hidden flex flex-col gap-20 mb-30">
+                <!-- Summary Section -->
+                <div class="settings-card shadow-premium border-none bg-glass-nav">
+                    <div class="card-header compact border-bottom">
+                      <div class="flex items-center gap-15">
+                        <div class="card-icon modal-header-amber">
+                          <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        </div>
+                        <h4 class="m-0 font-bold">AI Content Synthesis</h4>
+                      </div>
+                    </div>
+                    <div id="material-summary-content" class="text-md text-primary leading-relaxed p-20 bg-ghost-lite rounded-16 mt-15">
+                      Synthesizing academic insights...
+                    </div>
                 </div>
-                <div
-                  id="document-chat-history"
-                  class="chat-history-container"
-                >
-                  <p class="text-secondary text-center m-auto">
-                    Ask me anything about these notes!
-                  </p>
+
+                <!-- Wider Follow-up Chat -->
+                <div class="settings-card shadow-premium border-none bg-glass-nav flex flex-col" id="document-chat-card">
+                    <div class="card-header compact border-bottom">
+                      <div class="flex items-center gap-15">
+                        <div class="card-icon modal-header-primary">
+                          <i class="fa-solid fa-messages"></i>
+                        </div>
+                        <div>
+                          <h4 class="m-0 font-bold">Follow-up Inquiries</h4>
+                          <p class="text-xs text-secondary m-0">Ask questions about the analyzed material</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div id="document-chat-history" class="chat-history-container p-20 h-auto min-h-200">
+                      <div class="bot-msg-standard">
+                        Please ask any specific questions about the analyzed material.
+                      </div>
+                    </div>
+                    
+                    <div class="p-15">
+                        <div class="input-glass-container premium-shadow p-6 bg-white-opacity-5">
+                            <input
+                                type="text"
+                                id="document-chat-input"
+                                placeholder="Ask a follow-up question about this document..."
+                                class="bg-transparent border-none p-12 text-md w-full focus-none"
+                                onkeypress="if (event.key === 'Enter') askStudyBuddy();"
+                            />
+                            <button class="btn-primary px-24 py-12 rounded-12 shadow-teal" onclick="askStudyBuddy()" title="Submit Inquiry">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex-gap-8">
-                  <input
-                    type="text"
-                    id="document-chat-input"
-                    placeholder="Ask specific questions..."
-                    class="form-input-p12 text-sm"
-                    title="Ask a question about this document"
-                    onkeypress="if (event.key === 'Enter') askStudyBuddy();"
-                  />
-                  <button
-                    class="btn-primary btn-icon-square"
-                    onclick="askStudyBuddy()"
-                    title="Send Question"
-                  >
-                    <i class="fa-solid fa-paper-plane"></i>
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
 
-          <!-- Zen AI Chat View -->
-          <div id="study-zen-view" class="hidden flex-col zen-view-wrapper h-full">
-              <div class="settings-card flex-1 flex flex-col h-full glass-panel border-none shadow-lg">
-                  <div class="card-header border-bottom p-20-30 bg-white-opacity-5">
-                      <div class="flex items-center gap-15">
-                        <div class="card-icon modal-header-primary shadow-teal">
-                            <i class="fa-solid fa-brain"></i>
-                        </div>
-                        <div>
-                            <h4 class="m-0 font-bold">Zen AI Assistant</h4>
-                            <p class="text-xs text-secondary m-0">Powered by advanced linguistics</p>
-                        </div>
-                      </div>
-                      <div class="ml-auto flex gap-12">
-                          <button class="btn-secondary btn-small px-20 rounded-10 shadow-sm" onclick="newZenChat()" title="New Chat">
-                              <i class="fa-solid fa-plus mr-8"></i> New Session
+          <!-- Zen AI View -->
+          <div id="study-zen-view" class="hidden study-tab-view zen mx-auto w-full premium-view-entrance zen-viewport">
+              <!-- Chat Canvas (includes inline header) -->
+              <div id="zen-chat-history" class="zen-chat-panel scroll-mini">
+                  <div class="welcome-canvas">
+                       <div class="zen-orb">
+                          <i class="fa-solid fa-brain"></i>
+                       </div>
+                       <h1 class="gradient-text-teal mb-8 ls-neg-01 font-bold">Hello, I am Zen.</h1>
+                       <p class="text-secondary text-md text-center max-w-500 mx-auto zen-welcome-text">
+                         Your academic partner for high-level synthesis and research support.
+                       </p>
+                       
+                       <div class="zen-suggestions">
+                          <button class="zen-chip" onclick="setZenInput('Explain quantum entanglement simply')">
+                             <i class="fa-solid fa-atom"></i> Explain a concept
                           </button>
-                          <button class="btn-secondary btn-icon-square bg-ghost rounded-10 border-none" onclick="refreshZenChat()" title="Refresh">
-                              <i class="fa-solid fa-arrows-rotate"></i>
+                          <button class="zen-chip" onclick="setZenInput('Analyze this research summary')">
+                             <i class="fa-solid fa-microscope"></i> Deep Analysis
                           </button>
-                      </div>
+                          <button class="zen-chip" onclick="setZenInput('Synthesize study roadmap for finals')">
+                             <i class="fa-solid fa-route"></i> Study Roadmap
+                          </button>
+                          <button class="zen-chip" onclick="setZenInput('Compare and contrast these two theories')">
+                             <i class="fa-solid fa-code-compare"></i> Compare Topics
+                          </button>
+                       </div>
                   </div>
-                  
-                  <div id="zen-chat-history" class="chat-history-zen flex-1 p-30 overflow-y-auto">
-                      <div class="welcome-chat">
-                           <div class="floating-icon-container">
-                             <i class="fa-solid fa-brain"></i>
-                           </div>
-                           <h2 class="mb-12 font-bold ls-neg-01 text-accent">I am Zen</h2>
-                           <p class="text-secondary text-lg lh-1-6">Your generative AI partner for academic brilliance. <br>Ask me for summaries, explanations, or research help!</p>
-                           <div class="flex justify-center gap-15 mt-30">
-                              <div class="tool-chip bg-white border-standard px-20 py-10 rounded-12 shadow-sm cursor-pointer hover-scale" onclick="setZenInput('Explain the concept of quantum computing simply')">
-                                <i class="fa-solid fa-bolt text-amber mr-8"></i> Quick Explain
-                              </div>
-                              <div class="tool-chip bg-white border-standard px-20 py-10 rounded-12 shadow-sm cursor-pointer hover-scale" onclick="setZenInput('Help me draft an abstract for my research paper')">
-                                <i class="fa-solid fa-pen-nib text-purple mr-8"></i> Research Lite
-                              </div>
-                           </div>
-                      </div>
-                  </div>
-                  
-                  <div class="zen-input-area p-20-30 border-top bg-white-opacity-5">
-                      <div class="input-glass-container flex gap-12 items-center p-8 pr-12 rounded-20 bg-ghost border-standard">
-                          <button class="btn-ghost btn-icon-round hover-scale" id="zen-mic-btn" onclick="startZenSTT()" title="Voice Input">
-                              <i class="fa-solid fa-microphone text-accent"></i>
-                          </button>
-                          <input type="text" id="zen-input" placeholder="Type a message or task for Zen..." 
-                              class="flex-1 bg-transparent border-none outline-none text-primary text-md px-10"
-                              onkeypress="if(event.key === 'Enter') sendZenMessage()" />
-                          <button id="zen-send-btn" class="btn-primary btn-icon-square rounded-12 shadow-teal" onclick="sendZenMessage()" title="Send Message">
-                              <i class="fa-solid fa-paper-plane"></i>
-                          </button>
-                      </div>
+              </div>
+
+              <!-- Zen Typing Indicator -->
+              <div id="zen-typing-indicator" class="zen-typing-indicator hidden">
+                  <div class="zen-dot"></div>
+                  <div class="zen-dot"></div>
+                  <div class="zen-dot"></div>
+                  <span class="ml-12 text-secondary text-sm font-medium">Zen is synthesizing...</span>
+              </div>
+
+              <!-- Input Workspace -->
+              <div class="zen-input-bar">
+                  <div class="zen-input-inner">
+                      <button id="zen-mic-btn" class="zen-input-icon" onclick="startZenSTT()" title="Voice Input">
+                          <i class="fa-solid fa-microphone"></i>
+                      </button>
+                      <input type="text" id="zen-input" placeholder="Ask Zen anything..." 
+                          class="zen-input-field"
+                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                      <button class="zen-send-btn" onclick="sendZenMessage()" title="Send Command">
+                          <i class="fa-solid fa-arrow-up"></i>
+                      </button>
                   </div>
               </div>
           </div>

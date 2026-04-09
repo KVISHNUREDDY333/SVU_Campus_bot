@@ -147,7 +147,8 @@ templates = Jinja2Templates(directory=templates_dir)
 
 @app.get("/")
 async def read_root(request: Request):
-    response = templates.TemplateResponse(request=request, name="index.html", context={})
+    context = {"google_client_id": Config.GOOGLE_CLIENT_ID}
+    response = templates.TemplateResponse(request=request, name="index.html", context=context)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"

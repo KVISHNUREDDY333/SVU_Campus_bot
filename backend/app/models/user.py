@@ -22,7 +22,8 @@ class TokenData(BaseModel):
 class RegisterRequest(BaseModel):
     email: str
     password: str
-    full_name: str
+    first_name: str
+    last_name: str
     role: str = "student"
 
 class ForgotPasswordRequest(BaseModel):
@@ -32,3 +33,7 @@ class VerifyOTPRequest(BaseModel):
     email: str
     otp: str
     new_password: str
+
+class VerifyOnlyOTPRequest(BaseModel):
+    email: str
+    otp: str

@@ -29,3 +29,4 @@ certifi
 markdown
 xhtml2pdf
 python-docx
+google-auth

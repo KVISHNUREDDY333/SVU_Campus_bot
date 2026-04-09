@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
 from typing import List
 from ..models.user import User
 from ..models.faq import FAQModel, FAQResponse, SuggestedFAQModel, SuggestedFAQResponse, FAQRequest
-from .auth import get_current_user, get_password_hash
+from .auth import get_current_user, get_current_admin_user, get_password_hash
 from ..models.location import LocationModel, LocationResponse, LocationUpdate
 from ..models.trending import TrendingQueryModel, TrendingQueryResponse, TrendingQueryUpdate
 
@@ -12,8 +12,11 @@ from datetime import datetime
 import random
 import os
 import shutil
-from fastapi import UploadFile, File
-from ..services.rag_service import ingest_pdf, ingest_url, ingest_text, extract_faqs_from_text, refine_kb_data, ingest_faq
+from ..services.rag_service import (
+    ingest_pdf, ingest_url, ingest_text, extract_faqs_from_text, 
+    refine_kb_data, ingest_faq, process_and_refine_knowledge, 
+    validate_faq_with_web, setup_rag_chain
+)
 from ..services import notification_service
 from ..services.logging_service import get_recent_logs, log_event
 import pydantic
@@ -70,9 +73,7 @@ async def get_faqs():
     return results
 
 @router.post("/admin/faqs", response_model=FAQResponse)
-async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_admin_user)):
     
     # Insert directly into svu_vectors via ingest_faq
     from ..services.rag_service import ingest_faq as rag_ingest_faq
@@ -89,7 +90,7 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
             faq_id=faq_id
         )
     except Exception as e:
-        print(f"Failed to ingest FAQ into vector DB: {e}")
+        logger.error(f"Failed to ingest FAQ into vector DB: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create FAQ: {e}")
     
     # Trigger notification
@@ -110,9 +111,7 @@ async def create_faq(faq: FAQModel, current_user: User = Depends(get_current_use
     )
 
 @router.delete("/admin/faqs/{faq_id}")
-async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def delete_faq(faq_id: str, current_user: User = Depends(get_current_admin_user)):
         
     try:
         if database.svu_vectors_db is None or database.documents_db is None:
@@ -144,7 +143,7 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_user)
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Delete FAQ Error: {e}")
+        logger.error(f"Delete FAQ Error: {e}")
         raise HTTPException(status_code=400, detail="Failed to delete FAQ")
 
 @router.post("/faqs/suggest")
@@ -167,9 +166,7 @@ async def suggest_faq(faq: SuggestedFAQModel):
     return {"status": "success", "message": "FAQ suggestion submitted for review"}
 
 @router.get("/admin/suggested-faqs", response_model=List[SuggestedFAQResponse])
-async def get_suggested_faqs(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_suggested_faqs(current_user: User = Depends(get_current_admin_user)):
     
     if database.suggested_faqs_db is None:
         return []
@@ -187,9 +184,7 @@ async def get_suggested_faqs(current_user: User = Depends(get_current_user)):
     return results
 
 @router.post("/admin/suggested-faqs/{suggestion_id}/approve")
-async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_admin_user)):
     
     if database.suggested_faqs_db is None or database.svu_vectors_db is None:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -219,7 +214,7 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
             faq_id=faq_id
         )
     except Exception as e:
-        print(f"Failed to ingest FAQ into vector DB: {e}")
+        logger.error(f"Failed to ingest FAQ into vector DB: {e}")
     
     # Personal notification to the suggestor
     suggestor = suggestion.get("suggested_by")
@@ -236,9 +231,7 @@ async def approve_suggested_faq(suggestion_id: str, current_user: User = Depends
     return {"status": "success", "message": "FAQ approved and published"}
 
 @router.delete("/admin/suggested-faqs/{suggestion_id}")
-async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(get_current_admin_user)):
     
     suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
     if not suggestion:
@@ -267,17 +260,15 @@ class AddUrlRequest(pydantic.BaseModel):
     url: str
 
 @router.post("/admin/add-text")
-async def add_text_document(req: AddTextRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def add_text_document(req: AddTextRequest, current_user: User = Depends(get_current_admin_user)):
         
     try:
-        print(f"[DEBUG] Ingesting Text: {req.title}")
+        logger.debug(f"Ingesting Text: {req.title}")
         
         from ..services.rag_service import ingest_text
         doc_metadata = {"source": req.title, "type": "text_entry", "uploaded_by": current_user.username}
         num_chunks = await ingest_text(req.content, metadata=doc_metadata)
-        print(f"[DEBUG] Text Entry Ingested. Chunks: {num_chunks}")
+        logger.debug(f"Text Entry Ingested. Chunks: {num_chunks}")
 
         # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
@@ -312,9 +303,7 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
 @router.post("/admin/upload-document")
-async def upload_document(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def upload_document(file: UploadFile = File(...), current_user: User = Depends(get_current_admin_user)):
     
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -327,9 +316,9 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        print(f"[DEBUG] Ingesting PDF: {file.filename}")
+        logger.debug(f"Ingesting PDF: {file.filename}")
         num_chunks, full_text = await ingest_pdf(file_path, user_id="public", store_vectors=True)
-        print(f"[DEBUG] PDF Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
+        logger.debug(f"PDF Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
         
         # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
@@ -365,14 +354,12 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.post("/admin/add-url")
-async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_current_admin_user)):
         
     try:
-        print(f"[DEBUG] Ingesting URL: {req.url}")
+        logger.debug(f"Ingesting URL: {req.url}")
         num_chunks, full_text = await ingest_url(req.url, store_vectors=True)
-        print(f"[DEBUG] URL Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
+        logger.debug(f"URL Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
         
         # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
@@ -407,11 +394,9 @@ async def add_url_document(req: AddUrlRequest, current_user: User = Depends(get_
         raise HTTPException(status_code=500, detail=f"URL ingestion failed: {str(e)}")
 
 @router.get("/dashboard-stats")
-async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_dashboard_stats(current_user: User = Depends(get_current_admin_user)):
         
-    print(f"Fetching dashboard stats for user: {current_user.username}")
+    logger.info(f"Fetching dashboard stats for user: {current_user.username}")
     
     # Initialize defaults
     stats = {
@@ -443,22 +428,20 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_user)):
         # 3. Documents Stats (The Critical Part)
         if database.documents_db is not None:
             doc_count = database.documents_db.count_documents({})
-            print(f"DEBUG: Found {doc_count} documents in DB")
+            logger.debug(f"Found {doc_count} documents in DB")
             stats["total_documents"] = doc_count
         else:
-            print("CRITICAL: documents_db is None!")
+            logger.critical("documents_db is None!")
 
         return stats
 
     except Exception as e:
-        print(f"Dashboard Stats Error: {e}")
+        logger.error(f"Dashboard Stats Error: {e}")
         # Return partial stats instead of failing
         return stats
 
 @router.get("/admin/system-health")
-async def get_system_health(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_system_health(current_user: User = Depends(get_current_admin_user)):
     
     database.get_db_client() # Try to refresh client if disconnected
     mongo_status = "connected" if database.mongo_client else "disconnected"
@@ -478,10 +461,8 @@ async def get_system_health(current_user: User = Depends(get_current_user)):
 async def get_all_users(
     skip: int = 0,
     limit: int = 50,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_admin_user)
 ):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
     
     projection = {"_id": 1, "username": 1, "role": 1, "created_at": 1, "status": 1}
     cursor = database.users_db.find({}, projection).sort("created_at", -1).skip(skip).limit(limit)
@@ -498,9 +479,7 @@ async def get_all_users(
     return users
 
 @router.post("/admin/users", status_code=201)
-async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def create_user(user_data: UserCreate, current_user: User = Depends(get_current_admin_user)):
     
     if database.users_db.find_one({"username": user_data.username}):
         raise HTTPException(status_code=400, detail="User already exists")
@@ -517,9 +496,7 @@ async def create_user(user_data: UserCreate, current_user: User = Depends(get_cu
     return {"status": "success", "message": f"User {user_data.username} created"}
 
 @router.put("/admin/users/{user_id}/role")
-async def update_user_role(user_id: str, role_data: dict = Body(...), current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
+async def update_user_role(user_id: str, role_data: dict = Body(...), current_user: User = Depends(get_current_admin_user)):
     
     new_role = role_data.get("role")
     if new_role not in ["student", "admin", "faculty"]:
@@ -532,9 +509,7 @@ async def update_user_role(user_id: str, role_data: dict = Body(...), current_us
         raise HTTPException(status_code=400, detail="Invalid User ID")
 
 @router.delete("/admin/users/{user_id}")
-async def delete_user(user_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
+async def delete_user(user_id: str, current_user: User = Depends(get_current_admin_user)):
     
     user_to_delete = database.users_db.find_one({"_id": ObjectId(user_id)})
     if user_to_delete and user_to_delete["username"] == current_user.username:
@@ -547,18 +522,14 @@ async def delete_user(user_id: str, current_user: User = Depends(get_current_use
         raise HTTPException(status_code=400, detail="Invalid User ID")
 
 @router.post("/admin/cache/clear")
-async def clear_system_cache(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def clear_system_cache(current_user: User = Depends(get_current_admin_user)):
     
     from ..services import rag_service
     rag_service.store = {}
     return {"status": "success", "message": "System cache (session history) cleared."}
 
 @router.get("/admin/system-logs")
-async def get_admin_system_logs(limit: int = 50, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
+async def get_admin_system_logs(limit: int = 50, current_user: User = Depends(get_current_admin_user)):
     
     logs = get_recent_logs(limit)
     # Convert ObjectId to string and format timestamp
@@ -573,9 +544,7 @@ async def get_admin_system_logs(limit: int = 50, current_user: User = Depends(ge
     return formatted_logs
 
 @router.post("/admin/reindex")
-async def reindex_knowledge_base(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-         raise HTTPException(status_code=403, detail="Admin access required")
+async def reindex_knowledge_base(current_user: User = Depends(get_current_admin_user)):
     
     from ..services import rag_service
     try:
@@ -591,10 +560,8 @@ async def reindex_knowledge_base(current_user: User = Depends(get_current_user))
 async def list_documents(
     skip: int = 0,
     limit: int = 50,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_admin_user)
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
     
     if database.documents_db is None:
         return []
@@ -609,9 +576,7 @@ async def list_documents(
 @router.get("/admin/brain/status")
 
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
-async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_document_faqs(doc_id: str, current_user: User = Depends(get_current_admin_user)):
     
     if database.documents_db is None or database.svu_vectors_db is None:
         raise HTTPException(status_code=500, detail="Database not available")
@@ -666,9 +631,7 @@ async def get_document_faqs(doc_id: str, current_user: User = Depends(get_curren
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/admin/documents/{doc_id}")
-async def delete_document(doc_id: str, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def delete_document(doc_id: str, current_user: User = Depends(get_current_admin_user)):
         
     try:
         from ..core.config import Config
@@ -690,7 +653,7 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
         if database.svu_vectors_db is not None:
             # Cascade delete FAQs from svu_vectors
             delete_result = database.svu_vectors_db.delete_many({"type": "faq", "source": filename})
-            print(f"Deleted {delete_result.deleted_count} FAQs associated with {filename}")
+            logger.info(f"Deleted {delete_result.deleted_count} FAQs associated with {filename}")
 
         if database.mongo_client is not None:
             vector_collection_name = Config.COLLECTION_NAME or "documents"
@@ -698,20 +661,18 @@ async def delete_document(doc_id: str, current_user: User = Depends(get_current_
             
             # Delete general vector chunks (flat structure)
             vector_delete_result = vector_collection.delete_many({"source": filename})
-            print(f"Deleted {vector_delete_result.deleted_count} vector chunks for {filename}")
+            logger.info(f"Deleted {vector_delete_result.deleted_count} vector chunks for {filename}")
         
         return {"status": "success", "message": f"Document and associated data deleted for {filename}"}
 
     except Exception as e:
-        print(f"Delete Error: {e}")
+        logger.error(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
 
 
 
 @router.put("/admin/faqs/{faq_id}")
-async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(get_current_admin_user)):
     
     if database.svu_vectors_db is None:
         raise HTTPException(status_code=500, detail="Database not available")
@@ -777,16 +738,12 @@ async def get_public_locations(current_user: User = Depends(get_current_user)):
     return results
 
 @router.get("/admin/locations", response_model=List[LocationResponse])
-async def get_all_locations(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def get_all_locations(current_user: User = Depends(get_current_admin_user)):
     
     return await get_public_locations(current_user)
 
 @router.post("/admin/locations", response_model=LocationResponse)
-async def create_location(loc: LocationModel, current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def create_location(loc: LocationModel, current_user: User = Depends(get_current_admin_user)):
     
     new_loc = loc.dict()
     new_loc["created_at"] = datetime.utcnow()

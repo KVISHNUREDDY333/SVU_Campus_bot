@@ -27,7 +27,13 @@ def get_db_client():
     global mongo_client, users_db, otps_db, svu_vectors_db, documents_db, analytics_db, tickets_db, calendar_db, notifications_db, suggested_faqs_db, study_materials_db, exam_dates_db, locations_db, trending_queries_db, system_logs_db
     if Config.MONGODB_URI:
         try:
-            mongo_client = MongoClient(Config.MONGODB_URI, tlsCAFile=certifi.where())
+            # Extended timeouts to handle DNS resolution issues (Server Do53 timeouts)
+            mongo_client = MongoClient(
+                Config.MONGODB_URI, 
+                tlsCAFile=certifi.where(),
+                serverSelectionTimeoutMS=30000, # 30s selection timeout
+                connectTimeoutMS=20000          # 20s connection timeout
+            )
             db = mongo_client[Config.DB_NAME]
             users_db = db["users"]
             otps_db = db["otps"]

@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from typing import List, Optional
+import logging
+import io
+from pypdf import PdfReader
 from ..core import database
 from ..models.user import User
 from ..routers.auth import get_current_user
@@ -7,12 +10,12 @@ from ..services import rag_service
 from bson import ObjectId
 
 router = APIRouter(prefix="/career", tags=["Career Center"])
+logger = logging.getLogger("uvicorn")
 
 from ..models.academic import ResumeAnalysisRequest, ResumeGenerationRequest
 
-@router.post("/check-resume")
-async def check_resume(req: ResumeAnalysisRequest):
-    resume_text = req.resume_text
+async def perform_resume_analysis(resume_text: str, target_role: Optional[str] = None):
+    """Refactored helper function to handle AI resume analysis logic."""
     # Guidelines for the resume checker
     guidelines = """
     SV University Placement Cell Guidelines:
@@ -23,7 +26,7 @@ async def check_resume(req: ResumeAnalysisRequest):
     5. Internships: Highlight responsibilities and outcomes.
     """
     
-    target_role_context = f"Target Job Role: {req.target_role}" if req.target_role else "Target Job Role: Not Specified (General Analysis)"
+    target_role_context = f"Target Job Role: {target_role}" if target_role else "Target Job Role: Not Specified (General Analysis)"
     
     prompt = f"""
     You are an elite Career Strategy Expert and Technical Recruiter with deep knowledge of SV University standards and global industry expectations. 
@@ -71,8 +74,34 @@ async def check_resume(req: ResumeAnalysisRequest):
         response = await rag_service.llm.ainvoke(prompt)
         return {"analysis": response.content}
     except Exception as e:
-        print(f"Resume Check Error: {e}")
+        logger.error(f"Resume Analysis Logic Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Analysis Error: {str(e)}")
+
+@router.post("/check-resume")
+async def check_resume(req: ResumeAnalysisRequest):
+    return await perform_resume_analysis(req.resume_text, req.target_role)
+
+@router.post("/check-resume-file")
+async def check_resume_file(file: UploadFile = File(...), target_role: Optional[str] = Form(None)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
+    try:
+        content = await file.read()
+        pdf_file = io.BytesIO(content)
+        reader = PdfReader(pdf_file)
+        full_text = ""
+        for page in reader.pages:
+            full_text += page.extract_text() or ""
+            
+        if not full_text.strip():
+             raise HTTPException(status_code=400, detail="Could not extract text from PDF. It might be scanned or empty.")
+             
+        return await perform_resume_analysis(full_text, target_role)
+        
+    except Exception as e:
+        logger.error(f"Resume PDF Processing Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
 
 @router.post("/generate-resume")
 async def generate_resume(req: ResumeGenerationRequest):

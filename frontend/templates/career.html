@@ -44,15 +44,36 @@
           class="form-input-p12"
         />
       </div>
-      <p class="text-secondary text-sm my-10">
-        Paste your resume text below for instant feedback based on SVU guidelines and industry standards.
-      </p>
-      <textarea
-        id="resume-text-input"
-        rows="12"
-        placeholder="Paste resume content here..."
-        class="form-input-p15 mb-15"
-      ></textarea>
+      <div class="mode-toggle-container mb-20">
+        <button id="mode-text-btn" class="auth-tab active px-20 py-8 rounded-12" onclick="setCheckerMode('text')">
+          <i class="fa-solid fa-align-left mr-8"></i> Paste Text
+        </button>
+        <button id="mode-pdf-btn" class="auth-tab px-20 py-8 rounded-12" onclick="setCheckerMode('pdf')">
+          <i class="fa-solid fa-file-pdf mr-8"></i> Upload PDF
+        </button>
+      </div>
+
+      <div id="checker-text-area">
+        <p class="text-secondary text-sm my-10">
+          Paste your resume text below for instant feedback based on SVU guidelines and industry standards.
+        </p>
+        <textarea
+          id="resume-text-input"
+          rows="12"
+          placeholder="Paste resume content here..."
+          class="form-input-p15 mb-15"
+        ></textarea>
+      </div>
+
+      <div id="checker-pdf-area" class="hidden">
+        <div class="file-upload-zone p-30 border-dashed border-standard rounded-20 text-center mb-15 bg-ghost hover-accent transition-all cursor-pointer" onclick="document.getElementById('resume-file-input').click()">
+          <i class="fa-solid fa-cloud-arrow-up text-4xl text-accent mb-15 opacity-70"></i>
+          <p class="text-secondary mb-10">Select your Resume PDF (Max 5MB)</p>
+          <button class="btn-secondary btn-small">Browse PDF</button>
+          <input type="file" id="resume-file-input" accept=".pdf" class="hidden" onchange="handleResumeFileChange(this)" title="Upload Resume PDF" />
+        </div>
+        <div id="selected-file-name" class="text-accent text-sm font-medium mb-15 hidden"></div>
+      </div>
       <button
         class="btn-primary w-full"
         onclick="checkResume()"

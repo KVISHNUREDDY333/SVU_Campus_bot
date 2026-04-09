@@ -10,10 +10,13 @@ from authlib.integrations.starlette_client import OAuth
 from ..core.security import verify_password, get_password_hash, create_access_token
 from ..core.config import Config
 from ..core import database
-from ..models.user import User, Token, RegisterRequest, ForgotPasswordRequest, VerifyOTPRequest
+from ..models.user import User, Token, RegisterRequest, ForgotPasswordRequest, VerifyOTPRequest, VerifyOnlyOTPRequest
 from ..services.email_service import send_otp_email
 from jose import JWTError, jwt
 from ..services.logging_service import log_event
+from email_validator import validate_email, EmailNotValidError
+from ..utils.email_validator import is_valid_email, verify_google_token, probe_google_email
+import secrets
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
@@ -85,29 +88,44 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 @router.post("/register", response_model=Token)
 async def register_user(user_data: RegisterRequest):
+    if not is_valid_email(user_data.email):
+        logger.warning(f"Registration blocked for non-Gmail address: {user_data.email}")
+        raise HTTPException(
+            status_code=400, 
+            detail="Only verified Google accounts (@gmail.com) are accepted for registration."
+        )
+
     try:
+        # SMTP / DNS Authenticity Check
+        verified, msg = probe_google_email(user_data.email)
+        if verified is False:
+             raise HTTPException(status_code=400, detail=msg)
 
         if database.users_db.find_one({"username": user_data.email}):
             raise HTTPException(status_code=400, detail="Email already registered")
 
-        pwd_bytes = user_data.password.encode('utf-8')
-        if len(pwd_bytes) > 70:
-            truncated = pwd_bytes[:70].decode('utf-8', 'ignore')
-        else:
-            truncated = user_data.password
-        hashed_password = get_password_hash(truncated)
+        hashed_password = get_password_hash(user_data.password)
+        full_name = f"{user_data.first_name} {user_data.last_name}".strip()
         user_dict = {
             "username": user_data.email,
             "password_hash": hashed_password,
-            "full_name": user_data.full_name,
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name,
+            "full_name": full_name,
             "role": "student", 
             "created_at": datetime.utcnow()
         }
         database.users_db.insert_one(user_dict)
         log_event("SUCCESS", f"New user registered: {user_data.email}")
         
-        access_token = create_access_token(data={"sub": user_data.email, "role": user_data.role})
-        return {"access_token": access_token, "token_type": "bearer", "role": user_data.role, "username": user_data.email, "full_name": user_data.full_name}
+        access_token = create_access_token(data={"sub": user_data.email, "role": "student"})
+        return {
+            "access_token": access_token, 
+            "token_type": "bearer", 
+            "role": "student", 
+            "username": user_data.email, 
+            "full_name": full_name
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -120,7 +138,7 @@ async def register_user(user_data: RegisterRequest):
 async def forgot_password(request: ForgotPasswordRequest):
     user = database.users_db.find_one({"username": request.email})
     if not user:
-        return {"status": "success", "message": "If email exists, OTP sent."}
+        raise HTTPException(status_code=404, detail="please enter registered email")
     
     otp = "{:06d}".format(random.randint(0, 999999))
     database.otps_db.update_one(
@@ -158,6 +176,92 @@ async def verify_otp_reset(request: VerifyOTPRequest):
     database.otps_db.delete_one({"email": request.email})
     
     return {"status": "success", "message": "Password updated"}
+    
+@router.post("/verify-otp")
+async def verify_otp_only(request: VerifyOnlyOTPRequest):
+    input_otp = request.otp.strip()
+    input_email = request.email.strip()
+    
+    record = database.otps_db.find_one({"email": input_email})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid request")
+    
+    if (datetime.utcnow() - record["created_at"]).total_seconds() > 600:
+         raise HTTPException(status_code=400, detail="OTP expired")
+         
+    if str(record["otp"]).strip() != input_otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP")
+        
+    return {"status": "success", "message": "OTP verified"}
+
+@router.post("/auth/verify-google-email")
+async def verify_google_email_endpoint(request: ForgotPasswordRequest):
+    email = request.email.strip()
+    if not is_valid_email(email):
+        raise HTTPException(
+            status_code=400, 
+            detail="Only verified Google accounts (@gmail.com) are accepted."
+        )
+    
+    verified, message = probe_google_email(email)
+    if verified is False:
+        raise HTTPException(status_code=400, detail=message)
+        
+    return {"verified": True, "message": message}
+
+@router.post("/auth/google-id-token")
+async def google_id_token_login(request: Request):
+    """
+    Direct Google ID token verification and auto-registration flow.
+    """
+    body = await request.json()
+    id_token = body.get("id_token")
+    if not id_token:
+        raise HTTPException(status_code=400, detail="Missing Google ID token")
+        
+    id_info = verify_google_token(id_token)
+    if not id_info:
+        raise HTTPException(status_code=400, detail="Invalid Google Token")
+        
+    email = id_info.get("email")
+    name = id_info.get("name")
+    
+    if not email or not is_valid_email(email):
+        raise HTTPException(status_code=400, detail="Only Gmail accounts are allowed")
+        
+    db_user = database.users_db.find_one({"username": email})
+    if not db_user:
+        # Auto-create with random secure password
+        random_pass = secrets.token_urlsafe(16)
+        hashed_password = get_password_hash(random_pass)
+        new_user = {
+            "username": email,
+            "password_hash": hashed_password,
+            "full_name": name,
+            "role": "student",
+            "auth_provider": "google",
+            "created_at": datetime.utcnow(),
+            "last_login": datetime.utcnow()
+        }
+        database.users_db.insert_one(new_user)
+        role = "student"
+    else:
+        role = db_user.get("role", "student")
+        database.users_db.update_one({"username": email}, {"$set": {"last_login": datetime.utcnow()}})
+        
+    access_token = create_access_token(data={"sub": email, "role": role})
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer", 
+        "role": role, 
+        "username": email, 
+        "full_name": name
+    }
+
+# Keeping legacy /verify-email-authenticity for compatibility but aliasing to the new logic
+@router.post("/verify-email-authenticity")
+async def verify_email_authenticity_legacy(request: ForgotPasswordRequest):
+    return await verify_google_email_endpoint(request)
 
 @router.get("/login/google")
 async def login_google(request: Request):
@@ -174,10 +278,10 @@ async def auth_google(request: Request):
             user = await oauth.google.userinfo(token=token)
         
         email = user.get("email")
+        if not email or not is_valid_email(email):
+             raise HTTPException(status_code=400, detail="Only verified Google accounts (@gmail.com) are accepted.")
+
         name = user.get("name")
-        
-        if not email:
-            raise HTTPException(status_code=400, detail="Google authentication failed: No email provided")
         
         db_user = database.users_db.find_one({"username": email})
         if not db_user:

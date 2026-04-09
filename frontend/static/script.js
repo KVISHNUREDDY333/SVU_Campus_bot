@@ -173,19 +173,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function clearAuthInputs() {
   const ids = [
-    "login-username",
-    "login-password",
-    "reg-username",
-    "reg-fullname",
-    "reg-password",
-    "forgot-email",
-    "forgot-otp",
-    "forgot-new-password",
+    "login_email", "login_password",
+    "signup_first_name", "signup_last_name", "signup_email", "passInput", "confirmPassInput",
+    "reset_email", "otp_input",
+    "modal_new_pass", "modal_confirm_pass"
   ];
   ids.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.value = "";
+    if (el) {
+        el.value = "";
+        el.setAttribute('autocomplete', 'new-password'); // Stronger auto-fill block
+    }
   });
+  // Also reset forms
+  document.getElementById('loginForm')?.reset();
+  document.getElementById('signupForm')?.reset();
+  document.getElementById('modalResetForm')?.reset();
 }
 
 // --- Auth Functions ---
@@ -194,13 +197,438 @@ function checkAuth() {
   const ACCESS_TOKEN = sessionStorage.getItem("access_token");
 
   if (!ACCESS_TOKEN) {
-    if (overlay) overlay.classList.add("active");
+    if (overlay) { 
+        clearAuthInputs(); // Force clear on entrance
+        overlay.classList.add("active"); 
+        if(window.initAuthUI) window.initAuthUI(); 
+    }
     return false;
   } else {
     if (overlay) overlay.classList.remove("active");
     return true;
   }
 }
+
+
+
+
+
+// ==========================================
+// NEW SLIDING AUTH UI LOGIC
+// ==========================================
+
+window.initAuthUI = function() {
+    const container = document.getElementById('container');
+    const signUpGhostBtn = document.getElementById('signUpGhost');
+    const signInGhostBtn = document.getElementById('signInGhost');
+    const mobileSignUpBtn = document.getElementById('mobile-signup-btn');
+    const mobileSignInBtn = document.getElementById('mobile-signin-btn');
+
+    if(!container) return;
+    if(container.dataset.initialized) return;
+    container.dataset.initialized = 'true';
+
+    signUpGhostBtn?.addEventListener('click', () => { container.classList.add("right-panel-active"); });
+    signInGhostBtn?.addEventListener('click', () => { container.classList.remove("right-panel-active"); });
+    mobileSignUpBtn?.addEventListener('click', (e) => { e.preventDefault(); container.classList.add("right-panel-active"); });
+    mobileSignInBtn?.addEventListener('click', (e) => { e.preventDefault(); container.classList.remove("right-panel-active"); });
+
+    const loginBox = document.getElementById('login-container');
+    const forgotBox = document.getElementById('forgot-container');
+    const step1Form = document.getElementById('step1Form');
+    const step2Form = document.getElementById('step2Form');
+    
+    document.getElementById('showForgot')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        loginBox.style.display = 'none';
+        forgotBox.classList.remove('hidden', 'hidden-initially');
+        step1Form.style.display = 'block';
+        step2Form.classList.add('hidden', 'hidden-initially');
+        step2Form.style.display = 'none';
+        step1Form.reset(); step2Form.reset();
+        document.getElementById('forgotMessage').textContent = '';
+    });
+
+    document.getElementById('showLogin')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        forgotBox.classList.add('hidden', 'hidden-initially');
+        loginBox.style.display = 'flex';
+    });
+
+    function setupToggle(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if(!input || !icon) return;
+        icon.addEventListener('click', () => {
+            input.setAttribute('type', input.getAttribute('type') === 'password' ? 'text' : 'password');
+            icon.classList.toggle('fa-eye');
+            icon.classList.toggle('fa-eye-slash');
+        });
+    }
+    setupToggle('passInput', 'togglePass');
+    setupToggle('confirmPassInput', 'toggleConfirm');
+    setupToggle('login_password', 'toggleLoginPass');
+
+    const passInput = document.getElementById('passInput');
+    const confirmInput = document.getElementById('confirmPassInput');
+    const btnSubmitSignup = document.getElementById('btnSubmitSignup');
+    const matchMsg = document.getElementById('matchMessage');
+    const btnVerify = document.getElementById('verifyIdentityIcon');
+    const signupEmailInput = document.getElementById('signup_email');
+
+    const reqs = {
+        len: { el: document.getElementById('req-len'), regex: /.{8,}/ },
+        upper: { el: document.getElementById('req-upper'), regex: /[A-Z]/ },
+        num: { el: document.getElementById('req-num'), regex: /\d/ },
+        special: { el: document.getElementById('req-special'), regex: /[@$!%*?&]/ }
+    };
+
+    window.emailIsAuthentic = false;
+
+    function updateSubmitButton() {
+        if(!passInput) return;
+        const passMatch = passInput.value === confirmInput.value && passInput.value.length >= 8;
+        let passValid = true;
+        for (const key in reqs) {
+            if (reqs[key].regex && !reqs[key].regex.test(passInput.value)) { passValid = false; break; }
+        }
+        const allFilled = document.getElementById('signup_first_name')?.value.trim() && 
+                          document.getElementById('signup_last_name')?.value.trim() && 
+                          signupEmailInput?.value.trim();
+        
+        const isReady = (passMatch && passValid && allFilled && window.emailIsAuthentic);
+        if(btnSubmitSignup) btnSubmitSignup.disabled = !isReady;
+    }
+
+    function checkForm() {
+        if(!passInput) return;
+        const val = passInput.value;
+        const confirmVal = confirmInput.value;
+        const isEmpty = val.length === 0;
+        let allValid = true;
+
+        for (const key in reqs) {
+            const isValid = reqs[key].regex.test(val);
+            const item = reqs[key].el;
+            if(!item) continue;
+            const icon = item.querySelector('i');
+            item.classList.remove('valid', 'invalid');
+            icon.className = 'fa-solid fa-circle'; 
+            if (isEmpty) item.style.color = 'var(--text-muted)';
+            else if (isValid) { item.classList.add('valid'); icon.className = 'fa-solid fa-check-circle'; item.style.color=''; }
+            else { item.classList.add('invalid'); icon.className = 'fa-solid fa-circle-xmark'; allValid = false; item.style.color='';}
+            if(!isValid) allValid = false;
+        }
+
+        // Real-time color feedback for password field
+        if (isEmpty) {
+            passInput.classList.remove('input-pure-success', 'input-pure-danger');
+        } else {
+            if (allValid) {
+                passInput.classList.remove('input-pure-danger');
+                passInput.classList.add('input-pure-success');
+            } else {
+                passInput.classList.remove('input-pure-success');
+                passInput.classList.add('input-pure-danger');
+            }
+        }
+
+        if(confirmVal.length > 0) {
+            if(val === confirmVal) {
+                if(matchMsg) { matchMsg.textContent = "Passwords match"; matchMsg.style.color = "#10b981"; }
+            } else {
+                if(matchMsg) { matchMsg.textContent = "Passwords do not match"; matchMsg.style.color = "#ef4444"; }
+            }
+        } else { if(matchMsg) matchMsg.textContent = ""; }
+
+        updateSubmitButton();
+    }
+
+    passInput?.addEventListener('input', checkForm);
+    confirmInput?.addEventListener('input', checkForm);
+    document.getElementById('signup_first_name')?.addEventListener('input', updateSubmitButton);
+    document.getElementById('signup_last_name')?.addEventListener('input', updateSubmitButton);
+    
+    // Real Email Authenticity Scan (Backend Driven)
+    let emailCheckTimeout;
+    signupEmailInput?.addEventListener('input', () => {
+        window.emailIsAuthentic = false;
+        updateSubmitButton();
+        const statusIcon = document.getElementById('email-status-icon');
+        if (statusIcon) { statusIcon.className = 'email-verify-badge'; statusIcon.innerHTML = ''; }
+        
+        clearTimeout(emailCheckTimeout);
+        const email = signupEmailInput.value.trim();
+
+        // Apply red border while unverified, clear if empty
+        if (email.length === 0) {
+            signupEmailInput.classList.remove('input-pure-danger', 'input-pure-success');
+        } else {
+            signupEmailInput.classList.remove('input-pure-success');
+            signupEmailInput.classList.add('input-pure-danger');
+        }
+
+        if (email.length < 5 || !email.includes('@')) {
+            return;
+        }
+
+        emailCheckTimeout = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API_URL}/verify-email-authenticity`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email: email })
+                });
+                if (res.ok) {
+                    window.emailIsAuthentic = true;
+                    signupEmailInput.classList.remove('input-pure-danger');
+                    signupEmailInput.classList.add('input-pure-success');
+                    if (statusIcon) {
+                        statusIcon.className = 'email-verify-badge valid';
+                        statusIcon.innerHTML = '<i class="fa-solid fa-check-circle"></i>';
+                    }
+                } else {
+                    signupEmailInput.classList.remove('input-pure-success');
+                    signupEmailInput.classList.add('input-pure-danger');
+                    if (statusIcon) {
+                        statusIcon.className = 'email-verify-badge invalid';
+                        statusIcon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                    }
+                }
+                updateSubmitButton();
+            } catch(e) { }
+        }, 1200);
+    });
+
+    // Initialize Google Sign-In
+    function initGoogleSignIn() {
+        if (typeof google === 'undefined') {
+            setTimeout(initGoogleSignIn, 500);
+            return;
+        }
+
+        const clientID = window.GOOGLE_CLIENT_ID;
+        if (!clientID || clientID === "None") {
+            console.warn("Google Client ID not configured");
+            return;
+        }
+
+        google.accounts.id.initialize({
+            client_id: clientID,
+            callback: async (response) => {
+                const id_token = response.credential;
+                try {
+                    const res = await fetch(`${API_URL}/auth/google-id-token`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ id_token: id_token })
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        localStorage.setItem("token", data.access_token);
+                        localStorage.setItem("user_role", data.role);
+                        localStorage.setItem("username", data.username);
+                        localStorage.setItem("full_name", data.full_name);
+                        window.location.href = "/";
+                    } else {
+                        alert(data.detail || "Google Auth Failed");
+                    }
+                } catch (e) {
+                    console.error("Google verify error:", e);
+                    alert("A technical error occurred during Google verification.");
+                }
+            }
+        });
+
+        const renderOptions = {
+            theme: 'outline',
+            size: 'large',
+            text: 'signin_with',
+            shape: 'pill',
+            width: 250
+        };
+
+        if (document.getElementById('g_id_signin_login')) {
+            google.accounts.id.renderButton(document.getElementById('g_id_signin_login'), renderOptions);
+        }
+        if (document.getElementById('g_id_signin_signup')) {
+            google.accounts.id.renderButton(document.getElementById('g_id_signin_signup'), renderOptions);
+        }
+    }
+
+    initGoogleSignIn();
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+    if(window.initAuthUI) setTimeout(window.initAuthUI, 500);
+});
+
+document.addEventListener("submit", async (e) => {
+    // LOGIN
+    if (e.target.id === 'loginForm') {
+        e.preventDefault();
+        const msgEl = document.getElementById('loginMessage');
+        msgEl.style.color = '#94a3b8';
+        msgEl.textContent = 'Verifying credentials...';
+        
+        try {
+            const formData = new URLSearchParams();
+            formData.append("username", document.getElementById("login_email").value);
+            formData.append("password", document.getElementById("login_password").value);
+            const res = await fetch(`${API_URL}/token`, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: formData,
+            });
+            if (res.ok) {
+                const data = await res.json();
+                saveSession(data);
+                msgEl.style.color = '#10b981';
+                msgEl.textContent = 'Login Successful!';
+                setTimeout(() => document.getElementById('auth-overlay').classList.remove('active'), 800);
+            } else {
+                const err = await res.json();
+                msgEl.style.color = '#ef4444';
+                msgEl.textContent = err.detail || 'Login failed';
+            }
+        } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Server connection error'; }
+    }
+    
+    // FORGOT PASS STEP 1
+    if (e.target.id === 'step1Form') {
+        e.preventDefault();
+        window.resetEmail = document.getElementById('reset_email').value;
+        const msgEl = document.getElementById('forgotMessage');
+        msgEl.style.color = '#94a3b8';
+        msgEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Sending OTP...';
+        
+        try {
+            const res = await fetch(`${API_URL}/forgot-password`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: window.resetEmail })
+            });
+            const data = await res.json();
+            if(res.ok && data.status === "success") {
+                document.getElementById('step1Form').style.display = 'none';
+                const step2 = document.getElementById('step2Form');
+                step2.classList.remove('hidden', 'hidden-initially');
+                step2.style.display = 'block';
+                msgEl.textContent = ''; 
+            } else {
+                msgEl.style.color = '#ef4444';
+                msgEl.textContent = data.detail || data.message || 'Please enter Registered Email.';
+            }
+        } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Verification error.'; }
+    }
+    
+    // FORGOT PASS STEP 2 - VERIFY ONLY
+    if (e.target.id === 'step2Form') {
+        e.preventDefault();
+        const msgEl = document.getElementById('forgotMessage');
+        window.resetOtp = document.getElementById('otp_input').value;
+        
+        msgEl.style.color = '#94a3b8';
+        msgEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Verifying...';
+
+        try {
+            const res = await fetch(`${API_URL}/verify-otp`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: window.resetEmail, otp: window.resetOtp })
+            });
+            if (res.ok) {
+                msgEl.textContent = '';
+                const modal = document.getElementById('modalResetPassword');
+                if(modal) modal.classList.add('active');
+            } else {
+                const err = await res.json();
+                msgEl.style.color = '#ef4444';
+                msgEl.textContent = err.detail || 'Verification failed.';
+            }
+        } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Connection Error.'; }
+    }
+
+    // MODAL RESET FINAL
+    if (e.target.id === 'modalResetForm') {
+        e.preventDefault();
+        const pass = document.getElementById('modal_new_pass').value;
+        const confirm = document.getElementById('modal_confirm_pass').value;
+        const msgEl = document.getElementById('modalResetMsg');
+        if (pass !== confirm) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Passwords do not match.'; return; }
+        
+        msgEl.style.color = '#94a3b8';
+        msgEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Updating...';
+        try {
+            const res = await fetch(`${API_URL}/verify-otp-reset`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: window.resetEmail, otp: window.resetOtp, new_password: pass })
+            });
+            if(res.ok) {
+                msgEl.style.color = '#10b981';
+                msgEl.textContent = 'Success! Please login.';
+                setTimeout(() => {
+                    closeResetModal();
+                    document.getElementById('showLogin').click();
+                }, 1500);
+            } else {
+                const err = await res.json();
+                msgEl.style.color = '#ef4444';
+                msgEl.textContent = err.detail || 'Reset failed.';
+            }
+        } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Server error.'; }
+    }
+
+    // REGISTER FINAL
+    if (e.target.id === 'signupForm') {
+        e.preventDefault();
+        const msgEl = document.getElementById('signupMessage');
+        msgEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating...';
+        msgEl.style.color = "var(--accent-color)";
+        try {
+            const payload = {
+                email: document.getElementById('signup_email').value,
+                first_name: document.getElementById('signup_first_name').value,
+                last_name: document.getElementById('signup_last_name').value,
+                role: 'student',
+                password: document.getElementById('passInput').value
+            };
+            const res = await fetch(`${API_URL}/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) {
+                msgEl.innerHTML = '<span style="color:#10b981">Success! Proceeding to login.</span>';
+                document.getElementById('signInGhost').click();
+                document.getElementById('login_email').value = payload.email;
+            } else { 
+                const err = await res.json();
+                msgEl.textContent = err.detail || 'Registration failed';
+                msgEl.style.color = "#ef4444";
+            }
+        } catch(err) { msgEl.textContent = 'Connection Error'; msgEl.style.color = "#ef4444"; }
+    }
+});
+
+window.closeResetModal = function() {
+    const m = document.getElementById('modalResetPassword');
+    if(m) {
+        m.classList.remove('active');
+    }
+    document.getElementById('modalResetForm')?.reset();
+    if(document.getElementById('modalResetMsg')) document.getElementById('modalResetMsg').textContent = '';
+};
+
+window.openAuthOverlay = function(mode="login") {
+    const overlay = document.getElementById("auth-overlay");
+    if(overlay) overlay.classList.add("active");
+    if(window.initAuthUI) window.initAuthUI(); 
+    if(mode==="register") document.getElementById("signUpGhost")?.click();
+    else document.getElementById("signInGhost")?.click();
+};
+
 
 function initRoleUI() {
   const role = sessionStorage.getItem("user_role");
@@ -230,251 +658,10 @@ function initRoleUI() {
 }
 
 function saveSession(data) {
-  ACCESS_TOKEN = data.access_token;
-  USER_ROLE = data.role;
-  sessionStorage.setItem("access_token", ACCESS_TOKEN);
-  sessionStorage.setItem("user_role", USER_ROLE);
-  sessionStorage.setItem("username", data.username);
-
-  initRoleUI();
-  checkAuth();
-  
-  // Show welcome message
-  showStatusPopup(`Welcome back, ${data.username}!`);
-  
-  // Start system features
-  if (typeof startNotificationPolling === "function") {
-    startNotificationPolling();
-  }
-  
-  // Refresh data
-  if (USER_ROLE === "admin") {
-     refreshAllAdminData();
-  }
-}
-
-function logout() {
-  ACCESS_TOKEN = null;
-  USER_ROLE = null;
-  sessionStorage.removeItem("access_token");
-  sessionStorage.removeItem("user_role");
-  sessionStorage.removeItem("username");
-  
-  stopNotificationPolling();
-  
-  // Reset UI
-  const body = document.body;
-  body.classList.remove("dark-mode");
-  sessionStorage.setItem("svu_theme", "light");
-  
-  checkAuth();
-  window.location.reload(); // Hard reset to clear memory
-}
-
-window.logout = logout;
-
-async function handleForgotPassword(e) {
-  e.preventDefault();
-  const email = document.getElementById("forgot-email").value;
-  const errorEl = document.getElementById("auth-error");
-
-  try {
-    const res = await fetch(`${API_URL}/forgot-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email }),
-    });
-
-    const data = await res.json();
-    if (data.status === "success") {
-      document.getElementById("step-email").style.display = "none";
-      document.getElementById("step-otp").style.display = "block";
-      errorEl.style.display = "none";
-    } else {
-      throw new Error(data.message || "Failed to send OTP");
-    }
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.style.display = "block";
-  }
-}
-
-async function handleResetPassword(e) {
-  e.preventDefault();
-  const email = document.getElementById("forgot-email").value;
-  const otp = document.getElementById("forgot-otp").value;
-  const newPassword = document.getElementById("forgot-new-password").value;
-  const errorEl = document.getElementById("auth-error");
-
-  try {
-    const res = await fetch(`${API_URL}/verify-otp-reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email, otp, new_password: newPassword }),
-    });
-
-    const data = await res.json();
-    if (data.status === "success") {
-      await CustomDialog.alert("Password reset successful! Please log in.", "Success", "success");
-      location.reload();
-    } else {
-      throw new Error(data.detail || "Failed to reset password");
-    }
-  } catch (err) {
-    errorEl.textContent = err.message;
-    errorEl.style.display = "block";
-  }
-}
-
-async function handleLogin(e) {
-  e.preventDefault();
-  const username = document.getElementById("login-username").value;
-  const password = document.getElementById("login-password").value;
-  const errorEl = document.getElementById("auth-error");
-  const loadingOverlay = document.getElementById("loading-overlay");
-
-  if (loadingOverlay) loadingOverlay.style.display = "flex";
-  errorEl.style.display = "none";
-
-  try {
-    const formData = new URLSearchParams();
-    formData.append("username", username);
-    formData.append("password", password);
-
-    const res = await fetch(`${API_URL}/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        const errData = await res.json();
-        throw new Error(errData.detail || "Invalid credentials");
-      } else {
-        const text = await res.text();
-        console.error("Non-JSON Login Error:", text);
-        throw new Error("Server error during login. Please try again.");
-      }
-    }
-
-    const data = await res.json();
-    console.log("Login successful:", data.username);
-    saveSession(data);
-  } catch (err) {
-    console.error("Login error:", err.message);
-    errorEl.textContent = err.message;
-    errorEl.style.display = "block";
-  } finally {
-    if (loadingOverlay) loadingOverlay.style.display = "none";
-  }
-}
-
-const validateEmail = (email) => {
-  return String(email)
-    .toLowerCase()
-    .match(/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/);
-};
-
-const validatePassword = (password) => {
-  // Min 8 chars, 1 upper, 1 lower, 1 number, 1 special char
-  const re =
-    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
-  return re.test(password);
-};
-
-async function handleRegister(e) {
-  e.preventDefault();
-  const username = document.getElementById("reg-username").value;
-  const fullName = document.getElementById("reg-fullname").value;
-  const role = "student";
-  const password = document.getElementById("reg-password").value;
-  const errorEl = document.getElementById("auth-error");
-
-  // Frontend Validation
-  if (!validateEmail(username)) {
-    errorEl.textContent = "Invalid email format.";
-    errorEl.style.display = "block";
-    return;
-  }
-
-  // Full Name Validation
-  const nameRegex = /^[A-Za-z\s]+$/;
-  if (!nameRegex.test(fullName)) {
-    errorEl.textContent =
-      "Full Name must contain only alphabets and spaces (no numbers or special characters).";
-    errorEl.style.display = "block";
-    return;
-  }
-
-  if (!validatePassword(password)) {
-    errorEl.textContent =
-      "Password must be 8+ chars, with Upper, Lower, Number & Special char.";
-    errorEl.style.display = "block";
-    return;
-  }
-
-  try {
-    console.log("Registering user:", username);
-    const res = await fetch(`${API_URL}/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: username,
-        full_name: fullName,
-        role,
-        password,
-      }),
-    });
-
-    if (!res.ok) {
-      const contentType = res.headers.get("content-type");
-      let errData;
-      if (contentType && contentType.indexOf("application/json") !== -1) {
-        errData = await res.json();
-      } else {
-        const text = await res.text();
-        console.error("Non-JSON Register Error:", text);
-        throw new Error("Server error during registration. please check logs.");
-      }
-      console.error("Register Error Response:", errData);
-      if (errData.detail === "Username already registered") {
-        errorEl.textContent =
-          "This email is already registered. Please log in.";
-        errorEl.style.display = "block";
-        setTimeout(() => switchAuthTab("login"), 2000);
-        return;
-      }
-      let msg = "Registration failed";
-      if (typeof errData.detail === "string") {
-        msg = errData.detail;
-      } else if (Array.isArray(errData.detail)) {
-        // Handle Pydantic validation errors
-        msg = errData.detail.map((e) => e.msg).join(", ");
-      } else if (typeof errData.detail === "object") {
-        msg = JSON.stringify(errData.detail);
-      }
-      throw new Error(msg);
-    }
-
-    // Success Popup & Redirect to Login
-    console.info("Registration successful, alerting user.");
-    await CustomDialog.alert("User registration successful! Please log in with your credentials.", "Registration Success", "success");
-    switchAuthTab("login");
-  } catch (err) {
-    console.error("Registration error:", err.message);
-    errorEl.textContent = err.message;
-    errorEl.style.display = "block";
-  }
-}
-
-function saveSession(data) {
   // Force Light Mode on New Session (as per requirements)
-  // "change the theme to light only when user or admin is logged out or login"
   sessionStorage.setItem("svu_theme", "light");
   document.body.classList.remove("dark-mode");
-  updateThemeUI(false);
+  if (typeof updateThemeUI === "function") updateThemeUI(false);
 
   ACCESS_TOKEN = data.access_token;
   USER_ROLE = data.role;
@@ -488,13 +675,13 @@ function saveSession(data) {
   const authOverlay = document.getElementById("auth-overlay");
   if (authOverlay) authOverlay.classList.remove("active");
 
-  showSection("chat");
-  populateSidebarProfile();
+  if (typeof showSection === "function") showSection("chat");
+  if (typeof populateSidebarProfile === "function") populateSidebarProfile();
   initRoleUI();
-  startNotificationPolling();
+  if (typeof startNotificationPolling === "function") startNotificationPolling();
 
   // Reset chat to "New Chat" on login
-  clearChat();
+  if (typeof clearChat === "function") clearChat();
 }
 
 function logout() {
@@ -502,22 +689,24 @@ function logout() {
   localStorage.removeItem("access_token");
   sessionStorage.removeItem("user_role");
   sessionStorage.removeItem("username");
-  localStorage.removeItem("username"); // Clear legacy localStorage values
+  localStorage.removeItem("username"); 
   sessionStorage.removeItem("full_name");
-  localStorage.removeItem("full_name"); // Clear legacy localStorage values
-  sessionStorage.removeItem("svu_chat_history"); // Clear chat history on logout
+  localStorage.removeItem("full_name"); 
+  sessionStorage.removeItem("svu_chat_history"); 
   sessionStorage.removeItem("chat_session_id");
-  localStorage.removeItem("last_notification_id"); // Optional: clear notifications too
+  localStorage.removeItem("last_notification_id"); 
 
   ACCESS_TOKEN = null;
   USER_ROLE = null;
 
+  if (typeof stopNotificationPolling === "function") stopNotificationPolling();
+
   // Reset to Light Mode on Logout
   sessionStorage.setItem("svu_theme", "light");
-  localStorage.removeItem("svu_theme"); // Clear legacy localStorage theme
+  localStorage.removeItem("svu_theme"); 
 
   document.body.classList.remove("dark-mode");
-  updateThemeUI(false);
+  if (typeof updateThemeUI === "function") updateThemeUI(false);
 
   // Hide restricted links immediately
   const navAdmin = document.getElementById("nav-admin");
@@ -527,6 +716,11 @@ function logout() {
 
   location.reload();
 }
+
+window.logout = logout;
+window.saveSession = saveSession;
+window.initRoleUI = initRoleUI;
+
 
 // Chat History State
 let chatHistory = JSON.parse(
@@ -541,7 +735,6 @@ function loadChatHistory() {
   if (chatHistory.length > 0) scrollToBottom();
 }
 
-// ... existing code ...
 
 function populateSidebarProfile() {
   const fullName = sessionStorage.getItem("full_name");
@@ -1446,7 +1639,9 @@ function appendMessage(text, sender, save = true) {
     // Message text container
     const textSpan = document.createElement("div");
     textSpan.className = "message-content";
-    textSpan.innerHTML = formatText(text);
+    
+    // Use marked for bot responses to handle Markdown/HTML properly
+    textSpan.innerHTML = marked.parse(text);
 
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "msg-actions";
@@ -2669,8 +2864,8 @@ async function submitTicket() {
     });
 
     if (res.ok) {
-      await CustomDialog.alert("Ticket raised successfully! Support team will contact you.", "Ticket Raised", "success");
       closeTicketModal();
+      await CustomDialog.alert("Ticket raised successfully! Support team will contact you.", "Ticket Raised", "success");
     } else {
       await CustomDialog.alert("Failed to raise ticket.", "Ticket Error", "error");
     }
@@ -3842,46 +4037,8 @@ async function reindexData() {
   }
 }
 
-// --- Auth UI Interactions ---
-function switchAuthTab(tab) {
-  clearAuthInputs();
-  const loginForm = document.getElementById("login-form");
-  const registerForm = document.getElementById("register-form");
-  const forgotForm = document.getElementById("forgot-form");
-  const loginBtn = document.getElementById("tab-login");
-  const registerBtn = document.getElementById("tab-register");
-  const errorEl = document.getElementById("auth-error");
+// Switch auth tab removed, legacy layout replaced.
 
-  if (errorEl) errorEl.style.display = "none";
-  if (forgotForm) forgotForm.style.display = "none";
-
-  if (tab === "login") {
-    if (loginForm) loginForm.classList.remove("hidden");
-    if (registerForm) registerForm.classList.add("hidden");
-    if (loginBtn) loginBtn.classList.add("active");
-    if (registerBtn) registerBtn.classList.remove("active");
-  } else {
-    if (loginForm) loginForm.classList.add("hidden");
-    if (registerForm) registerForm.classList.remove("hidden");
-    if (loginBtn) loginBtn.classList.remove("active");
-    if (registerBtn) registerBtn.classList.add("active");
-  }
-}
-
-function showForgotPassword() {
-  const loginForm = document.getElementById("login-form");
-  const registerForm = document.getElementById("register-form");
-  const forgotForm = document.getElementById("forgot-form");
-  const errorEl = document.getElementById("auth-error");
-
-  if (loginForm) loginForm.classList.add("hidden");
-  if (registerForm) registerForm.classList.add("hidden");
-  if (forgotForm) {
-      forgotForm.classList.remove("hidden");
-      forgotForm.style.display = "block"; // Fallback for transition
-  }
-  if (errorEl) errorEl.style.display = "none";
-}
 
 function startNewChat() {
   const chatBox = document.getElementById("chat-box");
@@ -4241,15 +4398,11 @@ async function refreshAllAdminData() {
   }
 }
 
-// --- Study Buddy Feature ---
 async function loadStudyBuddy() {
   if (!ACCESS_TOKEN) return;
   const listEl = document.getElementById("study-materials-list");
-
-  // Removed Exam Loading Logic
   if (!listEl) return;
 
-  // Load Materials
   try {
     const res = await fetch(`${API_URL}/study-buddy/materials`, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
@@ -4257,29 +4410,33 @@ async function loadStudyBuddy() {
     if (res.ok) {
       const materials = await res.json();
       if (materials.length === 0) {
-        listEl.innerHTML =
-          '<p style="text-align: center; color: var(--text-secondary); padding: 40px;">No notes uploaded yet. Start by uploading a PDF!</p>';
+        listEl.innerHTML = `
+          <div class="p-40 text-center opacity-60">
+            <i class="fa-solid fa-cloud-arrow-up text-4xl mb-16 text-accent"></i>
+            <p>Your research archive is empty. Upload your first material to begin.</p>
+          </div>`;
       } else {
+        listEl.className = "material-grid"; // Switch to grid
         const html = materials.map((m) => {
           const date = new Date(m.upload_date).toLocaleDateString();
           return `
-                    <div class="study-material-item">
-                        <div class="material-content" onclick="summarizeMaterial('${m.id}')">
-                            <div class="material-icon"><i class="fa-solid fa-file-pdf"></i></div>
-                            <div class="material-details">
-                                <span class="material-name">${escapeHtml(m.filename)}</span>
-                                <span class="material-meta">Uploaded on ${date}</span>
-                            </div>
-                        </div>
-                        <div class="material-actions">
-                            <button class="action-btn" title="Summarize" onclick="summarizeMaterial('${m.id}')">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                            </button>
-                            <button class="action-btn delete" title="Delete" onclick="deleteStudyMaterial('${m.id}')">
-                                <i class="fa-solid fa-trash-can"></i>
-                            </button>
-                        </div>
-                    </div>`;
+            <div class="premium-material-card" onclick="summarizeMaterial('${m.id}')">
+                <div class="material-type-icon">
+                    <i class="fa-solid fa-file-pdf"></i>
+                </div>
+                <div class="material-meta">
+                    <div class="material-name">${escapeHtml(m.filename)}</div>
+                    <div class="material-date">Captured on ${date}</div>
+                </div>
+                <div class="material-actions" onclick="event.stopPropagation()">
+                    <button class="material-mini-btn" title="Deep Analysis" onclick="summarizeMaterial('${m.id}')">
+                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                    </button>
+                    <button class="material-mini-btn danger" title="Remove" onclick="deleteStudyMaterial('${m.id}')">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>`;
         }).join("");
         listEl.innerHTML = html;
       }
@@ -4401,29 +4558,32 @@ async function summarizeMaterial(id) {
     const data = await res.json();
     summaryEl.innerHTML = `<div class="markdown-body p-10">${marked.parse(data.summary)}</div>`;
 
-    // Setup Chat
+    // Setup Document Chat
     currentStudyMaterialId = id;
+    const workspace = document.getElementById("analysis-workspace");
+    if (workspace) workspace.classList.remove("hidden");
+
     const chatCard = document.getElementById("document-chat-card");
     if (chatCard) {
       chatCard.style.display = "flex";
       const history = document.getElementById("document-chat-history");
       if (history) {
         history.innerHTML = `
-          <div class="bot-msg-standard" style="background: rgba(13, 148, 136, 0.05); padding: 15px; border-radius: 12px; border: 1px dashed var(--accent-color); margin-bottom: 15px;">
-            <p style="margin: 0 0 10px 0; font-weight: 600; color: var(--accent-color); font-size: 13.5px;">
+          <div class="bot-msg-standard" style="background: rgba(13, 148, 136, 0.05); padding: 15px; border-radius: 12px; border: 1px dashed var(--accent-color); margin-bottom: 20px;">
+            <p style="margin: 0 0 10px 0; font-weight: 600; color: var(--accent-color); font-size: 14px;">
               <i class="fa-solid fa-circle-check"></i> Analysis Complete
             </p>
-            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
-              I've processed your notes. Any follow-up questions will now be answered using <strong>only</strong> the data provided in these files.
+            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+              I've indexed these notes. Please ask any follow-up questions below. I will respond based <strong>exclusively</strong> on the document content.
             </p>
-            <div class="flex flex-wrap gap-8 mt-12">
-               <button class="tool-chip" onclick="setStudyInput('Explain the main points')">Explain main points</button>
-               <button class="tool-chip" onclick="setStudyInput('List key definitions')">Key definitions</button>
-               <button class="tool-chip" onclick="setStudyInput('Quiz me on this')">Generate quiz</button>
-            </div>
           </div>
         `;
       }
+      // Focus the chat input
+      setTimeout(() => {
+        const docInput = document.getElementById("document-chat-input");
+        if (docInput) docInput.focus();
+      }, 100);
     }
   } catch (e) {
     if (e.name === 'AbortError') return;
@@ -4446,20 +4606,23 @@ async function askStudyBuddy() {
     input.focus();
   };
 
-  // Add user message to mini-history
+  // Add user message to history (Standardized Zen Style)
   const userMsg = document.createElement("div");
-  userMsg.style.cssText =
-    "align-self: flex-end; background: var(--gradient-primary); color: white; padding: 8px 12px; border-radius: 12px 12px 0 12px; max-width: 85%; font-size: 13px;";
-  userMsg.textContent = query;
+  userMsg.className = "zen-message-item user mb-16";
+  userMsg.innerHTML = `
+    <div class="zen-message user">
+        ${escapeHtml(query)}
+    </div>`;
   history.appendChild(userMsg);
   input.value = "";
 
   // Typing indicator
   const typing = document.createElement("div");
-  typing.innerHTML =
-    '<i class="fa-solid fa-brain fa-fade"></i> AI is reviewing notes...';
-  typing.style.cssText =
-    "align-self: flex-start; color: var(--accent-color); font-size: 12px; margin-top: 5px; font-weight: 500;";
+  typing.className = "flex items-center gap-10 mb-16";
+  typing.innerHTML = `
+    <div style="background: var(--glass-bg); padding: 12px 18px; border-radius: 18px 18px 18px 2px; border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 14px;">
+        <i class="fa-solid fa-microchip fa-spin mr-8 text-accent"></i> Reviewing material...
+    </div>`;
   history.appendChild(typing);
   history.scrollTop = history.scrollHeight;
 
@@ -4477,23 +4640,39 @@ async function askStudyBuddy() {
       }),
     });
 
-    history.removeChild(typing);
-
+    if (typing.parentNode) history.removeChild(typing);
     if (!res.ok) throw new Error("Chat failed");
+    
     const data = await res.json();
-
     const aiMsg = document.createElement("div");
-    aiMsg.style.cssText =
-      "align-self: flex-start; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 12px 12px 12px 0; max-width: 85%; font-size: 13px; line-height: 1.4;";
-    aiMsg.innerHTML = marked.parse(data.response);
+    aiMsg.className = "zen-message-item zen mb-16 animate-fade-in";
+    aiMsg.innerHTML = `
+      <div class="zen-message zen">
+          ${marked.parse(data.response)}
+          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 8px; font-size: 11px; opacity: 0.6;">
+            <i class="fa-solid fa-shield-halved text-accent"></i> Academic Verification Source
+          </div>
+      </div>`;
     history.appendChild(aiMsg);
+    
+    // Trigger rich rendering for document chat
+    if (typeof renderZenContent === 'function') {
+        renderZenContent(aiMsg);
+    }
+    
+    // Auto-scroll to top of new answer if needed, or bottom
     history.scrollTop = history.scrollHeight;
+    
+    // Prompt for next follow-up
+    input.placeholder = "Ask another follow-up question...";
+    input.focus();
+
   } catch (e) {
+    if (e.name === 'AbortError') return;
     if (typing.parentNode) history.removeChild(typing);
     const errorMsg = document.createElement("div");
-    errorMsg.style.cssText =
-      "align-self: center; color: #ef4444; font-size: 11px;";
-    errorMsg.textContent = "Connection error.";
+    errorMsg.style.cssText = "text-align: center; color: #ef4444; font-size: 12px; padding: 10px;";
+    errorMsg.textContent = "AI had trouble accessing the document context.";
     history.appendChild(errorMsg);
   }
 }
@@ -4652,7 +4831,7 @@ async function generateResume() {
     return;
   }
 
-  feedbackEl.style.display = "block";
+  feedbackEl.classList.remove("hidden");
   feedbackEl.innerHTML =
     '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Generating Professional Resume...</div>';
 
@@ -4733,41 +4912,93 @@ async function generateResume() {
 }
 window.generateResume = generateResume;
 
-async function checkResume() {
-  const textInput = document.getElementById("resume-text-input");
-  const text = textInput ? textInput.value.trim() : "";
-  const feedbackEl = document.getElementById("resume-feedback");
-  const targetRole = document
-    .getElementById("resume-target-role")
-    ?.value.trim();
+// --- Resume Checker Logic ---
+let currentCheckerMode = "text"; 
 
-  if (!text) {
-    await CustomDialog.alert("Please paste your resume text first.", "Validation Error", "warning");
-    return;
+function setCheckerMode(mode) {
+  currentCheckerMode = mode;
+  const textBtn = document.getElementById("mode-text-btn");
+  const pdfBtn = document.getElementById("mode-pdf-btn");
+  const textArea = document.getElementById("checker-text-area");
+  const pdfArea = document.getElementById("checker-pdf-area");
+
+  if (mode === "text") {
+    textBtn?.classList.add("active");
+    pdfBtn?.classList.remove("active");
+    textArea?.classList.remove("hidden");
+    pdfArea?.classList.add("hidden");
+  } else {
+    pdfBtn?.classList.add("active");
+    textBtn?.classList.remove("active");
+    pdfArea?.classList.remove("hidden");
+    textArea?.classList.add("hidden");
+  }
+}
+window.setCheckerMode = setCheckerMode;
+
+function handleResumeFileChange(input) {
+  const file = input.files[0];
+  const nameEl = document.getElementById("selected-file-name");
+  if (file) {
+    nameEl.innerText = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+    nameEl.classList.remove("hidden");
+  } else {
+    nameEl.classList.add("hidden");
+  }
+}
+window.handleResumeFileChange = handleResumeFileChange;
+
+async function checkResume() {
+  const targetRole = document.getElementById("resume-target-role")?.value.trim();
+  const feedbackEl = document.getElementById("resume-feedback");
+  
+  if (!ACCESS_TOKEN || !feedbackEl) return;
+
+  let url = `${API_URL}/career/check-resume`;
+  let body;
+  let headers = {
+    Authorization: `Bearer ${ACCESS_TOKEN}`,
+  };
+
+  if (currentCheckerMode === "text") {
+    const textInput = document.getElementById("resume-text-input");
+    const text = textInput ? textInput.value.trim() : "";
+    if (!text) {
+      await CustomDialog.alert("Please paste your resume text.", "Missing Input", "warning");
+      return;
+    }
+    body = JSON.stringify({ resume_text: text, target_role: targetRole || null });
+    headers["Content-Type"] = "application/json";
+  } else {
+    const fileInput = document.getElementById("resume-file-input");
+    const file = fileInput ? fileInput.files[0] : null;
+    if (!file) {
+      await CustomDialog.alert("Please upload a PDF resume.", "Missing Input", "warning");
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", file);
+    if (targetRole) formData.append("target_role", targetRole);
+    
+    url = `${API_URL}/career/check-resume-file`;
+    body = formData;
   }
 
-  feedbackEl.innerHTML =
-    '<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing resume...</div>';
+  feedbackEl.innerHTML = `<div style="text-align: center; padding: 20px;"><i class="fa-solid fa-spinner fa-spin"></i> Analyzing Resume ${currentCheckerMode === "pdf" ? "(Extracted from PDF)" : ""}...</div>`;
 
   try {
-    const res = await fetch(`${API_URL}/career/check-resume`, {
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
-      },
-      body: JSON.stringify({
-        resume_text: text,
-        target_role: targetRole || null,
-      }),
+      headers: headers,
+      body: body,
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Server error");
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Analysis failed");
     }
 
-    const data = await res.json();
+    const data = await response.json();
     currentAnalysisResult = data.analysis;
     feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.analysis)}</div>`;
 
@@ -4791,7 +5022,7 @@ async function checkResume() {
     const pdfBtn = document.createElement("button");
     pdfBtn.id = "btn-analysis-download-pdf";
     pdfBtn.className = "btn-primary";
-    pdfBtn.style.background = "#ef4444"; // Red for PDF
+    pdfBtn.style.background = "#ef4444"; 
     pdfBtn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Download PDF';
     pdfBtn.onclick = () => downloadAnalysis("pdf");
 
@@ -4799,7 +5030,7 @@ async function checkResume() {
     const docxBtn = document.createElement("button");
     docxBtn.id = "btn-analysis-download-docx";
     docxBtn.className = "btn-primary";
-    docxBtn.style.background = "#2563eb"; // Blue for Word
+    docxBtn.style.background = "#2563eb"; 
     docxBtn.innerHTML = '<i class="fa-solid fa-file-word"></i> Download Word';
     docxBtn.onclick = () => downloadAnalysis("docx");
 
@@ -4807,9 +5038,10 @@ async function checkResume() {
     actionsDiv.appendChild(pdfBtn);
     actionsDiv.appendChild(docxBtn);
     feedbackEl.appendChild(actionsDiv);
-  } catch (e) {
-    feedbackEl.innerHTML = `<p style="color: #ef4444;">Analysis failed: ${e.message}</p>`;
-    console.error(e);
+
+  } catch (err) {
+    console.error("Analysis Error:", err);
+    feedbackEl.innerHTML = `<p style="color: #ef4444;">Error: ${err.message}</p>`;
   }
 }
 window.checkResume = checkResume;
@@ -5373,6 +5605,26 @@ window.deleteTrendingQuery = deleteTrendingQuery;
 let zenChatHistory = [];
 let zenRecognition = null;
 
+function showZenTypingIndicator() {
+  const orb = document.querySelector("#zen-chat-history .zen-orb");
+  if (orb) orb.classList.add("synthesizing");
+  
+  const indicator = document.getElementById("zen-typing-indicator");
+  if (indicator) indicator.classList.remove("hidden");
+  const history = document.getElementById("zen-chat-history");
+  if (history) {
+    history.scrollTo({ top: history.scrollHeight, behavior: 'smooth' });
+  }
+}
+
+function hideZenTypingIndicator() {
+  const orb = document.querySelector("#zen-chat-history .zen-orb");
+  if (orb) orb.classList.remove("synthesizing");
+
+  const indicator = document.getElementById("zen-typing-indicator");
+  if (indicator) indicator.classList.add("hidden");
+}
+
 function setZenInput(text) {
   const input = document.getElementById("zen-input");
   if (input) {
@@ -5388,32 +5640,35 @@ function switchStudyTab(tab) {
   const notesView = document.getElementById("study-notes-view");
   const zenView = document.getElementById("study-zen-view");
 
+  // Abort any ongoing chat when switching
+  if (currentChatController) currentChatController.abort();
+
+  // Scroll the section to the top so the user sees the header, not the bottom
+  const workspace = document.getElementById("study-section");
+  if (workspace) workspace.scrollTop = 0;
+
   if (tab === "notes") {
     notesTab.classList.add("active");
     zenTab.classList.remove("active");
     notesView.classList.remove("hidden");
-    notesView.style.display = "flex";
     zenView.classList.add("hidden");
-    zenView.style.display = "none";
+    
+    // Refocus document chat if active (preventScroll avoids page jump)
+    const docInput = document.getElementById("document-chat-input");
+    if (docInput && currentStudyMaterialId) docInput.focus({ preventScroll: true });
   } else {
     zenTab.classList.add("active");
     notesTab.classList.remove("active");
     zenView.classList.remove("hidden");
-    zenView.style.display = "flex";
     notesView.classList.add("hidden");
-    notesView.style.display = "none";
     
-    // Smooth scroll and focus
-    const history = document.getElementById("zen-chat-history");
-    if (history) history.scrollTop = history.scrollHeight;
-    
+    // Focus the zen input without scrolling the page
     setTimeout(() => {
       const zenInput = document.getElementById("zen-input");
-      if (zenInput) zenInput.focus();
+      if (zenInput) zenInput.focus({ preventScroll: true });
     }, 100);
   }
 }
-
 async function sendZenMessage() {
   const input = document.getElementById("zen-input");
   const text = input.value.trim();
@@ -5425,9 +5680,13 @@ async function sendZenMessage() {
 
   input.value = "";
   appendZenMessage(text, "user");
+  showZenTypingIndicator();
 
   const welcome = document.querySelector("#zen-chat-history .welcome-chat");
   if (welcome) welcome.remove();
+  
+  const canvas = document.querySelector("#zen-chat-history .welcome-canvas");
+  if (canvas) canvas.remove();
 
   try {
     const response = await fetch(`${API_URL}/study-buddy/zen`, {
@@ -5444,6 +5703,7 @@ async function sendZenMessage() {
     });
 
     const data = await response.json();
+    hideZenTypingIndicator();
     if (data.response) {
       appendZenMessage(data.response, "zen");
       zenChatHistory.push({ role: "user", content: text });
@@ -5452,6 +5712,8 @@ async function sendZenMessage() {
       appendZenMessage("Zen is momentarily offline. Please try again.", "zen");
     }
   } catch (err) {
+    if (err.name === 'AbortError') return;
+    hideZenTypingIndicator();
     console.error("Zen Error:", err);
     appendZenMessage(
       "Zen encountered a neural hiccup. Check your connection.",
@@ -5460,60 +5722,107 @@ async function sendZenMessage() {
   }
 }
 
+function renderZenContent(element) {
+  // 1. Math Rendering (KaTeX)
+  if (typeof renderMathInElement === 'function') {
+    renderMathInElement(element, {
+      delimiters: [
+        {left: '$$', right: '$$', display: true},
+        {left: '$', right: '$', display: false},
+        {left: '\\(', right: '\\)', display: false},
+        {left: '\\[', right: '\\]', display: true}
+      ],
+      throwOnError: false
+    });
+  }
+  
+  // 2. Syntax Highlighting (Highlight.js)
+  if (typeof hljs !== 'undefined') {
+    element.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+    });
+  }
+}
+
 function appendZenMessage(text, role) {
   const history = document.getElementById("zen-chat-history");
   if (!history) return;
 
   const messageItem = document.createElement("div");
-  messageItem.className = `zen-message-item ${role}`;
+  messageItem.className = `zen-message-item ${role} animate-fadeIn`;
 
   const bubble = document.createElement("div");
   bubble.className = `zen-message ${role}`;
 
   let displayText = text;
-  let followups = null;
+  let followupsContainer = null;
 
-  // Extract follow-up questions if any
-  const followupMatch =
-    text.match(/Follow-up questions:[\s\S]*$/i) ||
-    text.match(/Would you like to know about:[\s\S]*$/i);
+  // Intelligent Follow-up Detection
+  // We look for questions at the end, often starting with "Follow-up" or matching the chip pattern
+  const followupPatterns = [
+    /Relevant Questions:[\s\S]*$/i,
+    /Follow-up questions:[\s\S]*$/i,
+    /Would you like to know about:[\s\S]*$/i,
+    /\n\n\d\. .*\?\n\d\. .*\?\n\d\. .*\?$/ // Matches 3 questions pattern
+  ];
 
-  if (followupMatch && role === "zen") {
-    const followupText = followupMatch[0];
-    displayText = text.replace(followupText, "");
+  let matchedPattern = null;
+  for (const pattern of followupPatterns) {
+    const match = text.match(pattern);
+    if (match && role === "zen") {
+      matchedPattern = match[0];
+      break;
+    }
+  }
 
-    followups = document.createElement("div");
-    followups.className = "zen-followup-container";
+  if (matchedPattern) {
+    displayText = text.replace(matchedPattern, "");
+    followupsContainer = document.createElement("div");
+    followupsContainer.className = "zen-followup-container";
 
-    const questions = followupText
+    const questions = matchedPattern
       .split("\n")
       .filter((q) => q.trim() && q.includes("?"));
+      
     questions.forEach((q) => {
       const cleanQ = q.replace(/^[\d.*-\s]+/, "").trim();
       if (cleanQ) {
-        const btn = document.createElement("button");
-        btn.className = "zen-followup-btn";
-        btn.innerText = cleanQ;
-        btn.onclick = () => {
-          document.getElementById("zen-input").value = cleanQ;
-          sendZenMessage();
+        const chip = document.createElement("button");
+        chip.className = "zen-followup-chip";
+        chip.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> ${cleanQ}`;
+        chip.onclick = () => {
+          const zenInput = document.getElementById("zen-input");
+          if (zenInput) {
+            zenInput.value = cleanQ;
+            sendZenMessage();
+          }
         };
-        followups.appendChild(btn);
+        followupsContainer.appendChild(chip);
       }
     });
   }
 
-  bubble.innerHTML = formatText(displayText);
+  // Use marked for premium markdown rendering
+  if (typeof marked !== 'undefined') {
+      bubble.innerHTML = role === "zen" ? marked.parse(displayText) : formatText(displayText);
+  } else {
+      bubble.innerHTML = formatText(displayText);
+  }
+
+  // Apply syntax highlighting and math
+  renderZenContent(bubble);
+
   messageItem.appendChild(bubble);
 
   if (role === "zen") {
+    // Action Buttons
     const actions = document.createElement("div");
     actions.className = "zen-actions";
 
     const copyBtn = document.createElement("button");
     copyBtn.className = "zen-action-btn";
     copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
-    copyBtn.title = "Copy";
+    copyBtn.title = "Copy Analysis";
     copyBtn.onclick = () => {
       navigator.clipboard.writeText(displayText);
       showStatusPopup("Copied to clipboard!", 1000);
@@ -5522,20 +5831,27 @@ function appendZenMessage(text, role) {
     const speakBtn = document.createElement("button");
     speakBtn.className = "zen-action-btn";
     speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-    speakBtn.title = "Listen";
+    speakBtn.title = "Synthesize Speech";
     speakBtn.onclick = () => speakText(displayText, bubble, speakBtn);
 
     actions.appendChild(copyBtn);
     actions.appendChild(speakBtn);
     messageItem.appendChild(actions);
 
-    if (followups) {
-      messageItem.appendChild(followups);
+    if (followupsContainer && followupsContainer.children.length > 0) {
+      messageItem.appendChild(followupsContainer);
     }
   }
 
   history.appendChild(messageItem);
-  history.scrollTop = history.scrollHeight;
+  
+  // High-fidelity Auto-scroll
+  setTimeout(() => {
+    history.scrollTo({
+      top: history.scrollHeight,
+      behavior: 'smooth'
+    });
+  }, 100);
 }
 
 function newZenChat() {
@@ -5580,7 +5896,7 @@ function startZenSTT() {
   zenRecognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     document.getElementById("zen-input").value = transcript;
-    sendZenMessage();
+    // Removed auto-send to allow review
   };
 
   zenRecognition.start();
