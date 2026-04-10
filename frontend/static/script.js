@@ -875,7 +875,7 @@ async function submitProfileUpdate() {
    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
 
    try {
-       const response = await fetch("/auth/update-profile", {
+       const response = await fetch("/update-profile", {
            method: "PUT",
            headers: {
                "Content-Type": "application/json",

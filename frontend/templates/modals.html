@@ -1225,16 +1225,24 @@
         <div class="profile-divider"></div>
         
         <div class="edit-profile-form">
-           <div class="premium-input-wrapper mb-15">
-             <i class="fa-solid fa-user input-icon"></i>
-             <input type="text" id="edit-first-name" placeholder="First Name" title="First Name">
+           <label class="edit-field-label" for="edit-first-name">
+             <i class="fa-solid fa-user"></i> First Name
+           </label>
+           <div class="edit-input-group">
+             <input type="text" id="edit-first-name" class="edit-profile-input" placeholder="Enter your first name" title="First Name">
            </div>
-           <div class="premium-input-wrapper mb-25">
-             <i class="fa-solid fa-signature input-icon"></i>
-             <input type="text" id="edit-last-name" placeholder="Last Name" title="Last Name">
+           
+           <label class="edit-field-label" for="edit-last-name">
+             <i class="fa-solid fa-signature"></i> Last Name
+           </label>
+           <div class="edit-input-group">
+             <input type="text" id="edit-last-name" class="edit-profile-input" placeholder="Enter your last name" title="Last Name">
            </div>
            
            <div class="profile-actions-row">
+             <button class="btn-profile-secondary" onclick="closeEditProfileModal()">
+               <i class="fa-solid fa-xmark"></i> Cancel
+             </button>
              <button class="btn-profile-primary" id="save-profile-btn" onclick="submitProfileUpdate()">
                <i class="fa-solid fa-floppy-disk"></i> Save Changes
              </button>
