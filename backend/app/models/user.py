@@ -37,3 +37,7 @@ class VerifyOTPRequest(BaseModel):
 class VerifyOnlyOTPRequest(BaseModel):
     email: str
     otp: str
+
+class ProfileUpdateRequest(BaseModel):
+    first_name: str
+    last_name: str

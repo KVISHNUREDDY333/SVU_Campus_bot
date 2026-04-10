@@ -10,7 +10,7 @@ from authlib.integrations.starlette_client import OAuth
 from ..core.security import verify_password, get_password_hash, create_access_token
 from ..core.config import Config
 from ..core import database
-from ..models.user import User, Token, RegisterRequest, ForgotPasswordRequest, VerifyOTPRequest, VerifyOnlyOTPRequest
+from ..models.user import User, Token, RegisterRequest, ForgotPasswordRequest, VerifyOTPRequest, VerifyOnlyOTPRequest, ProfileUpdateRequest
 from ..services.email_service import send_otp_email
 from jose import JWTError, jwt
 from ..services.logging_service import log_event
@@ -84,7 +84,15 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         data={"sub": user['username'], "role": user['role']}, expires_delta=access_token_expires
     )
     log_event("INFO", f"User login: {user['username']}")
-    return {"access_token": access_token, "token_type": "bearer", "role": user['role'], "username": user['username'], "full_name": user.get('full_name')}
+    return {
+        "access_token": access_token, 
+        "token_type": "bearer", 
+        "role": user['role'], 
+        "username": user['username'], 
+        "full_name": user.get('full_name'),
+        "first_name": user.get('first_name'),
+        "last_name": user.get('last_name')
+    }
 
 @router.post("/register", response_model=Token)
 async def register_user(user_data: RegisterRequest):
@@ -124,7 +132,9 @@ async def register_user(user_data: RegisterRequest):
             "token_type": "bearer", 
             "role": "student", 
             "username": user_data.email, 
-            "full_name": full_name
+            "full_name": full_name,
+            "first_name": user_data.first_name,
+            "last_name": user_data.last_name
         }
     except HTTPException:
         raise
@@ -310,3 +320,28 @@ async def auth_google(request: Request):
         traceback.print_exc()
         logger.error(f"Google Auth Error: {e}")
         return RedirectResponse(url="/?error=GoogleAuthFailed")
+
+@router.put("/update-profile")
+async def update_profile(request: ProfileUpdateRequest, current_user: User = Depends(get_current_user)):
+    try:
+        full_name = f"{request.first_name} {request.last_name}".strip()
+        result = database.users_db.update_one(
+            {"username": current_user.username},
+            {"$set": {
+                "first_name": request.first_name,
+                "last_name": request.last_name,
+                "full_name": full_name
+            }}
+        )
+        
+        log_event("SUCCESS", f"Profile updated for user: {current_user.username}")
+        return {
+            "status": "success", 
+            "message": "Profile updated successfully", 
+            "full_name": full_name,
+            "first_name": request.first_name,
+            "last_name": request.last_name
+        }
+    except Exception as e:
+        logger.error(f"Profile Update Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

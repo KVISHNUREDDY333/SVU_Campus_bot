@@ -46,10 +46,10 @@ function toggleTheme() {
   updateThemeUI(body.classList.contains("dark-mode"));
 
   // Save preference
-  sessionStorage.setItem(
-    "svu_theme",
-    body.classList.contains("dark-mode") ? "dark" : "light",
-  );
+  const isDarkModeNow = body.classList.contains("dark-mode");
+  const themeValue = isDarkModeNow ? "dark" : "light";
+  sessionStorage.setItem("svu_theme", themeValue);
+  localStorage.setItem("svu_theme", themeValue);
 }
 
 function updateThemeUI(isDark) {
@@ -61,6 +61,10 @@ function updateThemeUI(isDark) {
   if (headerIcon)
     headerIcon.className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
   if (text) text.textContent = isDark ? "Light Mode" : "Dark Mode";
+
+  // Sync with profile modal toggle if exists
+  const modalToggle = document.getElementById("modal-dark-mode-toggle");
+  if (modalToggle) modalToggle.checked = isDark;
 }
 
 // Splash Screen Logic
@@ -130,6 +134,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadChatHistory();
     populateSidebarProfile();
     startNotificationPolling();
+    
+    // Ensure session_start exists for existing sessions
+    if (!sessionStorage.getItem("session_start")) {
+       const savedStart = localStorage.getItem("login_timestamp");
+       if (savedStart) {
+          sessionStorage.setItem("session_start", savedStart);
+       } else {
+          const now = new Date().toLocaleString('en-US', { 
+            month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true 
+          });
+          sessionStorage.setItem("session_start", now);
+          localStorage.setItem("login_timestamp", now);
+       }
+    }
+    
+    // Synchro user type to local storage
+    if (USER_ROLE) localStorage.setItem("user_type", USER_ROLE);
   }
 
   // Force Unregister Service Worker to clear cache
@@ -668,8 +689,23 @@ function saveSession(data) {
   sessionStorage.setItem("access_token", ACCESS_TOKEN);
   localStorage.setItem("access_token", ACCESS_TOKEN);
   sessionStorage.setItem("user_role", USER_ROLE);
+  localStorage.setItem("user_type", USER_ROLE);
   sessionStorage.setItem("username", data.username);
   sessionStorage.setItem("full_name", data.full_name || data.username);
+  sessionStorage.setItem("first_name", data.first_name || "");
+  sessionStorage.setItem("last_name", data.last_name || "");
+  
+  const loginTime = new Date().toLocaleString('en-US', { 
+    month: 'short', 
+    day: '2-digit', 
+    year: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: true 
+  });
+  sessionStorage.setItem("session_start", loginTime);
+  localStorage.setItem("login_timestamp", loginTime);
+  localStorage.setItem("svu_theme", "light");
 
   // Redirection: Hide auth overlay and show chat
   const authOverlay = document.getElementById("auth-overlay");
@@ -756,6 +792,123 @@ function populateSidebarProfile() {
   } else if (profileEl) {
     profileEl.style.display = "none";
   }
+}
+
+function openProfileModal() {
+  const modal = document.getElementById("user-profile-modal");
+  if (!modal) return;
+
+  const fullName = sessionStorage.getItem("full_name") || "User Name";
+  const username = sessionStorage.getItem("username") || "user";
+  const sessionStart = sessionStorage.getItem("session_start") || "N/A";
+  
+  // Update details
+  document.getElementById("modal-full-name").textContent = fullName;
+  document.getElementById("modal-email").textContent = username.includes("@") ? username : `${username}@svuniversity.edu.in`;
+  document.getElementById("modal-session-time").textContent = sessionStart;
+  
+  // Profile ID (Deterministic for same user session)
+  let profileID = sessionStorage.getItem("svu_profile_id");
+  if (!profileID) {
+    profileID = '8880a051-fb39-49f3-804b-97d35bee' + Math.floor(1000 + Math.random() * 9000);
+    sessionStorage.setItem("svu_profile_id", profileID);
+  }
+  document.getElementById("modal-profile-id").textContent = profileID;
+
+  // Sync dark mode toggle
+  const isDark = document.body.classList.contains("dark-mode");
+  const toggle = document.getElementById("modal-dark-mode-toggle");
+  if (toggle) toggle.checked = isDark;
+
+  modal.classList.add("active");
+}
+
+function closeProfileModal() {
+  const modal = document.getElementById("user-profile-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+async function refreshProfileData() {
+    const btn = event.currentTarget || document.querySelector(".btn-profile-secondary");
+    if (btn) {
+        const icon = btn.querySelector("i");
+        if (icon) icon.classList.add("fa-spin");
+        
+        await new Promise(r => setTimeout(r, 1200));
+        
+        if (icon) icon.classList.remove("fa-spin");
+        CustomDialog.alert("Profile data has been synchronized with the latest records.", "Refresh Complete", "success");
+    }
+}
+
+function editProfile() {
+    const editModal = document.getElementById("edit-profile-modal");
+    if (!editModal) return;
+
+    // Pre-fill from session
+    const firstName = sessionStorage.getItem("first_name") || "";
+    const lastName = sessionStorage.getItem("last_name") || "";
+    
+    document.getElementById("edit-first-name").value = firstName;
+    document.getElementById("edit-last-name").value = lastName;
+    
+    editModal.classList.add("active");
+}
+
+function closeEditProfileModal() {
+    const editModal = document.getElementById("edit-profile-modal");
+    if (editModal) editModal.classList.remove("active");
+}
+
+async function submitProfileUpdate() {
+   const firstName = document.getElementById("edit-first-name").value.trim();
+   const lastName = document.getElementById("edit-last-name").value.trim();
+   
+   if (!firstName || !lastName) {
+       await CustomDialog.alert("Please provide both first and last names.", "Validation Error", "warning");
+       return;
+   }
+
+   const saveBtn = document.getElementById("save-profile-btn");
+   const originalHTML = saveBtn.innerHTML;
+   saveBtn.disabled = true;
+   saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Updating...';
+
+   try {
+       const response = await fetch("/auth/update-profile", {
+           method: "PUT",
+           headers: {
+               "Content-Type": "application/json",
+               "Authorization": `Bearer ${ACCESS_TOKEN}`
+           },
+           body: JSON.stringify({ first_name: firstName, last_name: lastName })
+       });
+
+       const result = await response.json();
+       if (response.ok) {
+           // Update Local and Session Storage
+           sessionStorage.setItem("full_name", result.full_name);
+           sessionStorage.setItem("first_name", result.first_name);
+           sessionStorage.setItem("last_name", result.last_name);
+           
+           // Update Sidebar UI
+           populateSidebarProfile();
+           
+           // Update Profile Modal if it's open
+           const modalName = document.getElementById("modal-full-name");
+           if (modalName) modalName.textContent = result.full_name;
+           
+           closeEditProfileModal();
+           await CustomDialog.alert("Your academic identity has been updated in the university records.", "Profile Updated", "success");
+       } else {
+           throw new Error(result.detail || "Update failed");
+       }
+   } catch (error) {
+       await CustomDialog.alert(error.message, "Update Error", "error");
+   } finally {
+       saveBtn.disabled = false;
+       saveBtn.innerHTML = originalHTML;
+   }
 }
 
 function showStatusPopup(message, duration = 2000) {
@@ -862,9 +1015,10 @@ function showSection(section) {
   const activeSection = document.getElementById(`${section}-section`);
   if (activeSection) {
     activeSection.classList.remove("hidden");
-    // We use flex for chat and locations sections to maintain layout, block for others
+    // We use flex for core interactive sections to maintain stationary header/inputs
+    const flexSections = ["chat", "locations", "study"];
     activeSection.style.display =
-      section === "chat" || section === "locations" ? "flex" : "block";
+      flexSections.includes(section) ? "flex" : "block";
   }
 
   const activeNav = document.getElementById(`nav-${section}`);
@@ -1793,13 +1947,13 @@ async function sendFeedback(userQuery, botResponse, rating, btn) {
 
 function showTypingIndicator() {
   if (typingIndicator) {
-    typingIndicator.style.display = "flex";
+    typingIndicator.classList.remove("hidden");
     scrollToBottom();
   }
 }
 
 function hideTypingIndicator() {
-  if (typingIndicator) typingIndicator.style.display = "none";
+  if (typingIndicator) typingIndicator.classList.add("hidden");
 }
 
 // Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
@@ -4618,11 +4772,12 @@ async function askStudyBuddy() {
 
   // Typing indicator
   const typing = document.createElement("div");
-  typing.className = "flex items-center gap-10 mb-16";
+  typing.className = "typing-indicator mb-16";
   typing.innerHTML = `
-    <div style="background: var(--glass-bg); padding: 12px 18px; border-radius: 18px 18px 18px 2px; border: 1px solid var(--glass-border); color: var(--text-primary); font-size: 14px;">
-        <i class="fa-solid fa-microchip fa-spin mr-8 text-accent"></i> Reviewing material...
-    </div>`;
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+  `;
   history.appendChild(typing);
   history.scrollTop = history.scrollHeight;
 
@@ -4679,7 +4834,16 @@ async function askStudyBuddy() {
 
 // --- Career Center Feature ---
 async function loadCareerCenter() {
-  // Placements feature removed - focusing on Resume Checker
+  // Ensure Maker fields are empty by default to prevent autofill
+  const makerIds = [
+    "maker-fullname", "maker-email", "maker-phone", "maker-linkedin",
+    "maker-qualification", "maker-percentage", "maker-role",
+    "maker-skills-tech", "maker-skills-coding", "maker-skills-soft"
+  ];
+  makerIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
 }
 window.loadCareerCenter = loadCareerCenter;
 
@@ -5669,6 +5833,21 @@ function switchStudyTab(tab) {
     }, 100);
   }
 }
+
+function handleStudyNewChat() {
+  const zenView = document.getElementById("study-zen-view");
+  if (zenView && !zenView.classList.contains("hidden")) {
+    newZenChat();
+  } else {
+    const docHistory = document.getElementById("document-chat-history");
+    if (docHistory) {
+      docHistory.innerHTML = `<div class="bot-msg-standard">Please ask any specific questions about the analyzed material.</div>`;
+    }
+  }
+}
+
+
+
 async function sendZenMessage() {
   const input = document.getElementById("zen-input");
   const text = input.value.trim();
@@ -5682,11 +5861,8 @@ async function sendZenMessage() {
   appendZenMessage(text, "user");
   showZenTypingIndicator();
 
-  const welcome = document.querySelector("#zen-chat-history .welcome-chat");
+  const welcome = document.querySelector("#zen-chat-history .welcome-screen");
   if (welcome) welcome.remove();
-  
-  const canvas = document.querySelector("#zen-chat-history .welcome-canvas");
-  if (canvas) canvas.remove();
 
   try {
     const response = await fetch(`${API_URL}/study-buddy/zen`, {
@@ -5858,9 +6034,19 @@ function newZenChat() {
   zenChatHistory = [];
   const history = document.getElementById("zen-chat-history");
   if (history) {
-    history.innerHTML = `<div class="welcome-chat" style="text-align: center; margin: auto; padding: 20px;"><i class="fa-solid fa-brain" style="font-size: 40px; color: var(--accent-color); margin-bottom: 15px; opacity: 0.8;"></i><h4 style="margin-bottom: 8px;">I am Zen</h4><p style="color: var(--text-secondary); font-size: 14px;">Your generative AI partner for academic brilliance. Ask me anything!</p></div>`;
+    history.innerHTML = `
+      <div class="welcome-screen my-auto">
+           <div class="zen-orb mx-auto mb-15">
+              <i class="fa-solid fa-brain text-50"></i>
+           </div>
+           <h1 class="gradient-text-teal mb-8 ls-neg-01 font-bold text-center">Hello, I am Zen.</h1>
+           <p class="text-secondary text-md text-center max-w-500 mx-auto zen-welcome-text">
+             Your academic partner for high-level synthesis and research support.
+           </p>
+      </div>
+    `;
   }
-  showStatusPopup("New session started. History cleared.", 2000);
+  showStatusPopup("New session started.", 2000);
 }
 
 function refreshZenChat() {

@@ -17,10 +17,12 @@
   -ms-overflow-style: none; /* IE and Edge */
 }
 
-/* THE DEFINITIVE NUCLEAR OPTION FOR HIDING SCROLLBARS - GLOBAL RESET */
 * {
   -ms-overflow-style: none !important; /* IE and Edge */
-  @supports (scrollbar-width: none) {
+}
+
+@supports (scrollbar-width: none) {
+  * {
     scrollbar-width: none !important; /* Firefox and Modern Chrome */
   }
 }
@@ -413,11 +415,76 @@ body.dark-mode .main-content {
   background: #0f172a;
 }
 
+#study-section:not(.hidden) {
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  height: 100% !important;
+  min-height: 0;
+}
+
+#study-section .header-premium {
+  flex-shrink: 0;
+  z-index: 100;
+  position: relative; /* Fixed context */
+}
+
+.study-tab-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* REQUIRED for flex children to scroll */
+  overflow: hidden;
+  position: relative;
+}
+
+#study-notes-view {
+    overflow-y: auto;
+}
+
+#study-zen-view.zen-viewport {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    padding-bottom: 0 !important;
+}
+
+#zen-chat-history {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 150px !important; /* Space for the floating bar */
+    scroll-behavior: smooth;
+    width: 100%;
+}
+
+/* Fix Zen Input Bar vertically at bottom */
+#study-zen-view .input-area-wrapper {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+    background: transparent;
+    pointer-events: none; /* Let clicks pass to history if needed */
+    padding-bottom: 25px; /* Visual spacing for the pill */
+}
+
+#study-zen-view .input-container {
+    pointer-events: auto; /* Active input container */
+    margin: 0 auto;
+    width: 90%;
+    max-width: 850px;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.05) !important;
+}
 .content-section {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto; /* Enable internal scrolling up to where data is */
+  overflow-y: auto;
   padding: 32px;
   animation: fadeInSlide 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
@@ -555,17 +622,21 @@ body.dark-mode .header-actions i:hover, body.dark-mode .header-globe-link:hover 
 }
 
 .welcome-screen {
-  min-height: calc(100% - 40px);
-  height: auto;
-  flex-shrink: 0; /* Prevent flex container from shrinking smaller than content */
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* Ensure top isn't clipped if overflowing */
   animation: fadeInUp 0.8s cubic-bezier(0.23, 1, 0.32, 1);
-  padding: 40px 20px;
+  padding: 40px 20px 0 20px;
   text-align: center;
   width: 100%;
+}
+/* Flex spacer to safely center welcome screen content vertically if there is room */
+.welcome-screen::before,
+.welcome-screen::after {
+  content: "";
+  flex: 1;
 }
 
 .welcome-badge {
@@ -750,7 +821,7 @@ body.dark-mode .suggestion-card:hover {
 .message-body {
   display: flex;
   flex-direction: column;
-  max-width: 85%;
+  max-width: 92%;
   gap: 4px;
 }
 
@@ -2063,37 +2134,34 @@ input:checked + .slider-small:before {
 
 .typing-indicator {
   display: flex;
-  gap: 6px;
-  padding: 0 20px;
+  gap: 5px;
+  padding: 12px 18px;
   margin-bottom: 20px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 18px 18px 18px 2px;
+  width: fit-content;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
 }
 
 .typing-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--text-secondary);
+  width: 7px;
+  height: 7px;
+  background: #0d9488;
   border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out both;
+  animation: typingBounce 1.5s infinite ease-in-out both;
 }
 
-.typing-dot:nth-child(1) {
-  animation-delay: -0.32s;
-}
+.typing-dot:nth-child(1) { animation-delay: 0s; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-.typing-dot:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes bounce {
-  0%,
-  80%,
-  100% {
-    transform: scale(0);
-  }
-
-  40% {
-    transform: scale(1);
-  }
+@keyframes typingBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+  40% { transform: translateY(-5px); opacity: 1; }
 }
 
 /* Global scrollbars hidden */
@@ -3746,7 +3814,7 @@ body.dark-mode tr:hover td {
 .zen-message-item {
   display: flex;
   flex-direction: column;
-  max-width: 85%;
+  max-width: 92%;
   gap: 4px;
 }
 
@@ -4413,6 +4481,10 @@ body.dark-mode .mobile-menu-btn:hover {
   }
 }
 
+#dialog-modal {
+  z-index: 10005 !important;
+}
+
 /* --- Custom Dialog Modal Styles --- */
 .dialog-content {
   border-radius: 28px !important;
@@ -4900,7 +4972,8 @@ body.dark-mode .faq-search-wrapper:focus-within {
 }
 
 .zen-message {
-    max-width: 85%;
+    max-width: 100ch;
+    width: fit-content;
     padding: 16px 24px;
     border-radius: 24px;
     font-size: 15.5px;
@@ -5005,33 +5078,7 @@ body.dark-mode .zen-followup-chip {
     margin-top: 8px;
 }
 
-.zen-typing-indicator {
-    display: flex;
-    align-items: center;
-    padding: 12px 20px;
-    margin-bottom: 20px;
-    background: rgba(255, 255, 255, 0.4);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 20px;
-    width: fit-content;
-    animation: fadeIn 0.3s ease-out;
-}
-
-body.dark-mode .zen-typing-indicator {
-    background: rgba(30, 41, 59, 0.6);
-    border-color: rgba(255, 255, 255, 0.1);
-}
-
-.zen-dot {
-    width: 6px;
-    height: 6px;
-    background: var(--accent-color);
-    border-radius: 50%;
-    margin-right: 4px;
-    animation: zenPulse 1.4s infinite ease-in-out;
-}
+/* Optimized Zen Typing Indicator removed from here to be pinned above input elsewhere */
 
 .zen-dot:nth-child(2) { animation-delay: 0.2s; }
 .zen-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -5353,6 +5400,9 @@ body.dark-mode .modal-footer-shared {
 
 .modal-header-slate { background: linear-gradient(135deg, #64748b, #475569) !important; padding: 25px 30px !important; border-bottom: none !important; }
 .flex-wrap { flex-wrap: wrap !important; }
+.flex-1 { flex: 1 !important; }
+.my-auto { margin-top: auto !important; margin-bottom: auto !important; }
+.text-50 { font-size: 50px !important; }
 .grid-autofit-280 { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important; gap: 20px !important; }
 .divider-light { width: 100% !important; height: 2px !important; background: rgba(0,0,0,0.05) !important; margin: 15px 0 !important; }
 .mx-auto-max800 { max-width: 800px !important; margin: 0 auto !important; }
@@ -5845,7 +5895,8 @@ body.dark-mode .shadow-premium {
 .zen-viewport {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 120px);
+    flex: 1; /* Stretch properly inside flex parent */
+    min-height: 0; /* Important for scrollable flex children */
     position: relative;
     gap: 0 !important;
     padding: 0 !important;
@@ -5854,9 +5905,11 @@ body.dark-mode .shadow-premium {
 .zen-chat-panel {
     flex: 1;
     overflow-y: auto;
-    padding: 40px 20px 100px 20px;
+    padding: 30px 20px 120px 20px; /* Big bottom padding for absolute input bar */
     display: flex;
     flex-direction: column;
+    scroll-behavior: smooth;
+    position: relative;
 }
 
 .zen-welcome-text {
@@ -5916,7 +5969,7 @@ body.dark-mode .zen-chip:hover {
 /* Elite Floating Input Bar */
 .zen-input-bar {
     position: absolute;
-    bottom: 25px;
+    bottom: 30px; /* Raised slightly more for screen fitting */
     left: 50%;
     transform: translateX(-50%);
     width: 90%;
@@ -5984,8 +6037,46 @@ body.dark-mode .zen-input-inner {
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: var(--text-primary);
-    color: white;
+.zen-viewport .chat-area {
+    padding-bottom: 150px !important; /* Extra buffer so messages don't get trapped behind floating bar */
+}
+
+.zen-viewport .input-container {
+    background: rgba(255, 255, 255, 0.8) !important;
+    border-radius: 40px !important;
+    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.dark-mode .zen-viewport .input-container {
+    background: rgba(30, 41, 59, 0.8) !important;
+}
+
+.zen-viewport .send-btn {
+    background: #1e293b !important; /* Matte Black */
+    color: white !important;
+    border-radius: 50% !important;
+    width: 44px !important;
+    height: 44px !important;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+.zen-viewport .send-btn:hover {
+    transform: scale(1.1) rotate(-10deg) !important;
+    background: #000 !important;
+}
+
+.synthesizing-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: #64748b;
+    margin-left: 12px;
+    letter-spacing: 0.01em;
+}
+
+body.dark-mode .synthesizing-text {
+    color: #94a3b8;
+}
     border: none;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -6023,15 +6114,43 @@ body.dark-mode .glass-tool-btn:hover {
 .px-35 { padding-left: 35px; padding-right: 35px; }
 .py-18 { padding-top: 18px; padding-bottom: 18px; }
 
-/* scroll-mini hidden but scrollable */
+/* scroll-mini styled scrollbar for Zen AI */
 .scroll-mini {
   overflow-y: auto;
 }
 
+.scroll-mini:hover::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+}
+
 .scroll-mini::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+  display: block; /* Let's keep it visible so users know they can scroll */
+  width: 6px !important;
+  height: 6px !important;
+  background: transparent !important;
+}
+
+.scroll-mini::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.scroll-mini::-webkit-scrollbar-thumb {
+  background: rgba(13, 148, 136, 0.3) !important;
+  border-radius: 10px !important;
+  transition: background 0.3s ease;
+}
+
+.scroll-mini::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 148, 136, 0.6) !important;
+}
+
+body.dark-mode .scroll-mini::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.3) !important;
+}
+
+body.dark-mode .scroll-mini::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.6) !important;
 }
 /* Ensure Action icons in tables look clean */
 .icon-btn {
@@ -6754,25 +6873,12 @@ body.dark-mode .glass-modal-card {
    ZEN AI ASSISTANT PREMIUM UI 
 ============================================================== */
 
-/* Viewport and Layout */
-.zen-viewport {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    position: relative;
-    padding-bottom: 20px;
-}
-
-.zen-chat-panel {
-    flex: 1;
-    overflow-y: auto;
-    padding: 30px 20px;
-    display: flex;
-    flex-direction: column;
-    scroll-behavior: smooth;
-    position: relative;
-    will-change: transform, opacity;
+/* Floating actions inside Zen AI */
+.zen-floating-actions {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    z-index: 10;
 }
 
 /* Welcome Canvas */
@@ -6795,7 +6901,7 @@ body.dark-mode .glass-modal-card {
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-color), #0f766e);
+    background: linear-gradient(135deg, #0d948a, #3b82f6);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -6805,12 +6911,13 @@ body.dark-mode .glass-modal-card {
     animation: zenPulse 4s infinite alternate ease-in-out;
     margin-bottom: 25px;
     border: 2px solid rgba(255,255,255,0.2);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
 
 @keyframes zenPulse {
     0% { transform: scale(0.95); box-shadow: 0 0 20px rgba(13, 148, 136, 0.2), inset 0 0 10px rgba(255,255,255,0.3); }
-    100% { transform: scale(1.05); box-shadow: 0 0 50px rgba(13, 148, 136, 0.6), inset 0 0 20px rgba(255,255,255,0.6); }
+    100% { transform: scale(1.05); box-shadow: 0 0 50px rgba(59, 130, 246, 0.6), inset 0 0 20px rgba(255,255,255,0.6); }
 }
 
 body.dark-mode .zen-orb {
@@ -6819,13 +6926,14 @@ body.dark-mode .zen-orb {
 
 /* Gradient Text */
 .gradient-text-teal {
-    background: linear-gradient(135deg, var(--accent-color), #3b82f6);
+    background: linear-gradient(135deg, #0d948a, #3b82f6);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    letter-spacing: -1px;
-    margin-bottom: 15px;
-    animation: textShimmer 3s infinite linear;
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    letter-spacing: -2px;
+    margin-bottom: 20px;
+    font-weight: 800;
 }
 
 @keyframes textShimmer {
@@ -6837,6 +6945,7 @@ body.dark-mode .gradient-text-teal {
     background: linear-gradient(135deg, #2dd4bf, #60a5fa, #2dd4bf);
     background-size: 200% auto;
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -6873,6 +6982,7 @@ body.dark-mode .gradient-text-teal {
     display: flex;
     align-items: center;
     gap: 10px;
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
 }
 
@@ -6922,6 +7032,7 @@ body.dark-mode .zen-chip:hover {
     border-radius: 24px;
     padding: 10px 15px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     transition: all 0.3s ease;
 }
@@ -7004,23 +7115,43 @@ body.dark-mode .zen-input-inner:focus-within {
 }
 
 /* Typing Indicator Overlay */
+/* Unified Zen Typing Indicator (Pinned above input) */
 .zen-typing-indicator {
+    position: absolute;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 15px;
-    margin: 10px auto;
-    width: fit-content;
+    gap: 12px;
+    padding: 10px 24px;
     background: var(--glass-bg);
-    border-radius: 30px;
     border: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    transition: opacity 0.3s ease;
+    border-radius: 50px;
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: all 0.3s ease;
+    animation: slideUpFloat 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .zen-typing-indicator.hidden {
-    display: none;
+    display: none !important;
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+}
+
+.synthesizing-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    letter-spacing: 0.02em;
+}
+
+@keyframes slideUpFloat {
+    from { opacity: 0; transform: translateX(-50%) translateY(15px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .zen-dot {
@@ -7055,7 +7186,8 @@ body.dark-mode .zen-input-inner:focus-within {
     padding: 18px 25px;
     font-size: 16px;
     line-height: 1.7;
-    max-width: 85%;
+    max-width: 92%;
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
 }
 
@@ -7151,5 +7283,261 @@ body.dark-mode .zen-followup-chip:hover {
     background: #2dd4bf;
     color: #0f172a;
 }
+
+/* --- User Profile Modal Styles --- */
+.profile-modal-card {
+    max-width: 480px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(25px);
+    backdrop-filter: blur(25px);
+    padding: 40px;
+    border-radius: 28px;
+    text-align: center;
+    position: relative;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+    z-index: 1; /* Relative to its modal parent */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#user-profile-modal {
+    z-index: 10001; /* Lower than pop-up dialogs */
+}
+
+#user-profile-modal.active .profile-modal-card {
+    animation: modalScaleUp 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalScaleUp {
+    from { opacity: 0; transform: scale(0.9) translateY(30px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.modal-close-btn:hover { color: var(--text-primary); }
+
+.profile-avatar-large {
+    width: 130px;
+    height: 130px;
+    background: #f1f5f9;
+    border: 2px solid #e2e8f0;
+    border-radius: 50%;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 55px;
+    color: #94a3b8;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.profile-eyebrow {
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.profile-display-name {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+}
+
+.profile-display-email {
+    font-size: 15px;
+    color: #14b8a6;
+    font-weight: 500;
+    margin-bottom: 24px;
+}
+
+.profile-id-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.profile-id-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
+.profile-id-badge {
+    background: rgba(13, 148, 136, 0.05);
+    border: 1px solid rgba(13, 148, 136, 0.15);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 12px;
+    color: var(--text-primary);
+}
+
+.profile-divider {
+    height: 1px;
+    background: var(--glass-border);
+    margin: 25px 0;
+}
+
+.profile-session-box {
+    background: rgba(13, 148, 136, 0.05);
+    border: 1px solid rgba(13, 148, 136, 0.1);
+    padding: 12px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.session-info span {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+.session-timestamp {
+    font-family: monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0d9488;
+}
+
+.profile-preference-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--glass-border);
+    padding: 18px;
+    border-radius: 16px;
+    margin-bottom: 28px;
+    text-align: left;
+}
+
+.preference-title {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.preference-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 3px 0 0;
+}
+
+.switch-premium {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 24px;
+}
+
+.switch-premium input { opacity: 0; width: 0; height: 0; }
+
+.slider-premium {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255,255,255,0.1);
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider-premium:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider-premium { background-color: #0d9488; }
+input:checked + .slider-premium:before { transform: translateX(22px); }
+
+.profile-actions-row {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-profile-primary {
+    flex: 1;
+    background: linear-gradient(135deg, #14b8a6, #0d9488);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(13, 148, 136, 0.2);
+}
+
+.btn-profile-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 148, 136, 0.3);
+}
+
+.btn-profile-secondary {
+    flex: 1;
+    background: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--glass-border);
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-profile-secondary:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+/* Dark Mode Overrides for Profile Modal (Synchronized) */
+body.dark-mode .profile-modal-card {
+    background: rgba(15, 23, 42, 0.98);
+}
+body.dark-mode .profile-avatar-large {
+    background: #1e293b;
+    border-color: #334155;
+    color: #64748b;
+}
+
+/* Edit Profile Modal Overrides */
+.edit-profile-card { max-width: 440px; }
+.edit-profile-header { padding-bottom: 0; }
+.edit-profile-avatar { width: 80px; height: 80px; font-size: 32px; }
+.edit-profile-form { padding: 0 10px; }
+#edit-profile-modal { z-index: 10003; }
 
 

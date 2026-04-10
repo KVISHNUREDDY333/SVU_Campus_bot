@@ -883,7 +883,7 @@
             <label
               class="checkbox-container flex items-center gap-10 cursor-pointer text-sm text-primary mt-15"
             >
-              <input type="checkbox" id="resp-save-faq" checked />
+              <input type="checkbox" id="resp-save-faq" checked title="Save as FAQ" />
               Save as verified FAQ in Knowledge Base
             </label>
           </div>
@@ -1205,6 +1205,94 @@
         <div class="dialog-footer">
           <button id="dialog-cancel-btn" class="btn-dialog-ghost">Cancel</button>
           <button id="dialog-confirm-btn" class="btn-dialog-primary">Confirm</button>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="edit-profile-modal" class="modal">
+      <div class="modal-content profile-modal-card edit-profile-card">
+        <button class="modal-close-btn" onclick="closeEditProfileModal()">&times;</button>
+        <div class="profile-header-main edit-profile-header">
+           <div class="profile-avatar-large edit-profile-avatar">
+             <i class="fa-solid fa-user-pen"></i>
+           </div>
+           <h2 class="profile-display-name">Edit Identity</h2>
+           <p class="profile-display-email">Update your official name records</p>
+        </div>
+        
+        <div class="profile-divider"></div>
+        
+        <div class="edit-profile-form">
+           <div class="premium-input-wrapper mb-15">
+             <i class="fa-solid fa-user input-icon"></i>
+             <input type="text" id="edit-first-name" placeholder="First Name" title="First Name">
+           </div>
+           <div class="premium-input-wrapper mb-25">
+             <i class="fa-solid fa-signature input-icon"></i>
+             <input type="text" id="edit-last-name" placeholder="Last Name" title="Last Name">
+           </div>
+           
+           <div class="profile-actions-row">
+             <button class="btn-profile-primary" id="save-profile-btn" onclick="submitProfileUpdate()">
+               <i class="fa-solid fa-floppy-disk"></i> Save Changes
+             </button>
+           </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- User Profile Details Modal -->
+    <div id="user-profile-modal" class="modal">
+      <div class="modal-content profile-modal-card">
+        <button class="modal-close-btn" onclick="closeProfileModal()">&times;</button>
+        
+        <div class="profile-header-main">
+          <div class="profile-avatar-wrapper">
+             <div class="profile-avatar-large">
+               <i class="fa-solid fa-user"></i>
+             </div>
+          </div>
+          <p class="profile-eyebrow">MY PROFILE</p>
+          <h2 id="modal-full-name" class="profile-display-name">Username</h2>
+          <p id="modal-email" class="profile-display-email">user@example.com</p>
+          
+          <div class="profile-id-section">
+            <span class="profile-id-label">PROFILE ID:</span>
+            <div class="profile-id-badge" id="modal-profile-id">ID-00000000-0000-0000</div>
+          </div>
+        </div>
+
+        <div class="profile-divider"></div>
+
+        <div class="profile-session-box">
+          <div class="session-info">
+             <span><i class="fa-solid fa-signal text-secondary"></i> ACTIVE SESSION STARTED</span>
+             <p id="modal-session-time" class="session-timestamp">Apr 10, 2026, 04:23 PM</p>
+          </div>
+        </div>
+
+        <div class="profile-preference-card">
+           <div class="preference-info">
+             <p class="preference-title">Dark Mode Preference</p>
+             <p class="preference-desc">Switch between light and dark aesthetics</p>
+           </div>
+           <div class="preference-action">
+             <label class="switch-premium">
+               <input type="checkbox" id="modal-dark-mode-toggle" onchange="toggleTheme()" title="Toggle dark mode preference">
+               <span class="slider-premium rounded-50"></span>
+             </label>
+           </div>
+        </div>
+
+        <div class="profile-actions-row">
+            <button class="btn-profile-primary" onclick="editProfile()">
+              <i class="fa-solid fa-user-pen"></i> Edit Profile
+            </button>
+            <button class="btn-profile-secondary" onclick="refreshProfileData()">
+              <i class="fa-solid fa-rotate"></i> Refresh Data
+            </button>
         </div>
       </div>
     </div>

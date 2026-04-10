@@ -29,33 +29,39 @@ async def perform_resume_analysis(resume_text: str, target_role: Optional[str] =
     target_role_context = f"Target Job Role: {target_role}" if target_role else "Target Job Role: Not Specified (General Analysis)"
     
     prompt = f"""
-    You are an elite Career Strategy Expert and Technical Recruiter with deep knowledge of SV University standards and global industry expectations. 
-    Analyze the following resume text with extreme detail and provide a comprehensive report.
+    You are an elite Career Strategy Expert and Technical Recruiter at a Fortune 500 company.
+    
+    TASK: Analyze the following resume text with surgical precision. Provide a HIGH-FIDELITY evaluation grounded in modern industry requirements and university placement standards.
     
     {target_role_context}
     
-    Guidelines to consider:
+    Placement Guidelines:
     {guidelines}
     
-    Please structure your response with the following sections using clear Markdown:
+    **CRITICAL ANALYSIS FRAMEWORK**:
+    - **ACCURACY**: Every strength or weakness must be directly evidenced by the provided text.
+    - **RELEVANCE**: Tailor all suggestions to the specific technical stacks used in {target_role if target_role else 'modern entry-level roles'}.
+    - **REASONING**: Briefly explain WHY a change is needed (e.g., "ATS systems cannot parse column-based headers").
+
+    Please structure your response with these sections:
     
     **📊 Resume Score: [X/10]**
-    Provide a justification for this score based on completeness and impact.
+    Provide a data-driven justification focused on exact skill matching, impact quantization (numbers/metrics), and structural integrity.
     
     **🌟 Key Strengths**
-    Highlight the most marketable aspects of the resume. What makes this candidate stand out?
+    List the most MARKETABLE assets found in the text.
     
     **🔍 Opportunity for Improvement (Weaknesses)**
-    Point out missing keywords, vague duty descriptions, or gaps in information specific to SVU guidelines.
+    Identify specific missing keywords, vague phrases (e.g., "responsible for"), or missing metrics.
     
     **💻 Technical & Soft Skills Analysis**
-    Evaluate the skills listed. Are they relevant for the target role? Suggest 3-5 high-demand skills to add based on the candidate's field and target role.
+    Critically evaluate if the skills match the {target_role or 'industry standards'}. Suggest 3-5 high-demand skills to bridge the gap.
     
     **🚀 Actionable Roadmap**
-    Provide 5 specific, high-impact bullet points the candidate should change or add IMMEDIATELY to double their interview chances for the target role.
+    Give 5 HIGH-IMPACT bullet points for immediate execution.
     
     **🛠 ATS Compatibility Check**
-    Analyze how well this resume would be parsed by Applicant Tracking Systems. 
+    Evaluate parseability and layout risks.
     
     Resume Text:
     {resume_text[:4000]}
@@ -106,33 +112,31 @@ async def check_resume_file(file: UploadFile = File(...), target_role: Optional[
 @router.post("/generate-resume")
 async def generate_resume(req: ResumeGenerationRequest):
     prompt = f"""
-    You are a Professional Resume Writer and Career Coach. 
-    Create a high-impact, ATS-friendly resume for a candidate with the following profile:
+    You are a Master Resume Architect and Senior Recruiter. 
+    Your mission: Generate a HIGH-IMPACT, ATS-OPTIMIZED resume that bridges the gap between the candidate's actual profile and the roles at top companies.
 
     **Candidate Profile:**
     - **Name:** {req.full_name}
     - **Target Role:** {req.target_role}
     - **Experience Level:** {req.experience_level}
-    - **Qualification:** {req.qualification} ({req.qualification_percentage})
-    - **Technical Skills:** {req.skills_technical}
-    - **Coding Skills:** {req.skills_coding}
-    - **Soft Skills:** {req.skills_soft}
-    - **Research/Publications:** {req.research_publications or "None"}
-    - **Industry Experience:** {req.industry_experience or "Fresher/None"}
-    - **Projects/Personal Portfolio:** {req.projects or "None"}
+    - **Education:** {req.qualification} ({req.qualification_percentage})
+    - **Skills:** Tech: {req.skills_technical} | Coding: {req.skills_coding} | Soft: {req.skills_soft}
+    - **Evidence:** Research: {req.research_publications or "N/A"} | Industry: {req.industry_experience or "N/A"} | Projects: {req.projects or "N/A"}
 
-    **Instructions:**
-    1.  **Structure:** use standard professional resume sections: Header, Professional Summary, Skills, Experience (or Projects for freshers), Education, Certifications/Achievements.
-    2.  **Professional Summary:** Write a compelling summary tailored to the '{req.target_role}'.
-    3.  **Skills:** Organize skills logically.
-    4.  **Content:** 
-        - If the candidate is a 'Beginner' or 'Fresher', focus on Projects and Academic Achievements. Prioritize the user-provided projects if available; otherwise, suggest realistic, high-impact academic projects based on their skills and target role.
-        - If 'Intermediate' or 'Professional', focus on Work Experience and significant Projects.
-    5.  **Tone:** Professional, action-oriented, and concise.
-    6.  **Format:** clean Markdown.
+    **STRICT ARCHITECTURAL RULES:**
+    1. **GROUNDING**: Do not invent employment history. Only expand on provided projects/skills.
+    2. **IMPACT ORIENTATION**: Use action verbs (e.g., "Engineered", "Optimized", "Architected"). Quantify results where possible based on the context.
+    3. **ATS SEMANTICS**: Include high-relevance keywords for '{req.target_role}'.
+    4. **LAYOUT**: Use a clean, single-column professional Markdown structure.
+    
+    **Structure:**
+    - **Professional Summary**: 2-3 high-density lines focused on value proposition.
+    - **Skills Matrix**: Categorized (Languages, Tools, Frameworks).
+    - **Projects/Experience**: Detail-rich bullet points highlighting technical complexity and outcomes.
+    - **Education & Achievements**.
 
     **Output Resume:**
-    (Provide ONLY the resume content in Markdown)
+    (Generate ONLY the Markdown resume. No preamble.)
     """
 
     if not rag_service.llm:

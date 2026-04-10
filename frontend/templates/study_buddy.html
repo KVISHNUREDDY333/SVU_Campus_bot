@@ -1,8 +1,10 @@
-        <section id="study-section" class="content-section hidden scroll-mini">
+        <section id="study-section" class="content-section hidden">
           <div class="header-premium flex-col items-start vhd-header border-bottom bg-glass-nav sticky-top">
-            <div class="flex items-center gap-15">
-              <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
-              <h2 class="m-0 font-bold text-accent">Study Buddy AI</h2>
+            <div class="flex items-center justify-between w-full">
+              <div class="flex items-center gap-15">
+                <div class="mobile-menu-btn" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></div>
+                <h2 class="m-0 font-bold text-accent">Study Buddy AI</h2>
+              </div>
             </div>
             <div class="mode-toggle-container">
               <div class="auth-tabs m-0 justify-start border-none bg-ghost p-4 rounded-50">
@@ -17,7 +19,7 @@
           </div>
 
           <!-- Lecture Notes View -->
-          <div id="study-notes-view" class="p-15 flex flex-col gap-15 study-tab-view notes mx-auto w-full premium-view-entrance">
+          <div id="study-notes-view" class="p-15 flex flex-col gap-15 study-tab-view notes mx-auto w-full premium-view-entrance overflow-y-auto flex-1">
             <!-- Materials List -->
             <div class="settings-card shadow-premium border-none bg-glass-nav">
               <div class="card-header compact border-bottom">
@@ -73,6 +75,9 @@
                           <p class="text-xs text-secondary m-0">Ask questions about the analyzed material</p>
                         </div>
                       </div>
+                      <button onclick="handleStudyNewChat()" class="btn-secondary btn-small rounded-10 ml-auto mr-10">
+                        <i class="fa-solid fa-broom mr-4"></i> Clear
+                      </button>
                     </div>
                     <div id="document-chat-history" class="chat-history-container p-20 h-auto min-h-200">
                       <div class="bot-msg-standard">
@@ -100,52 +105,48 @@
 
           <!-- Zen AI View -->
           <div id="study-zen-view" class="hidden study-tab-view zen mx-auto w-full premium-view-entrance zen-viewport">
+              <div class="zen-floating-actions">
+                  <button onclick="newZenChat()" class="btn-new-chat shadow-premium">
+                      New Chat
+                  </button>
+              </div>
+              
               <!-- Chat Canvas (includes inline header) -->
-              <div id="zen-chat-history" class="zen-chat-panel scroll-mini">
-                  <div class="welcome-canvas">
-                       <div class="zen-orb">
-                          <i class="fa-solid fa-brain"></i>
+              <div id="zen-chat-history" class="chat-area scroll-mini">
+                  <div class="welcome-screen my-auto">
+                       <div class="zen-orb mx-auto mb-15">
+                          <i class="fa-solid fa-brain text-50"></i>
                        </div>
-                       <h1 class="gradient-text-teal mb-8 ls-neg-01 font-bold">Hello, I am Zen.</h1>
+                       <h1 class="gradient-text-teal mb-8 ls-neg-01 font-bold text-center">Hello, I am Zen.</h1>
                        <p class="text-secondary text-md text-center max-w-500 mx-auto zen-welcome-text">
                          Your academic partner for high-level synthesis and research support.
                        </p>
                        
-                       <div class="zen-suggestions">
-                          <button class="zen-chip" onclick="setZenInput('Explain quantum entanglement simply')">
-                             <i class="fa-solid fa-atom"></i> Explain a concept
-                          </button>
-                          <button class="zen-chip" onclick="setZenInput('Analyze this research summary')">
-                             <i class="fa-solid fa-microscope"></i> Deep Analysis
-                          </button>
-                          <button class="zen-chip" onclick="setZenInput('Synthesize study roadmap for finals')">
-                             <i class="fa-solid fa-route"></i> Study Roadmap
-                          </button>
-                          <button class="zen-chip" onclick="setZenInput('Compare and contrast these two theories')">
-                             <i class="fa-solid fa-code-compare"></i> Compare Topics
-                          </button>
-                       </div>
                   </div>
               </div>
 
-              <!-- Zen Typing Indicator -->
-              <div id="zen-typing-indicator" class="zen-typing-indicator hidden">
-                  <div class="zen-dot"></div>
-                  <div class="zen-dot"></div>
-                  <div class="zen-dot"></div>
-                  <span class="ml-12 text-secondary text-sm font-medium">Zen is synthesizing...</span>
-              </div>
+              <!-- Zen Typing Indicator moved inside wrapper -->
 
-              <!-- Input Workspace -->
-              <div class="zen-input-bar">
-                  <div class="zen-input-inner">
-                      <button id="zen-mic-btn" class="zen-input-icon" onclick="startZenSTT()" title="Voice Input">
+              <!-- Input Workspace - Mirrored from main chat -->
+              <div class="input-area-wrapper">
+                  <!-- Zen Typing Indicator -->
+                  <div id="zen-typing-indicator" class="zen-typing-indicator hidden">
+                      <div class="typing-dot"></div>
+                      <div class="typing-dot"></div>
+                      <div class="typing-dot"></div>
+                      <span class="synthesizing-text">Zen is synthesizing...</span>
+                  </div>
+
+                  <div class="input-container">
+                      <input type="text" class="hidden invisible-trap" tabindex="-1" title="Autofill trap" />
+                      <input type="password" class="hidden invisible-trap" tabindex="-1" title="Autofill trap" />
+                      <input type="text" id="zen-input" placeholder="Ask Zen anything... (Type or Speak)" 
+                          autocomplete="off"
+                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                      <button id="zen-mic-btn" class="mic-btn" onclick="startZenSTT()" title="Voice Input">
                           <i class="fa-solid fa-microphone"></i>
                       </button>
-                      <input type="text" id="zen-input" placeholder="Ask Zen anything..." 
-                          class="zen-input-field"
-                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
-                      <button class="zen-send-btn" onclick="sendZenMessage()" title="Send Command">
+                      <button class="send-btn" onclick="sendZenMessage()" title="Send Command">
                           <i class="fa-solid fa-arrow-up"></i>
                       </button>
                   </div>
