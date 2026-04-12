@@ -28,40 +28,26 @@ async def perform_resume_analysis(resume_text: str, target_role: Optional[str] =
     
     target_role_context = f"Target Job Role: {target_role}" if target_role else "Target Job Role: Not Specified (General Analysis)"
     
-    prompt = f"""
-    You are an elite Career Strategy Expert and Technical Recruiter at a Fortune 500 company.
+    prompt = f"""🛡️ UNIVERSITY SAFE ACADEMIC ASSISTANT - CAREER MODE
+    You are an elite Career Strategy Expert at SVU. 
     
-    TASK: Analyze the following resume text with surgical precision. Provide a HIGH-FIDELITY evaluation grounded in modern industry requirements and university placement standards.
+    TASK: Analyze the following resume with surgical precision and academic-grade accuracy.
     
-    {target_role_context}
+    🔒 SAFETY: Ensure the content is professional and academic. Reject if it contains unsafe or offensive material.
+    
+    QUALITY STANDARDS:
+    - Deliver factual, data-driven feedback.
+    - Match skills against the target role: {target_role if target_role else 'General Analysis'}.
+    - Ground all observations in the Provided Text.
     
     Placement Guidelines:
     {guidelines}
     
-    **CRITICAL ANALYSIS FRAMEWORK**:
-    - **ACCURACY**: Every strength or weakness must be directly evidenced by the provided text.
-    - **RELEVANCE**: Tailor all suggestions to the specific technical stacks used in {target_role if target_role else 'modern entry-level roles'}.
-    - **REASONING**: Briefly explain WHY a change is needed (e.g., "ATS systems cannot parse column-based headers").
-
-    Please structure your response with these sections:
-    
-    **📊 Resume Score: [X/10]**
-    Provide a data-driven justification focused on exact skill matching, impact quantization (numbers/metrics), and structural integrity.
-    
-    **🌟 Key Strengths**
-    List the most MARKETABLE assets found in the text.
-    
-    **🔍 Opportunity for Improvement (Weaknesses)**
-    Identify specific missing keywords, vague phrases (e.g., "responsible for"), or missing metrics.
-    
-    **💻 Technical & Soft Skills Analysis**
-    Critically evaluate if the skills match the {target_role or 'industry standards'}. Suggest 3-5 high-demand skills to bridge the gap.
-    
-    **🚀 Actionable Roadmap**
-    Give 5 HIGH-IMPACT bullet points for immediate execution.
-    
-    **🛠 ATS Compatibility Check**
-    Evaluate parseability and layout risks.
+    STRUCTURE:
+    - **📊 Resume Score**: Data-driven justification.
+    - **🌟 Key Strengths**: Marketable assets.
+    - **🔍 Critical Weaknesses**: Missing keywords or metrics.
+    - **🚀 Actionable Roadmap**: High-impact execution steps.
     
     Resume Text:
     {resume_text[:4000]}
@@ -111,32 +97,30 @@ async def check_resume_file(file: UploadFile = File(...), target_role: Optional[
 
 @router.post("/generate-resume")
 async def generate_resume(req: ResumeGenerationRequest):
-    prompt = f"""
-    You are a Master Resume Architect and Senior Recruiter. 
-    Your mission: Generate a HIGH-IMPACT, ATS-OPTIMIZED resume that bridges the gap between the candidate's actual profile and the roles at top companies.
+    # Check safety
+    from ..services.moderation import ModerationService
+    if not await ModerationService.check_content(req.skills_technical + " " + req.projects):
+         return {"resume": ModerationService.get_rejection_message()}
 
-    **Candidate Profile:**
-    - **Name:** {req.full_name}
-    - **Target Role:** {req.target_role}
-    - **Experience Level:** {req.experience_level}
-    - **Education:** {req.qualification} ({req.qualification_percentage})
-    - **Skills:** Tech: {req.skills_technical} | Coding: {req.skills_coding} | Soft: {req.skills_soft}
-    - **Evidence:** Research: {req.research_publications or "N/A"} | Industry: {req.industry_experience or "N/A"} | Projects: {req.projects or "N/A"}
-
-    **STRICT ARCHITECTURAL RULES:**
-    1. **GROUNDING**: Do not invent employment history. Only expand on provided projects/skills.
-    2. **IMPACT ORIENTATION**: Use action verbs (e.g., "Engineered", "Optimized", "Architected"). Quantify results where possible based on the context.
-    3. **ATS SEMANTICS**: Include high-relevance keywords for '{req.target_role}'.
-    4. **LAYOUT**: Use a clean, single-column professional Markdown structure.
+    prompt = f"""🛡️ UNIVERSITY SAFE ACADEMIC ASSISTANT - RESUME GENERATOR
+    You are a Master Resume Architect at SVU Career Center.
     
-    **Structure:**
-    - **Professional Summary**: 2-3 high-density lines focused on value proposition.
-    - **Skills Matrix**: Categorized (Languages, Tools, Frameworks).
-    - **Projects/Experience**: Detail-rich bullet points highlighting technical complexity and outcomes.
-    - **Education & Achievements**.
+    TASK: Generate a high-fidelity, professional resume based on the student's data.
 
-    **Output Resume:**
-    (Generate ONLY the Markdown resume. No preamble.)
+    🔒 SAFETY: Ensure all generated content is professional and academic.
+    
+    QUALITY RULES:
+    - Ground content in the Profile Data.
+    - Use active, professional terminology.
+    - Ensure logical flow and ATS optimization.
+
+    Profile Data:
+    - Name: {req.full_name}
+    - Role: {req.target_role}
+    - Skills: {req.skills_technical}, {req.skills_coding}
+    - Projects: {req.projects}
+    
+    Output structured Markdown resume only.
     """
 
     if not rag_service.llm:
