@@ -671,7 +671,6 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
         except Exception as e:
             logger.error(f"pypdf extraction failed: {e}, falling back to loader.")
         
-        from langchain_community.document_loaders import PyPDFLoader
         loader = PyPDFLoader(file_path)
         pages = loader.load()
         
@@ -688,7 +687,6 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=75)
         
         if full_text.strip() and not pages:
-             from langchain.schema import Document
              splits = text_splitter.create_documents([full_text], metadatas=[{"source": filename, "user_id": user_id}])
         else:
              splits = text_splitter.split_documents(pages)
@@ -714,7 +712,7 @@ async def ingest_text(text: str, metadata: dict = None):
              raise Exception("Vector DB not initialized")
     
     try:
-        from langchain.schema import Document
+
         logger.info("Ingesting Text Chunk...")
         
         doc = Document(page_content=text, metadata=metadata or {})

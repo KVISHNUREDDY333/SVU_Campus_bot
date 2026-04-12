@@ -18,3 +18,8 @@ class Config:
     GROQ_MODEL_ID = os.getenv("GROQ_MODEL_ID", "llama-3.3-70b-versatile")
     GROQ_FAST_MODEL_ID = os.getenv("GROQ_FAST_MODEL_ID", "llama-3.1-8b-instant")
 
+    # Path Configuration
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploads") # Root uploads
+    BACKEND_UPLOAD_DIR = os.path.join(PROJECT_ROOT, "backend", "uploads")
+

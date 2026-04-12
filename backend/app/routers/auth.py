@@ -15,7 +15,7 @@ from ..services.email_service import send_otp_email
 from jose import JWTError, jwt
 from ..services.logging_service import log_event
 from email_validator import validate_email, EmailNotValidError
-from ..utils.email_validator import is_valid_email, verify_google_token, probe_google_email
+from ..utils.email_validator import is_valid_email, verify_google_token, probe_email_authenticity
 import secrets
 
 router = APIRouter()
@@ -97,15 +97,15 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @router.post("/register", response_model=Token)
 async def register_user(user_data: RegisterRequest):
     if not is_valid_email(user_data.email):
-        logger.warning(f"Registration blocked for non-Gmail address: {user_data.email}")
+        logger.warning(f"Registration blocked for unsupported provider: {user_data.email}")
         raise HTTPException(
             status_code=400, 
-            detail="Only verified Google accounts (@gmail.com) are accepted for registration."
+            detail="Only verified academic or official accounts (Gmail, Outlook, Yahoo, Zoho) are accepted for registration."
         )
 
     try:
         # SMTP / DNS Authenticity Check
-        verified, msg = probe_google_email(user_data.email)
+        verified, msg = probe_email_authenticity(user_data.email)
         if verified is False:
              raise HTTPException(status_code=400, detail=msg)
 
@@ -210,10 +210,10 @@ async def verify_google_email_endpoint(request: ForgotPasswordRequest):
     if not is_valid_email(email):
         raise HTTPException(
             status_code=400, 
-            detail="Only verified Google accounts (@gmail.com) are accepted."
+            detail="Only verified official accounts (Gmail, Outlook, Yahoo, Zoho) are accepted."
         )
     
-    verified, message = probe_google_email(email)
+    verified, message = probe_email_authenticity(email)
     if verified is False:
         raise HTTPException(status_code=400, detail=message)
         
@@ -237,7 +237,7 @@ async def google_id_token_login(request: Request):
     name = id_info.get("name")
     
     if not email or not is_valid_email(email):
-        raise HTTPException(status_code=400, detail="Only Gmail accounts are allowed")
+        raise HTTPException(status_code=400, detail="Only supported email providers (Gmail, Outlook, Yahoo, Zoho) are allowed")
         
     db_user = database.users_db.find_one({"username": email})
     if not db_user:
@@ -289,7 +289,7 @@ async def auth_google(request: Request):
         
         email = user.get("email")
         if not email or not is_valid_email(email):
-             raise HTTPException(status_code=400, detail="Only verified Google accounts (@gmail.com) are accepted.")
+             raise HTTPException(status_code=400, detail="Only official email accounts (Gmail, Outlook, Yahoo, Zoho) are accepted.")
 
         name = user.get("name")
         

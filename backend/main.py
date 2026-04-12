@@ -111,9 +111,88 @@ async def lifespan(app: FastAPI):
     setup_rag_chain()
     await seed_admin()
     await seed_data()
+    
+    display_app_stats(app)
+    
     yield
     logger.info("Shutting Down Application Components...")
     close_db_client()
+
+def display_app_stats(app: FastAPI):
+    """Prints a summary of the application status to the terminal."""
+    try:
+        import platform
+        import sys
+        from collections import Counter
+        
+        print("\n" + "+" + "-"*68 + "+")
+        print("|" + " SVU CAMPUS BOT - APPLICATION STARTUP STATS ".center(68) + "|")
+        print("+" + "-"*68 + "+")
+        
+        # System Info
+        print(f"| [SYSTEM INFO]")
+        print(f"|   OS        : {platform.system()} {platform.release()}")
+        print(f"|   Python    : {sys.version.split()[0]}")
+        print(f"|   PID       : {os.getpid()}")
+        
+        # Status Flags
+        print(f"|")
+        print(f"| [APPLICATION COMPONENTS]")
+        print(f"|   FastAPI   : Loaded")
+        print(f"|   RAG Chain : Initialized")
+        
+        # Database Stats
+        print(f"|")
+        print(f"| [DATABASE STATUS]")
+        if database.mongo_client:
+            try:
+                print(f"|   Connection: Active")
+                print(f"|   Database  : {Config.DB_NAME}")
+                
+                # Check if collections are accessible
+                collections = {
+                    "Users": database.users_db,
+                    "Tickets": database.tickets_db,
+                    "Docs": database.documents_db,
+                    "Vectors": database.svu_vectors_db,
+                    "Exams": database.exam_dates_db
+                }
+                
+                for name, coll in collections.items():
+                    if coll is not None:
+                        count = coll.count_documents({})
+                        print(f"|   - {name:10}: {count} records")
+                    else:
+                        print(f"|   - {name:10}: Unavailable")
+            except Exception as e:
+                print(f"|   Database Error: {e}")
+        else:
+            print("|   Connection: Disconnected")
+            
+        # Router Action Summary
+        print(f"|")
+        print(f"| [API ROUTE SUMMARY]")
+        routes = [r for r in app.routes if hasattr(r, "path")]
+        print(f"|   Total Routes: {len(routes)}")
+        
+        methods = []
+        for r in routes:
+            if hasattr(r, "methods"):
+                methods.extend(list(r.methods))
+        method_counts = Counter(methods)
+        important_methods = ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        methods_display = [f"{m}: {method_counts[m]}" for m in important_methods if method_counts[m] > 0]
+        print(f"|   Methods     : {', '.join(methods_display)}")
+
+        # Environment Preview (Masked)
+        print(f"|")
+        print(f"| [ENVIRONMENT]")
+        print(f"|   Port      : {os.getenv('PORT', '8888')}")
+        print(f"|   Debug     : {os.getenv('DEBUG', 'False')}")
+        
+        print("+" + "-"*68 + "+\n")
+    except Exception as e:
+        logger.error(f"Failed to display startup stats: {e}")
 
 app = FastAPI(lifespan=lifespan)
 

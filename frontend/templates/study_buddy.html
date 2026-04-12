@@ -8,93 +8,110 @@
             </div>
             <div class="mode-toggle-container">
               <div class="auth-tabs m-0 justify-start border-none bg-ghost p-4 rounded-50">
-                <button id="tab-study-notes" class="auth-tab active px-24 py-10 rounded-50" onclick="switchStudyTab('notes')">
-                  <i class="fa-solid fa-book-open mr-8"></i> Lecture Notes
+                <button id="tab-study-notes" class="auth-tab active px-24 py-12 rounded-50 transition-all" onclick="switchStudyTab('notes')">
+                  <i class="fa-solid fa-book-open mr-8 text-accent"></i> Lecture Notes
                 </button>
-                <button id="tab-study-zen" class="auth-tab px-24 py-10 rounded-50" onclick="switchStudyTab('zen')">
-                  <i class="fa-solid fa-brain mr-8"></i> Zen AI Assistant
+                <button id="tab-study-zen" class="auth-tab px-24 py-12 rounded-50 transition-all" onclick="switchStudyTab('zen')">
+                  <i class="fa-solid fa-brain mr-8 text-accent"></i> Zen Assistant
                 </button>
               </div>
             </div>
           </div>
 
           <!-- Lecture Notes View -->
-          <div id="study-notes-view" class="p-15 flex flex-col gap-15 study-tab-view notes mx-auto w-full premium-view-entrance overflow-y-auto flex-1">
+          <div id="study-notes-view" class="p-20 flex flex-col gap-35 study-tab-view notes mx-auto w-full premium-view-entrance overflow-y-auto flex-1">
             <!-- Materials List -->
-            <div class="settings-card shadow-premium border-none bg-glass-nav">
-              <div class="card-header compact border-bottom">
+            <div id="study-archive-card" class="analysis-card-premium shadow-premium border-none bg-glass-nav">
+              <div class="analysis-header border-bottom">
                 <div class="flex items-center gap-15">
-                  <div class="card-icon modal-header-primary shadow-teal">
-                    <i class="fa-solid fa-book-open"></i>
+                  <div class="material-type-icon shadow-teal">
+                    <i class="fa-solid fa-layer-group"></i>
                   </div>
-                  <div>
+                  <div class="analysis-title-group">
                     <h4 class="m-0 font-bold">Lecture Archive</h4>
                     <p class="text-xs text-secondary m-0">Synchronized academic material repository</p>
                   </div>
                 </div>
                 <div class="ml-auto flex gap-10">
-                  <button class="btn-primary btn-small rounded-10" onclick="openUploadModal('study')">
+                  <button class="btn-primary btn-small rounded-12 px-15" onclick="openUploadModal('study')">
                     <i class="fa-solid fa-cloud-arrow-up mr-8"></i> Upload
                   </button>
-                  <button class="btn-secondary btn-small rounded-10" onclick="openStudyTextModal()">
-                    <i class="fa-solid fa-keyboard mr-8"></i> text
+                  <button class="btn-secondary btn-small rounded-12 px-15" onclick="openStudyTextModal()">
+                    <i class="fa-solid fa-keyboard mr-8"></i> Add Text
                   </button>
                 </div>
               </div>
-              <div id="study-materials-list" class="mt-15 p-10">
-                <p class="text-center text-secondary p-40">Initializing material sync...</p>
+              <div id="study-materials-list" class="mt-25 mb-10">
+                <div class="p-60 text-center text-secondary bg-ghost rounded-24 border-dashed border-2">
+                  <i class="fa-solid fa-cloud-arrow-up text-40 mb-20 opacity-40"></i>
+                  <p class="font-medium text-lg">Your academic archive is ready for synchronization.</p>
+                  <p class="text-xs opacity-60">Upload PDFs or add text notes to begin deep analysis.</p>
+                </div>
               </div>
             </div>
 
             <!-- Analysis Workspace (Hidden until file selected) -->
-            <div id="analysis-workspace" class="hidden flex flex-col gap-20 mb-30">
+            <div id="analysis-workspace" class="hidden flex flex-col gap-30 mb-80">
                 <!-- Summary Section -->
-                <div class="settings-card shadow-premium border-none bg-glass-nav">
-                    <div class="card-header compact border-bottom">
+                <div class="analysis-card-premium">
+                    <div class="analysis-bg-glow"></div>
+                    <div class="analysis-header border-bottom">
                       <div class="flex items-center gap-15">
-                        <div class="card-icon modal-header-amber">
+                        <div class="analysis-icon-box">
                           <i class="fa-solid fa-wand-magic-sparkles"></i>
                         </div>
-                        <h4 class="m-0 font-bold">AI Content Synthesis</h4>
+                        <div class="analysis-title-group">
+                          <h4 class="m-0 font-bold">AI Content Synthesis</h4>
+                          <p class="text-xs text-secondary m-0">Deep neural extraction of academic insights</p>
+                        </div>
+                      </div>
+                      <div class="ml-auto">
+                        <button class="analysis-close-btn" 
+                                onclick="toggleStudyArchive(true)" 
+                                title="Return to Lecture Archive"
+                                aria-label="Close analysis">
+                           <i class="fa-solid fa-xmark"></i>
+                        </button>
                       </div>
                     </div>
-                    <div id="material-summary-content" class="text-md text-primary leading-relaxed p-20 bg-ghost-lite rounded-16 mt-15">
+                    <div id="material-summary-content" class="mt-20">
                       Synthesizing academic insights...
                     </div>
                 </div>
 
                 <!-- Wider Follow-up Chat -->
-                <div class="settings-card shadow-premium border-none bg-glass-nav flex flex-col" id="document-chat-card">
-                    <div class="card-header compact border-bottom">
+                <div class="analysis-card-premium flex flex-col study-chat-card-reset" id="document-chat-card">
+                    <div class="analysis-header border-bottom p-25 mb-0">
                       <div class="flex items-center gap-15">
-                        <div class="card-icon modal-header-primary">
-                          <i class="fa-solid fa-messages"></i>
+                        <div class="analysis-icon-box chat-icon-teal">
+                          <i class="fa-solid fa-comments"></i>
                         </div>
-                        <div>
+                        <div class="analysis-title-group">
                           <h4 class="m-0 font-bold">Follow-up Inquiries</h4>
-                          <p class="text-xs text-secondary m-0">Ask questions about the analyzed material</p>
+                          <p class="text-xs text-secondary m-0">Context-aware document interrogation</p>
                         </div>
                       </div>
                       <button onclick="handleStudyNewChat()" class="btn-secondary btn-small rounded-10 ml-auto mr-10">
                         <i class="fa-solid fa-broom mr-4"></i> Clear
                       </button>
                     </div>
-                    <div id="document-chat-history" class="chat-history-container p-20 h-auto min-h-200">
-                      <div class="bot-msg-standard">
+                    
+                    <div id="document-chat-history" class="study-chat-history scroll-mini h-auto min-h-300">
+                      <div class="bot-msg-standard-study">
                         Please ask any specific questions about the analyzed material.
                       </div>
                     </div>
                     
-                    <div class="p-15">
-                        <div class="input-glass-container premium-shadow p-6 bg-white-opacity-5">
+                    <div class="p-10">
+                        <div class="premium-chat-input-container">
                             <input
                                 type="text"
                                 id="document-chat-input"
                                 placeholder="Ask a follow-up question about this document..."
-                                class="bg-transparent border-none p-12 text-md w-full focus-none"
+                                class="premium-chat-input"
                                 onkeypress="if (event.key === 'Enter') askStudyBuddy();"
                             />
-                            <button class="btn-primary px-24 py-12 rounded-12 shadow-teal" onclick="askStudyBuddy()" title="Submit Inquiry">
+                            <button class="premium-send-btn" onclick="askStudyBuddy()" title="Submit Inquiry">
                                 <i class="fa-solid fa-paper-plane"></i>
                             </button>
                         </div>

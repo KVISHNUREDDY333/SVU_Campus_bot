@@ -911,22 +911,7 @@ async function submitProfileUpdate() {
    }
 }
 
-function showStatusPopup(message, duration = 2000) {
-  let popup = document.getElementById("status-popup");
-  if (!popup) {
-    popup = document.createElement("div");
-    popup.id = "status-popup";
-    popup.className = "status-popup";
-    document.body.appendChild(popup);
-  }
 
-  popup.innerHTML = message;
-  popup.classList.add("active");
-
-  setTimeout(() => {
-    popup.classList.remove("active");
-  }, duration);
-}
 
 async function loadTrendingQueries() {
   console.time("TrendingQueriesLoad");
@@ -1959,9 +1944,7 @@ function hideTypingIndicator() {
 // Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
 // loadSystemHealth definition moved to Admin section
 
-function scrollToBottom() {
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
+
 
 function copyText(textContainer, btn) {
   let textToCopy = "";
@@ -3871,6 +3854,9 @@ async function submitDocument() {
             setTimeout(() => {
               summaryEl.parentElement.style.border = "none";
             }, 2000);
+            
+            // UI Interaction: Hide Archive, Show Analysis
+            toggleStudyArchive(false);
           }
         }
       } else {
@@ -4004,25 +3990,7 @@ async function submitText() {
 // checkResume defined below
 
 // --- Locations Logic ---
-function filterLocations(query) {
-  const listEl = document.getElementById("locations-list");
-  if (!listEl) return;
 
-  const searchTerm = query.toLowerCase().trim();
-  const items = listEl.querySelectorAll(".location-item");
-
-  items.forEach((item) => {
-    const text = item.textContent.toLowerCase();
-    if (text.includes(searchTerm)) {
-      item.style.display = "block";
-      // Simple animation
-      item.style.opacity = "1";
-    } else {
-      item.style.display = "none";
-      item.style.opacity = "0";
-    }
-  });
-}
 
 function openLocations() {
   const listEl = document.getElementById("locations-list");
@@ -4565,26 +4533,32 @@ async function loadStudyBuddy() {
       const materials = await res.json();
       if (materials.length === 0) {
         listEl.innerHTML = `
-          <div class="p-40 text-center opacity-60">
-            <i class="fa-solid fa-cloud-arrow-up text-4xl mb-16 text-accent"></i>
-            <p>Your research archive is empty. Upload your first material to begin.</p>
+          <div class="p-60 text-center text-secondary bg-ghost rounded-24 border-dashed border-2 animate-fadeIn">
+            <i class="fa-solid fa-cloud-arrow-up text-40 mb-20 opacity-40 text-accent"></i>
+            <p class="font-bold text-xl text-primary mb-8 ls-neg-01">Your research archive is empty.</p>
+            <p class="text-md opacity-70 mb-25">Upload your first material to begin your high-fidelity analysis journey.</p>
+            <button class="btn-primary rounded-12 px-25 py-12 shadow-premium" onclick="openUploadModal('study')">
+              <i class="fa-solid fa-plus mr-8"></i> Begin Upload
+            </button>
           </div>`;
       } else {
-        listEl.className = "material-grid"; // Switch to grid
+        listEl.className = "premium-material-grid"; // Switch to premium grid
         const html = materials.map((m) => {
           const date = new Date(m.upload_date).toLocaleDateString();
           return `
             <div class="premium-material-card" onclick="summarizeMaterial('${m.id}')">
-                <div class="material-type-icon">
+                <div class="material-type-icon shadow-teal">
                     <i class="fa-solid fa-file-pdf"></i>
                 </div>
                 <div class="material-meta">
                     <div class="material-name">${escapeHtml(m.filename)}</div>
-                    <div class="material-date">Captured on ${date}</div>
+                    <div class="material-date">
+                      <i class="fa-regular fa-calendar-check"></i> Captured on ${date}
+                    </div>
                 </div>
                 <div class="material-actions" onclick="event.stopPropagation()">
                     <button class="material-mini-btn" title="Deep Analysis" onclick="summarizeMaterial('${m.id}')">
-                        <i class="fa-solid fa-magnifying-glass-chart"></i>
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
                     </button>
                     <button class="material-mini-btn danger" title="Remove" onclick="deleteStudyMaterial('${m.id}')">
                         <i class="fa-solid fa-trash-can"></i>
@@ -4697,6 +4671,16 @@ async function summarizeMaterial(id) {
         <div class="text-secondary font-medium">Zen is reading your notes...</div>
     </div>`;
   
+  // Clear chat history during loading phase
+  const history = document.getElementById("document-chat-history");
+  if (history) {
+    history.innerHTML = `
+      <div class="bot-msg-standard-study" style="text-align: center; opacity: 0.5;">
+        Preparing workspace...
+      </div>
+    `;
+  }
+  
   try {
     const res = await fetch(`${API_URL}/study-buddy/summarize/${id}`, {
       method: "POST",
@@ -4714,8 +4698,9 @@ async function summarizeMaterial(id) {
 
     // Setup Document Chat
     currentStudyMaterialId = id;
-    const workspace = document.getElementById("analysis-workspace");
-    if (workspace) workspace.classList.remove("hidden");
+    
+    // UI Interaction: Hide Archive, Show Analysis
+    toggleStudyArchive(false);
 
     const chatCard = document.getElementById("document-chat-card");
     if (chatCard) {
@@ -4723,12 +4708,12 @@ async function summarizeMaterial(id) {
       const history = document.getElementById("document-chat-history");
       if (history) {
         history.innerHTML = `
-          <div class="bot-msg-standard" style="background: rgba(13, 148, 136, 0.05); padding: 15px; border-radius: 12px; border: 1px dashed var(--accent-color); margin-bottom: 20px;">
-            <p style="margin: 0 0 10px 0; font-weight: 600; color: var(--accent-color); font-size: 14px;">
-              <i class="fa-solid fa-circle-check"></i> Analysis Complete
+          <div class="bot-msg-standard-study" style="background: rgba(13, 148, 136, 0.05); padding: 20px; border-radius: 16px; border: 1px dashed var(--accent-color); margin-bottom: 25px;">
+            <p style="margin: 0 0 10px 0; font-weight: 700; color: var(--accent-color); font-size: 15px; font-family: 'Outfit', sans-serif;">
+              <i class="fa-solid fa-sparkles"></i> Neural Analysis Complete
             </p>
-            <p style="margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
-              I've indexed these notes. Please ask any follow-up questions below. I will respond based <strong>exclusively</strong> on the document content.
+            <p style="margin: 0; font-size: 14px; color: var(--text-primary); line-height: 1.6; opacity: 0.9;">
+              I have successfully synthesized these lecture notes. You can now interrogate the document content using the follow-up field below. I will respond with <strong>high-fidelity academic precision</strong>.
             </p>
           </div>
         `;
@@ -4741,9 +4726,64 @@ async function summarizeMaterial(id) {
     }
   } catch (e) {
     if (e.name === 'AbortError') return;
-    summaryEl.innerHTML = `<p style="color: #ef4444; padding: 20px;">Failed to generate summary: ${e.message}</p>`;
+    const summaryEl = document.getElementById("material-summary-content");
+    if (summaryEl) summaryEl.innerHTML = `<p style="color: #ef4444; padding: 20px;">Failed to generate summary: ${e.message}</p>`;
     console.error(e);
   }
+}
+
+/**
+ * Toggles between Lecture Archive and Analysis Workspace
+ * @param {boolean} showArchive - if true, shows archive and hides workspace
+ */
+function toggleStudyArchive(showArchive) {
+    console.log("Toggling Study View - Show Archive:", showArchive);
+    const archive = document.getElementById("study-archive-card");
+    const workspace = document.getElementById("analysis-workspace");
+    const container = document.getElementById("study-notes-view");
+    
+    if (showArchive) {
+        if (archive) {
+            archive.classList.remove("hidden");
+            archive.style.display = "block";
+        }
+        if (workspace) {
+            workspace.classList.add("hidden");
+            workspace.style.display = "none";
+            
+            // Clear analysis content when closing
+            const summaryEl = document.getElementById("material-summary-content");
+            if (summaryEl) summaryEl.innerHTML = "Synthesizing academic insights...";
+            
+            const history = document.getElementById("document-chat-history");
+            if (history) {
+                history.innerHTML = `
+                  <div class="bot-msg-standard-study">
+                    Please ask any specific questions about the analyzed material.
+                  </div>
+                `;
+            }
+            
+            const input = document.getElementById("document-chat-input");
+            if (input) {
+                input.value = "";
+                input.placeholder = "Ask a follow-up question about this document...";
+            }
+            
+            currentStudyMaterialId = null;
+        }
+        if (container) container.classList.remove("full-analysis-layout");
+    } else {
+        if (archive) {
+            archive.classList.add("hidden");
+            archive.style.display = "none";
+        }
+        if (workspace) {
+            workspace.classList.remove("hidden");
+            workspace.style.display = "block";
+        }
+        if (container) container.classList.add("full-analysis-layout");
+    }
 }
 
 async function askStudyBuddy() {
@@ -4800,12 +4840,17 @@ async function askStudyBuddy() {
     
     const data = await res.json();
     const aiMsg = document.createElement("div");
-    aiMsg.className = "zen-message-item zen mb-16 animate-fade-in";
+    aiMsg.className = "zen-message-item zen mb-24 animate-fadeIn";
     aiMsg.innerHTML = `
-      <div class="zen-message zen">
-          ${marked.parse(data.response)}
-          <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; gap: 8px; font-size: 11px; opacity: 0.6;">
-            <i class="fa-solid fa-shield-halved text-accent"></i> Academic Verification Source
+      <div class="zen-message zen" style="box-shadow: var(--shadow-lg); border-left: 4px solid var(--accent-color); padding: 22px; border-radius: 20px;">
+          <div class="markdown-body">
+            ${marked.parse(data.response)}
+          </div>
+          <div style="margin-top: 18px; padding-top: 15px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+            <div style="display: flex; align-items: center; gap: 8px; opacity: 0.8; font-weight: 500;">
+                <i class="fa-solid fa-microchip text-accent"></i> Synthesized from Lecture Content
+            </div>
+            <div style="font-weight: 800; color: var(--accent-color); letter-spacing: 0.8px; text-transform: uppercase;">Zen AI Analysis</div>
           </div>
       </div>`;
     history.appendChild(aiMsg);

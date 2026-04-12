@@ -15,7 +15,7 @@ import shutil
 from ..services.rag_service import (
     ingest_pdf, ingest_url, ingest_text, extract_faqs_from_text, 
     refine_kb_data, ingest_faq, process_and_refine_knowledge, 
-    validate_faq_with_web, setup_rag_chain
+    validate_faq_with_web, setup_rag_chain, embeddings
 )
 from ..services import notification_service
 from ..services.logging_service import get_recent_logs, log_event
@@ -250,7 +250,7 @@ async def reject_suggested_faq(suggestion_id: str, current_user: User = Depends(
     
     return {"status": "success", "message": "FAQ suggestion rejected"}
 
-from ..services.rag_service import ingest_pdf, ingest_url, extract_faqs_from_text, ingest_faq, validate_faq_with_web
+
 
 class AddTextRequest(pydantic.BaseModel):
     title: str
@@ -265,7 +265,7 @@ async def add_text_document(req: AddTextRequest, current_user: User = Depends(ge
     try:
         logger.debug(f"Ingesting Text: {req.title}")
         
-        from ..services.rag_service import ingest_text
+
         doc_metadata = {"source": req.title, "type": "text_entry", "uploaded_by": current_user.username}
         num_chunks = await ingest_text(req.content, metadata=doc_metadata)
         logger.debug(f"Text Entry Ingested. Chunks: {num_chunks}")
@@ -309,7 +309,9 @@ async def upload_document(file: UploadFile = File(...), current_user: User = Dep
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
     try:
-        upload_dir = "backend/uploads"
+        # Standardise to project root "backend/uploads" folder
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        upload_dir = os.path.join(project_root, "backend", "uploads")
         os.makedirs(upload_dir, exist_ok=True)
         file_path = os.path.join(upload_dir, file.filename)
         
@@ -688,13 +690,11 @@ async def update_faq(faq_id: str, faq: FAQRequest, current_user: User = Depends(
         }
         
         # Regenerate embedding immediately for the updated FAQ
-        from ..services.rag_service import embeddings
         if embeddings:
             try:
                 update_data["embedding"] = embeddings.embed_query(formatted_text)
             except Exception as e:
                 logger.error(f"Error re-embedding FAQ {faq_id}: {e}")
-
         result = database.svu_vectors_db.update_one(
             {"_id": ObjectId(faq_id)},
             {"$set": update_data}
