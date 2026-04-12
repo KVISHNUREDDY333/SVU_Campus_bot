@@ -43,8 +43,8 @@ class ModerationService:
 
     @staticmethod
     async def is_on_topic(text: str) -> bool:
-        """LLM-based check for topic relevance (University, Education, Science)."""
-        # Fast keyword check first to skip LLM if obvious
+        """LLM-based check for topic relevance (Education, Knowledge, University)."""
+        # Fast keyword check first to skip LLM if obvious academic intent
         text_lower = text.lower()
         if any(topic in text_lower for topic in UNIVERSITY_TOPICS):
             return True
@@ -53,33 +53,46 @@ class ModerationService:
             rag_service.setup_rag_chain()
         
         prompt = f"""
-        Classification Task: Is the following user query relevant to a University, Education, or Science context?
+        University Academic Assistant - Safety & Relevance Filter
         
-        RULES:
-        - University context: Campus life, exams, SVU departments, admissions, hostels, results, greetings, general questions, etc.
-        - Education context: Learning, courses, study tips, academic concepts, any knowledge-seeking query.
-        - Science context: Physics, chemistry, technology, research, mathematics, etc.
-        - Greetings and general conversation starters ("hi", "hello", "help me") should be considered RELEVANT.
-        - If in doubt, classify as YES.
-        - ONLY classify as NO for clearly inappropriate content like shopping, recipes, entertainment gossip, or explicit content.
-
-        QUERY: "{text}"
+        TASK: Classify the following user query based on the University's STRICT RESPONSE POLICY.
         
-        Output EXACTLY "YES" or "NO".
+        ALLOWED TOPICS:
+        - Education (subjects, concepts, syllabus, notes)
+        - Academic support (assignments, projects, coding help)
+        - Research and innovation
+        - General Knowledge (GK) & Current Affairs
+        - Competitive exams (UPSC, GATE, GRE, CAT, etc.)
+        - Career guidance and skill development
+        - University-related information (SVU settings, campus, etc.)
+        - Polite greetings (Hi, Hello, Help)
+        
+        RESTRICTED / OUT-OF-SCOPE:
+        - Hate speech, abusive language, offensive content
+        - Adult, explicit, or inappropriate topics
+        - Violence, self-harm, illegal activities
+        - Personal attacks or harmful ideologies
+        - Irrelevant casual chat (recipes, shopping, gossip, entertainment non-GK)
+        
+        USER QUERY: "{text}"
+        
+        CLASSIFICATION:
+        If SAFE + EDUCATIONAL/ACADEMIC -> Output EXACTLY "YES"
+        If UNSAFE or OUT OF SCOPE -> Output EXACTLY "NO"
         """
         try:
             response = await rag_service.fast_llm.ainvoke(prompt)
             result = response.content.strip().upper()
-            logger.info(f"Topic Relevance Check for '{text[:20]}...': {result}")
+            logger.info(f"Policy Classification for '{text[:20]}...': {result}")
             return "YES" in result
         except Exception as e:
             logger.error(f"Moderation LLM Error: {e}")
-            return True # Fail open on system error to avoid blocking valid queries
-
+            return True # Fail open on system error
+            
     @classmethod
     async def check_content(cls, text: str) -> bool:
         """
-        Comprehensive check. Returns True if OK, False if restricted.
+        Comprehensive check against the strict educational policy.
         """
         if not text:
             return True
@@ -94,4 +107,4 @@ class ModerationService:
 
     @staticmethod
     def get_rejection_message() -> str:
-        return "I am not supposed to answer your query."
+        return "I'm here to assist with academic, educational, and knowledge-based queries only. Please ask a relevant question."
