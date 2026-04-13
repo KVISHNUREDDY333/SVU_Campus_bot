@@ -28,12 +28,12 @@ async def perform_resume_analysis(resume_text: str, target_role: Optional[str] =
     
     target_role_context = f"Target Job Role: {target_role}" if target_role else "Target Job Role: Not Specified (General Analysis)"
     
-    prompt = f"""🛡️ UNIVERSITY SAFE ACADEMIC ASSISTANT - CAREER MODE
+    prompt = f"""UNIVERSITY SAFE ACADEMIC ASSISTANT - CAREER MODE
     You are an elite Career Strategy Expert at SVU. 
     
     TASK: Analyze the following resume with surgical precision and academic-grade accuracy.
     
-    🔒 SAFETY: Ensure the content is professional and academic. Reject if it contains unsafe or offensive material.
+    SAFETY: Ensure the content is professional and academic. Reject if it contains unsafe or offensive material.
     
     QUALITY STANDARDS:
     - Deliver factual, data-driven feedback.
@@ -44,10 +44,10 @@ async def perform_resume_analysis(resume_text: str, target_role: Optional[str] =
     {guidelines}
     
     STRUCTURE:
-    - **📊 Resume Score**: Data-driven justification.
-    - **🌟 Key Strengths**: Marketable assets.
-    - **🔍 Critical Weaknesses**: Missing keywords or metrics.
-    - **🚀 Actionable Roadmap**: High-impact execution steps.
+    - **Resume Score**: Data-driven justification.
+    - **Key Strengths**: Marketable assets.
+    - **Critical Weaknesses**: Missing keywords or metrics.
+    - **Actionable Roadmap**: High-impact execution steps.
     
     Resume Text:
     {resume_text[:4000]}
@@ -102,12 +102,12 @@ async def generate_resume(req: ResumeGenerationRequest):
     if not await ModerationService.check_content(req.skills_technical + " " + req.projects):
          return {"resume": ModerationService.get_rejection_message()}
 
-    prompt = f"""🛡️ UNIVERSITY SAFE ACADEMIC ASSISTANT - RESUME GENERATOR
+    prompt = f"""UNIVERSITY SAFE ACADEMIC ASSISTANT - RESUME GENERATOR
     You are a Master Resume Architect at SVU Career Center.
     
     TASK: Generate a high-fidelity, professional resume based on the student's data.
 
-    🔒 SAFETY: Ensure all generated content is professional and academic.
+    SAFETY: Ensure all generated content is professional and academic.
     
     QUALITY RULES:
     - Ground content in the Profile Data.
