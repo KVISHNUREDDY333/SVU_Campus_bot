@@ -6934,6 +6934,8 @@ body.dark-mode .form-container::-webkit-scrollbar-thumb { background: rgba(255,2
     backdrop-filter: blur(25px) saturate(180%);
     opacity: 0;
     pointer-events: none;
+    overflow-y: auto;
+    padding: 40px 0;
     transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -6961,11 +6963,13 @@ body.dark-mode .form-container::-webkit-scrollbar-thumb { background: rgba(255,2
     top: 0;
     height: 100%;
     transition: all 0.8s cubic-bezier(0.68, -0.6, 0.32, 1.6);
-    padding: 60px;
+    padding: 85px clamp(24px, 5vw, 60px) 40px; /* Increased top padding to ensure zero logo clipping */
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     background: #ffffff;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .sign-in-container { left: 0; width: 50%; z-index: 2; }
@@ -7004,15 +7008,15 @@ body.dark-mode .form-container::-webkit-scrollbar-thumb { background: rgba(255,2
 .right-panel-active .overlay { transform: translateX(50%); }
 
 .auth-page-logo {
-    width: 100px;
-    height: 100px;
+    width: clamp(80px, 10vh, 100px);
+    height: clamp(80px, 10vh, 100px);
     border-radius: 50%;
     object-fit: cover;
     border: 4px solid var(--accent-color);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     background: white;
     padding: 4px;
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
 }
 
 .panel-header h2 {
@@ -7067,6 +7071,7 @@ body.dark-mode .form-container::-webkit-scrollbar-thumb { background: rgba(255,2
     box-shadow: 0 10px 25px rgba(45, 212, 191, 0.3);
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     margin-top: 1rem;
+    flex-shrink: 0;
 }
 
 .btn-auth:hover {
