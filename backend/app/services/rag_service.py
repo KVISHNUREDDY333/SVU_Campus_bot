@@ -494,11 +494,33 @@ Output format (JSON):
                 except Exception as analysis_e:
                     logger.warning(f"Query analysis failed: {analysis_e}")
 
-            # 2. RETRIEVAL PHASE: Optimized Hybrid Search
+            # 2. FAQ-FIRST RESPONSE PATH FOR MAIN CHAT
+            faq_chatbot = get_enhanced_faq_chatbot()
+            faq_result = await faq_chatbot.generate_faq_response_bundle(
+                user_query=message,
+                retrieval_query=rephrased_query,
+                session_id=session_id,
+                context=(
+                    f"User Context: {personal_context_str}\n"
+                    f"Known Entities: {entities_str}\n"
+                    f"User Requirements: {user_requirements}"
+                ),
+                language_instruction=lang_instruction,
+            )
+
+            if faq_result.get("matched") and faq_result.get("response"):
+                logger.info(
+                    "[RAG] FAQ answer served for main chat (confidence=%s)",
+                    faq_result.get("confidence", 0.0),
+                )
+                refiner = get_response_refiner()
+                return await refiner.format_for_display(faq_result["response"])
+
+            # 3. RETRIEVAL PHASE: Optimized Hybrid Search
             fused_docs = await _hybrid_search(rephrased_query, limit=10, keywords=extracted_keywords)
             raw_context = "\n\n".join([doc.page_content for doc in fused_docs])
             
-            # 3. CONTEXT CLEANING PHASE (NEW)
+            # 4. CONTEXT CLEANING PHASE
             logger.info(f"[RAG] Cleaning Context ({len(raw_context)} chars)")
             cleaned_context = "I don’t have enough information to answer that. Please contact the university office."
             
@@ -514,7 +536,7 @@ Output format (JSON):
                     logger.warning(f"Context cleaning failed: {cleaning_e}")
                     cleaned_context = raw_context # Fallback to raw
 
-            # 4. GENERATION PHASE: Standardized Answer Structure
+            # 5. GENERATION PHASE: Standardized Answer Structure
             if len(cleaned_context.strip()) < 15:
                  return "I don’t have enough information to answer that. Please contact the university office."
 
@@ -535,8 +557,9 @@ User Request: {message}
 --- CRITICAL QUALITY RULES ---
 1. **ACCURACY & FACTUALITY**: Mentally cross-verify every detail. Only output correct, reliable academic information.
 2. **SAFETY FIRST**: If the request is non-educational or harmful, use the Rejection Response.
-3. **STYLE**: Academic, structured, and helpful. Use Markdown formatting.
-4. **ZERO HALLUCINATION**: Only state what is confirmed by context or verified academic knowledge (GK).
+3. **STYLE**: Keep the answer simple, relevant, and directly useful. Do not add unnecessary explanation.
+4. **LENGTH CONTROL**: If the question needs a short factual answer, answer in 1-2 sentences. Give longer detail only when the question asks for it.
+5. **ZERO HALLUCINATION**: Only state what is confirmed by context or verified academic knowledge (GK).
 """
             
             response = await smart_llm.ainvoke(master_prompt)
@@ -550,14 +573,8 @@ User Request: {message}
                 context=cleaned_context
             )
             
-            # Enhance with reasoning
-            final_response = await refiner.enhance_with_reasoning(
-                response=refined_response,
-                query=message
-            )
-            
             # Format for display
-            formatted_response = await refiner.format_for_display(final_response)
+            formatted_response = await refiner.format_for_display(refined_response)
             
             return formatted_response
             

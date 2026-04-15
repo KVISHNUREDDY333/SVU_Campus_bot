@@ -30,7 +30,7 @@ class ResponseRefiner:
         if not raw_response or len(raw_response.strip()) < 10:
             return raw_response
         
-        refine_prompt = f"""You are an expert academic writing assistant. Your task is to refine and enhance a response to make it more professional, clear, and well-structured.
+        refine_prompt = f"""You are an academic response editor. Clean the response without adding extra content.
 
 **Original User Query**: {original_query}
 
@@ -39,26 +39,19 @@ class ResponseRefiner:
 
 **Refinement Guidelines**:
 1. **Grammar & Clarity**: Fix any grammatical errors, awkward phrasing, or unclear sentences.
-2. **Structure**: Organize the response with:
-   - A clear, direct opening that answers the main question
-   - Logical flow with smooth transitions
-   - Proper use of Markdown formatting (bold for key terms, bullet points for lists)
-3. **Tone**: Maintain an authoritative yet approachable academic tone
-4. **Completeness**: Ensure all important information is included and nothing is missing
-5. **Conciseness**: Remove redundancy while keeping all essential details
-6. **Professional Formatting**:
-   - Use **bold** for important terms and key points
-   - Use bullet points (•) for lists
-   - Use numbered lists (1., 2., 3.) for procedures or steps
-   - Use tables for comparative data or structured information
-   - Use proper spacing and line breaks for readability
+2. **Keep Size Appropriate**: Preserve the original answer length as much as possible. Do not expand a short answer into a long explanation.
+3. **Tone**: Keep the response simple, relevant, accurate, and professional.
+4. **Conciseness**: Remove redundancy and filler.
+5. **Formatting**:
+   - Use plain text or short bullets only when helpful
+   - Keep formatting minimal
+   - Avoid unnecessary headings or tables
 
 **Output Requirements**:
 - Return ONLY the refined response, no explanations or meta-commentary
 - Maintain all factual information from the original
-- Improve readability and professional presentation
-- Ensure the response directly addresses the user's query
-- Use proper academic language and terminology
+- Do not add new facts, background explanation, or generic advice
+- Ensure the response directly answers the user's query
 
 Refined Response:"""
         

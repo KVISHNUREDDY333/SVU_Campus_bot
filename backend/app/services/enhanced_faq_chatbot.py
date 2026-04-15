@@ -1,278 +1,287 @@
 """
-Enhanced FAQ Matching & Response Generation System
-Intelligently matches user questions to database FAQs and generates appropriately-sized responses
+FAQ-first matching and concise response generation for the main chatbot.
 """
 
 import logging
-import json
 import re
-from typing import List, Dict, Tuple, Optional
-from datetime import datetime
+from difflib import SequenceMatcher
+from typing import Any, Dict, List
+
 from langchain_groq import ChatGroq
-from langchain_core.output_parsers import StrOutputParser
-from ..core.config import Config
+
 from ..core import database
+from ..core.config import Config
 
 logger = logging.getLogger("uvicorn")
 
+STOPWORDS = {
+    "a", "an", "and", "are", "at", "be", "by", "can", "for", "from", "how",
+    "i", "in", "is", "it", "me", "my", "of", "on", "or", "please", "the",
+    "to", "what", "when", "where", "which", "who", "with", "would", "you",
+}
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", (value or "").lower())).strip()
+
+
+def _tokenize(value: str) -> List[str]:
+    tokens = []
+    for token in _normalize_text(value).split():
+        if len(token) > 2 and token not in STOPWORDS:
+            tokens.append(token)
+    return tokens
+
+
+def _parse_faq_text(text: str) -> Dict[str, str]:
+    raw_text = (text or "").strip()
+    question_match = re.search(r"Question:\s*(.+?)(?:\n|$)", raw_text, re.IGNORECASE)
+    answer_match = re.search(r"Answer:\s*(.+)", raw_text, re.IGNORECASE | re.DOTALL)
+
+    question = question_match.group(1).strip() if question_match else ""
+    answer = answer_match.group(1).strip() if answer_match else ""
+
+    if not question and raw_text:
+        question = raw_text.splitlines()[0].strip()[:200]
+    if not answer and raw_text:
+        answer = raw_text
+
+    return {"question": question, "answer": answer}
+
 
 class FAQMatcher:
-    """Matches user questions to relevant FAQs in the database."""
-    
-    def __init__(self):
-        self.matcher_llm = ChatGroq(
-            model=Config.GROQ_MODEL_ID,
-            groq_api_key=Config.GROQ_API_KEY,
-            temperature=0.1,
-            timeout=60
+    """Matches user questions to the best FAQs in svu_vectors."""
+
+    def _extract_keywords(self, query: str) -> List[str]:
+        seen = set()
+        keywords = []
+        for token in _tokenize(query):
+            if token not in seen:
+                seen.add(token)
+                keywords.append(token)
+        return keywords[:8]
+
+    def _normalize_faq_doc(self, faq: Dict[str, Any]) -> Dict[str, Any]:
+        parsed = _parse_faq_text(faq.get("text", ""))
+        question = (faq.get("question") or parsed["question"]).strip()
+        answer = (faq.get("answer") or parsed["answer"]).strip()
+        text = faq.get("text") or f"Question: {question}\nAnswer: {answer}"
+        return {
+            "_id": faq.get("_id"),
+            "faq_id": str(faq.get("faq_id") or faq.get("_id") or ""),
+            "question": question,
+            "answer": answer,
+            "category": faq.get("category", "General"),
+            "text": text,
+            "vector_score": float(faq.get("vector_score", 0.0) or 0.0),
+            "keyword_hit": bool(faq.get("keyword_hit", False)),
+        }
+
+    def _faq_key(self, faq: Dict[str, Any]) -> str:
+        return faq.get("faq_id") or _normalize_text(faq.get("question", ""))[:160]
+
+    def _search_by_keywords(self, keywords: List[str], limit: int) -> List[Dict[str, Any]]:
+        if database.svu_vectors_db is None or not keywords:
+            return []
+
+        try:
+            regex = re.compile("|".join(re.escape(word) for word in keywords), re.IGNORECASE)
+            query = {
+                "type": "faq",
+                "$or": [
+                    {"question": {"$regex": regex}},
+                    {"answer": {"$regex": regex}},
+                    {"text": {"$regex": regex}},
+                    {"category": {"$regex": regex}},
+                ],
+            }
+            results = list(
+                database.svu_vectors_db.find(query).sort("created_at", -1).limit(max(limit * 4, 10))
+            )
+            normalized = []
+            for item in results:
+                item["keyword_hit"] = True
+                normalized.append(self._normalize_faq_doc(item))
+            return normalized
+        except Exception as exc:
+            logger.error(f"[FAQ_MATCHER] Keyword search error: {exc}")
+            return []
+
+    async def _search_by_similarity(self, query: str, limit: int) -> List[Dict[str, Any]]:
+        try:
+            from . import rag_service
+
+            if not rag_service.vector_db:
+                rag_service.setup_rag_chain()
+            if not rag_service.vector_db:
+                return []
+
+            docs = rag_service.vector_db.similarity_search_with_score(
+                query,
+                k=max(limit * 4, 10),
+                filter={"type": "faq"},
+            )
+
+            normalized = []
+            for doc, score in docs:
+                if float(score or 0.0) < 0.35:
+                    continue
+                parsed = _parse_faq_text(getattr(doc, "page_content", ""))
+                metadata = getattr(doc, "metadata", {}) or {}
+                normalized.append(
+                    {
+                        "faq_id": str(metadata.get("faq_id") or metadata.get("_id") or ""),
+                        "question": (metadata.get("question") or parsed["question"]).strip(),
+                        "answer": (metadata.get("answer") or parsed["answer"]).strip(),
+                        "category": metadata.get("category", "General"),
+                        "text": getattr(doc, "page_content", ""),
+                        "vector_score": float(score or 0.0),
+                        "keyword_hit": False,
+                    }
+                )
+            return normalized
+        except Exception as exc:
+            logger.warning(f"[FAQ_MATCHER] Semantic search error: {exc}")
+            return []
+
+    def _score_faq(self, user_query: str, faq: Dict[str, Any]) -> float:
+        query_tokens = set(_tokenize(user_query))
+        question_tokens = set(_tokenize(faq.get("question", "")))
+        answer_tokens = set(_tokenize(faq.get("answer", "")))
+        category_tokens = set(_tokenize(str(faq.get("category", ""))))
+
+        if not query_tokens:
+            return 0.0
+
+        question_overlap = len(query_tokens & question_tokens) / len(query_tokens)
+        answer_overlap = len(query_tokens & answer_tokens) / len(query_tokens)
+        category_overlap = 1.0 if query_tokens & category_tokens else 0.0
+        sequence_score = SequenceMatcher(
+            None,
+            _normalize_text(user_query),
+            _normalize_text(faq.get("question", "")),
+        ).ratio()
+
+        phrase_bonus = 0.08 if _normalize_text(user_query) in _normalize_text(faq.get("question", "")) else 0.0
+        score = (
+            (0.40 * question_overlap)
+            + (0.18 * answer_overlap)
+            + (0.05 * category_overlap)
+            + (0.17 * sequence_score)
+            + (0.15 * min(max(float(faq.get("vector_score", 0.0) or 0.0), 0.0), 1.0))
+            + phrase_bonus
         )
-    
-    async def find_relevant_faqs(self, user_query: str, limit: int = 5) -> List[Dict]:
-        """
-        Find relevant FAQs from database that match user query.
-        
-        Args:
-            user_query: User's question
-            limit: Maximum number of FAQs to return
-            
-        Returns:
-            List of relevant FAQ documents
-        """
+        if faq.get("keyword_hit"):
+            score += 0.05
+        return round(min(score, 0.99), 3)
+
+    def _combine_and_rank(
+        self,
+        user_query: str,
+        keyword_faqs: List[Dict[str, Any]],
+        semantic_faqs: List[Dict[str, Any]],
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        merged: Dict[str, Dict[str, Any]] = {}
+
+        for faq in keyword_faqs + semantic_faqs:
+            key = self._faq_key(faq)
+            if key in merged:
+                merged[key]["keyword_hit"] = merged[key]["keyword_hit"] or faq.get("keyword_hit", False)
+                merged[key]["vector_score"] = max(merged[key]["vector_score"], faq.get("vector_score", 0.0))
+                if len(faq.get("answer", "")) > len(merged[key].get("answer", "")):
+                    merged[key]["question"] = faq.get("question", "")
+                    merged[key]["answer"] = faq.get("answer", "")
+                    merged[key]["text"] = faq.get("text", "")
+                    merged[key]["category"] = faq.get("category", "General")
+            else:
+                merged[key] = faq
+
+        ranked = list(merged.values())
+        for faq in ranked:
+            faq["match_confidence"] = self._score_faq(user_query, faq)
+
+        ranked.sort(
+            key=lambda item: (
+                item.get("match_confidence", 0.0),
+                item.get("vector_score", 0.0),
+                len(item.get("answer", "")),
+            ),
+            reverse=True,
+        )
+        return ranked[:limit]
+
+    async def find_relevant_faqs(self, user_query: str, limit: int = 5) -> List[Dict[str, Any]]:
         if database.svu_vectors_db is None:
             logger.warning("[FAQ_MATCHER] Database not available")
             return []
-        
-        try:
-            # 1. Extract keywords from query
-            keywords = await self._extract_keywords(user_query)
-            logger.info(f"[FAQ_MATCHER] Extracted keywords: {keywords}")
-            
-            # 2. Search by keywords
-            keyword_faqs = self._search_by_keywords(user_query, keywords, limit)
-            logger.info(f"[FAQ_MATCHER] Found {len(keyword_faqs)} FAQs by keyword search")
-            
-            # 3. Search by semantic similarity
-            semantic_faqs = await self._search_by_similarity(user_query, limit)
-            logger.info(f"[FAQ_MATCHER] Found {len(semantic_faqs)} FAQs by semantic search")
-            
-            # 4. Combine and rank results
-            combined_faqs = self._combine_and_rank(keyword_faqs, semantic_faqs, limit)
-            logger.info(f"[FAQ_MATCHER] Combined and ranked {len(combined_faqs)} FAQs")
-            
-            return combined_faqs
-            
-        except Exception as e:
-            logger.error(f"[FAQ_MATCHER] Error finding relevant FAQs: {e}")
-            return []
-    
-    async def _extract_keywords(self, query: str) -> List[str]:
-        """Extract important keywords from user query."""
-        try:
-            extraction_prompt = f"""Extract 3-5 most important keywords from this question that would help find relevant FAQs.
-            
-Question: {query}
 
-Return ONLY a JSON array of keywords, nothing else:
-["keyword1", "keyword2", "keyword3"]"""
-            
-            response = await self.matcher_llm.ainvoke(extraction_prompt)
-            content = response.content if hasattr(response, 'content') else str(response)
-            
-            # Parse JSON array
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                keywords = json.loads(json_match.group(0))
-                return keywords
-        except Exception as e:
-            logger.warning(f"[FAQ_MATCHER] Error extracting keywords: {e}")
-        
-        # Fallback: extract words > 3 characters
-        return [w for w in query.split() if len(w) > 3]
-    
-    def _search_by_keywords(self, query: str, keywords: List[str], limit: int) -> List[Dict]:
-        """Search FAQs by keyword matching."""
         try:
-            # Build regex pattern
-            regex_pattern = "|".join(re.escape(kw) for kw in keywords)
-            regex_obj = re.compile(regex_pattern, re.IGNORECASE)
-            
-            # Search in FAQ text and keywords
-            search_query = {
-                "type": "faq",
-                "$or": [
-                    {"text": {"$regex": regex_obj}},
-                    {"keywords": {"$in": [regex_obj]}},
-                    {"category": {"$regex": regex_obj}}
-                ]
-            }
-            
-            faqs = list(database.svu_vectors_db.find(search_query).limit(limit))
-            logger.info(f"[FAQ_MATCHER] Keyword search found {len(faqs)} FAQs")
-            return faqs
-            
-        except Exception as e:
-            logger.error(f"[FAQ_MATCHER] Error in keyword search: {e}")
+            keywords = self._extract_keywords(user_query)
+            keyword_faqs = self._search_by_keywords(keywords, limit)
+            semantic_faqs = await self._search_by_similarity(user_query, limit)
+            ranked = self._combine_and_rank(user_query, keyword_faqs, semantic_faqs, limit)
+            logger.info(f"[FAQ_MATCHER] Ranked {len(ranked)} FAQs for main chat")
+            return ranked
+        except Exception as exc:
+            logger.error(f"[FAQ_MATCHER] Error finding relevant FAQs: {exc}")
             return []
-    
-    async def _search_by_similarity(self, query: str, limit: int) -> List[Dict]:
-        """Search FAQs by semantic similarity."""
-        try:
-            from ..services.rag_service import embeddings
-            
-            if embeddings is None:
-                logger.warning("[FAQ_MATCHER] Embeddings not available")
-                return []
-            
-            # Generate query embedding
-            query_embedding = embeddings.embed_query(query)
-            
-            # Search using vector similarity
-            faqs = list(database.svu_vectors_db.aggregate([
-                {
-                    "$search": {
-                        "cosmosSearch": {
-                            "vector": query_embedding,
-                            "k": limit
-                        },
-                        "returnScore": True
-                    }
-                },
-                {
-                    "$match": {"type": "faq"}
-                },
-                {
-                    "$limit": limit
-                }
-            ]))
-            
-            logger.info(f"[FAQ_MATCHER] Semantic search found {len(faqs)} FAQs")
-            return faqs
-            
-        except Exception as e:
-            logger.warning(f"[FAQ_MATCHER] Error in semantic search: {e}")
-            return []
-    
-    def _combine_and_rank(self, keyword_faqs: List[Dict], semantic_faqs: List[Dict], limit: int) -> List[Dict]:
-        """Combine and rank FAQs from different search methods."""
-        try:
-            # Create ranking dictionary
-            faq_scores = {}
-            
-            # Score keyword matches (higher weight)
-            for idx, faq in enumerate(keyword_faqs):
-                faq_id = str(faq.get('_id', ''))
-                score = (len(keyword_faqs) - idx) * 2  # Higher score for earlier results
-                faq_scores[faq_id] = {
-                    'score': score,
-                    'faq': faq
-                }
-            
-            # Score semantic matches
-            for idx, faq in enumerate(semantic_faqs):
-                faq_id = str(faq.get('_id', ''))
-                score = (len(semantic_faqs) - idx)
-                
-                if faq_id in faq_scores:
-                    faq_scores[faq_id]['score'] += score
-                else:
-                    faq_scores[faq_id] = {
-                        'score': score,
-                        'faq': faq
-                    }
-            
-            # Sort by score and return top results
-            ranked = sorted(faq_scores.values(), key=lambda x: x['score'], reverse=True)
-            result = [item['faq'] for item in ranked[:limit]]
-            
-            logger.info(f"[FAQ_MATCHER] Ranked {len(result)} FAQs")
-            return result
-            
-        except Exception as e:
-            logger.error(f"[FAQ_MATCHER] Error ranking FAQs: {e}")
-            return keyword_faqs[:limit]
 
 
 class ResponseSizer:
-    """Determines appropriate response size based on query complexity."""
-    
-    def __init__(self):
-        self.sizer_llm = ChatGroq(
-            model=Config.GROQ_MODEL_ID,
-            groq_api_key=Config.GROQ_API_KEY,
-            temperature=0.2,
-            timeout=60
+    """Determines how much content to return based on the question."""
+
+    def determine_response_size(self, query: str, faq_content: str) -> Dict[str, Any]:
+        normalized_query = _normalize_text(query)
+        tokens = _tokenize(query)
+        faq_words = max(len((faq_content or "").split()), 40)
+
+        explicit_small = any(text in normalized_query for text in ["brief", "short", "one line", "in short"])
+        explicit_large = any(text in normalized_query for text in ["detailed", "full details", "complete", "all details"])
+        process_query = any(text in normalized_query for text in ["how", "process", "procedure", "steps", "apply", "documents"])
+        list_query = any(text in normalized_query for text in ["list", "all", "available", "requirements", "facilities"])
+        comparison_query = any(text in normalized_query for text in ["fee", "fees", "structure", "compare", "comparison", "eligibility"])
+
+        short_fact_query = (
+            len(tokens) <= 7
+            and any(normalized_query.startswith(prefix) for prefix in ["what", "when", "where", "who", "which", "is", "are", "can"])
         )
-    
-    async def determine_response_size(self, query: str, faq_content: str) -> Dict:
-        """
-        Determine appropriate response size and structure.
-        
-        Returns:
-            {
-                'size': 'small' | 'medium' | 'large',
-                'word_count': int,
-                'structure': 'simple' | 'detailed' | 'comprehensive',
-                'include_examples': bool,
-                'include_steps': bool,
-                'include_tables': bool
-            }
-        """
-        try:
-            sizing_prompt = f"""Analyze this question and FAQ content to determine appropriate response size.
 
-Question: {query}
+        if explicit_small:
+            size = "small"
+        elif explicit_large or process_query or list_query or len(tokens) >= 12:
+            size = "large"
+        elif short_fact_query and not comparison_query:
+            size = "small"
+        else:
+            size = "medium"
 
-FAQ Content: {faq_content[:500]}
+        word_limits = {
+            "small": {"min": 18, "max": 55, "structure": "simple"},
+            "medium": {"min": 60, "max": 150, "structure": "detailed"},
+            "large": {"min": 160, "max": 280, "structure": "structured"},
+        }
+        selected = word_limits[size]
+        estimated_words = faq_words if size != "small" else int(faq_words * 0.45)
+        word_count = max(selected["min"], min(selected["max"], estimated_words))
 
-Determine:
-1. Response size: 'small' (1-2 sentences), 'medium' (3-5 sentences), or 'large' (detailed with sections)
-2. Word count target: small=50-100, medium=150-300, large=400-800
-3. Structure: 'simple' (plain text), 'detailed' (with bullets), 'comprehensive' (with sections, tables, examples)
-4. Include examples: true/false
-5. Include step-by-step: true/false
-6. Include comparison table: true/false
-
-Return ONLY valid JSON:
-{{
-    "size": "small|medium|large",
-    "word_count": number,
-    "structure": "simple|detailed|comprehensive",
-    "include_examples": true/false,
-    "include_steps": true/false,
-    "include_tables": true/false
-}}"""
-            
-            response = await self.sizer_llm.ainvoke(sizing_prompt)
-            content = response.content if hasattr(response, 'content') else str(response)
-            
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group(0))
-                logger.info(f"[RESPONSE_SIZER] Determined size: {result['size']}")
-                return result
-                
-        except Exception as e:
-            logger.warning(f"[RESPONSE_SIZER] Error determining size: {e}")
-        
-        # Default: medium response
         return {
-            'size': 'medium',
-            'word_count': 200,
-            'structure': 'detailed',
-            'include_examples': True,
-            'include_steps': False,
-            'include_tables': False
+            "size": size,
+            "word_count": word_count,
+            "structure": selected["structure"],
+            "include_steps": process_query,
+            "include_list": list_query or comparison_query,
         }
 
 
 class FAQResponseGenerator:
-    """Generates refined responses from FAQ content."""
+    """Generates concise, user-facing responses from FAQ content."""
     
     def __init__(self):
         self.generator_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID,
             groq_api_key=Config.GROQ_API_KEY,
-            temperature=0.3,
+            temperature=0.1,
             timeout=60
         )
     
@@ -280,28 +289,17 @@ class FAQResponseGenerator:
         self,
         user_query: str,
         faq_content: str,
-        response_config: Dict,
-        context: str = ""
+        response_config: Dict[str, Any],
+        context: str = "",
+        language_instruction: str = "Reply in English.",
     ) -> str:
-        """
-        Generate refined response from FAQ content.
-        
-        Args:
-            user_query: User's original question
-            faq_content: FAQ content from database
-            response_config: Configuration for response size/structure
-            context: Additional context
-            
-        Returns:
-            Refined, well-structured response
-        """
         try:
-            # Build generation prompt based on response config
             prompt = self._build_generation_prompt(
                 user_query,
                 faq_content,
                 response_config,
-                context
+                context,
+                language_instruction,
             )
             
             response = await self.generator_llm.ainvoke(prompt)
@@ -318,64 +316,57 @@ class FAQResponseGenerator:
         self,
         query: str,
         faq_content: str,
-        config: Dict,
-        context: str
+        config: Dict[str, Any],
+        context: str,
+        language_instruction: str,
     ) -> str:
-        """Build generation prompt based on response configuration."""
-        
         size = config.get('size', 'medium')
         structure = config.get('structure', 'detailed')
-        word_count = config.get('word_count', 200)
-        include_examples = config.get('include_examples', True)
+        word_count = config.get('word_count', 100)
         include_steps = config.get('include_steps', False)
-        include_tables = config.get('include_tables', False)
+        include_list = config.get('include_list', False)
         
-        # Size-specific instructions
         size_instructions = {
-            'small': 'Keep response to 1-2 sentences. Be concise and direct.',
-            'medium': f'Provide a balanced response of approximately {word_count} words. Include key information.',
-            'large': f'Provide a comprehensive response of approximately {word_count} words. Include detailed information, examples, and context.'
+            'small': 'Answer in 1-2 sentences only.',
+            'medium': f'Answer in about {word_count} words with only the necessary details.',
+            'large': f'Answer in about {word_count} words with clear structure and only relevant details.',
         }
-        
-        # Structure-specific instructions
         structure_instructions = {
-            'simple': 'Use plain text format. No special formatting.',
-            'detailed': 'Use bullet points and bold text for key terms. Organize information logically.',
-            'comprehensive': 'Use sections with headers, bullet points, tables, and examples. Organize hierarchically.'
+            'simple': 'Use a short plain answer.',
+            'detailed': 'Use a direct opening and short bullet points only if needed.',
+            'structured': 'Use short sections or bullets only when they help readability.',
         }
-        
-        # Build prompt
-        prompt = f"""You are an expert at refining FAQ content into high-quality responses.
+
+        return f"""You are refining an answer for the main SVU chatbot using FAQ data from the database.
+
+Language Rule: {language_instruction}
 
 User Question: {query}
 
-FAQ Content (Source):
+FAQ Content:
 {faq_content}
 
-{f'Additional Context: {context}' if context else ''}
+Additional Context:
+{context or "None"}
 
 Response Requirements:
 1. Size: {size_instructions[size]}
 2. Structure: {structure_instructions[structure]}
-3. Word Count Target: {word_count} words
-4. Include Examples: {'Yes - provide relevant examples' if include_examples else 'No - focus on core information'}
-5. Include Step-by-Step: {'Yes - provide numbered steps if applicable' if include_steps else 'No'}
-6. Include Tables: {'Yes - use tables for comparison/data' if include_tables else 'No'}
+3. Include steps: {"Yes, but only if the question asks for a process." if include_steps else "No step-by-step explanation unless essential."}
+4. Include list formatting: {"Yes, but only if it makes the answer clearer." if include_list else "No unnecessary bullets or lists."}
 
 Quality Standards:
-- Accuracy: Ensure all information is accurate and grounded in the FAQ
-- Clarity: Use clear, professional language
-- Organization: Structure information logically
-- Completeness: Address all aspects of the question
-- Formatting: Use Markdown properly (**bold**, • bullets, 1. numbered lists)
+- Use only the FAQ content to answer.
+- Do not add background, importance, recommendations, warnings, or extra explanation unless the user asked.
+- Do not say "it is important because", "it is recommended", or similar filler.
+- Keep the answer simple, relevant, true, accurate, and complete only to the needed level.
+- If the FAQ does not contain the answer, say that briefly.
 
-Generate the refined response now:"""
-        
-        return prompt
+Return only the final answer."""
 
 
 class EnhancedFAQChatbot:
-    """Enhanced chatbot that uses FAQ database for intelligent responses."""
+    """FAQ-first chatbot for the main chat experience."""
     
     def __init__(self):
         self.faq_matcher = FAQMatcher()
@@ -384,106 +375,132 @@ class EnhancedFAQChatbot:
         self.refiner_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID,
             groq_api_key=Config.GROQ_API_KEY,
-            temperature=0.3,
+            temperature=0.1,
             timeout=60
         )
-    
+
+    def _build_context(self, primary_faq: Dict[str, Any], related_faqs: List[Dict[str, Any]]) -> str:
+        blocks = [
+            "Primary FAQ",
+            f"Question: {primary_faq.get('question', '').strip()}",
+            f"Answer: {primary_faq.get('answer', '').strip()}",
+        ]
+        if related_faqs:
+            blocks.append("\nRelated FAQs")
+            for index, faq in enumerate(related_faqs, start=1):
+                blocks.append(f"{index}. Question: {faq.get('question', '').strip()}")
+                blocks.append(f"   Answer: {faq.get('answer', '').strip()}")
+        return "\n".join(blocks).strip()
+
+    async def generate_faq_response_bundle(
+        self,
+        user_query: str,
+        retrieval_query: str = "",
+        session_id: str = "",
+        context: str = "",
+        language_instruction: str = "Reply in English.",
+    ) -> Dict[str, Any]:
+        del session_id
+
+        try:
+            lookup_query = retrieval_query or user_query
+            relevant_faqs = await self.faq_matcher.find_relevant_faqs(lookup_query, limit=5)
+            if not relevant_faqs:
+                return {"matched": False, "confidence": 0.0, "response": "", "primary_faq": None}
+
+            primary_faq = relevant_faqs[0]
+            confidence = float(primary_faq.get("match_confidence", 0.0) or 0.0)
+            if confidence < 0.23:
+                logger.info("[ENHANCED_CHATBOT] No strong FAQ match found")
+                return {"matched": False, "confidence": confidence, "response": "", "primary_faq": primary_faq}
+
+            related_faqs = []
+            for faq in relevant_faqs[1:]:
+                faq_confidence = float(faq.get("match_confidence", 0.0) or 0.0)
+                if faq_confidence >= max(0.18, confidence - 0.10):
+                    related_faqs.append(faq)
+                if len(related_faqs) >= 2:
+                    break
+
+            faq_context = self._build_context(primary_faq, related_faqs)
+            response_config = self.response_sizer.determine_response_size(user_query, faq_context)
+            raw_response = await self.response_generator.generate_response(
+                user_query=user_query,
+                faq_content=faq_context,
+                response_config=response_config,
+                context=context,
+                language_instruction=language_instruction,
+            )
+            final_response = await self._final_refinement(
+                response=raw_response,
+                query=user_query,
+                config=response_config,
+                faq_context=faq_context,
+                language_instruction=language_instruction,
+            )
+            return {
+                "matched": True,
+                "confidence": confidence,
+                "response": final_response,
+                "primary_faq": primary_faq,
+            }
+        except Exception as exc:
+            logger.error(f"[ENHANCED_CHATBOT] Error generating FAQ-based response: {exc}")
+            return {"matched": False, "confidence": 0.0, "response": "", "primary_faq": None}
+
     async def generate_faq_based_response(
         self,
         user_query: str,
         session_id: str = "",
-        context: str = ""
+        context: str = "",
+        language_instruction: str = "Reply in English.",
     ) -> str:
-        """
-        Generate response using FAQ database.
-        
-        Args:
-            user_query: User's question
-            session_id: Session ID for context
-            context: Additional context
-            
-        Returns:
-            Refined response based on FAQ
-        """
-        try:
-            logger.info(f"[ENHANCED_CHATBOT] Processing query: {user_query[:80]}")
-            
-            # Step 1: Find relevant FAQs
-            relevant_faqs = await self.faq_matcher.find_relevant_faqs(user_query, limit=3)
-            
-            if not relevant_faqs:
-                logger.warning("[ENHANCED_CHATBOT] No relevant FAQs found")
-                return "I don't have specific information about this topic. Please contact the university office for more details."
-            
-            # Step 2: Select best FAQ
-            best_faq = relevant_faqs[0]
-            faq_content = best_faq.get('text', '')
-            logger.info(f"[ENHANCED_CHATBOT] Selected FAQ: {faq_content[:100]}")
-            
-            # Step 3: Determine response size
-            response_config = await self.response_sizer.determine_response_size(
-                user_query,
-                faq_content
-            )
-            logger.info(f"[ENHANCED_CHATBOT] Response config: {response_config['size']}")
-            
-            # Step 4: Generate refined response
-            refined_response = await self.response_generator.generate_response(
-                user_query,
-                faq_content,
-                response_config,
-                context
-            )
-            
-            # Step 5: Final refinement for quality
-            final_response = await self._final_refinement(
-                refined_response,
-                user_query,
-                response_config
-            )
-            
-            logger.info(f"[ENHANCED_CHATBOT] Generated response ({len(final_response)} chars)")
-            return final_response
-            
-        except Exception as e:
-            logger.error(f"[ENHANCED_CHATBOT] Error generating FAQ-based response: {e}")
-            return "I encountered an error processing your question. Please try again."
-    
+        bundle = await self.generate_faq_response_bundle(
+            user_query=user_query,
+            retrieval_query="",
+            session_id=session_id,
+            context=context,
+            language_instruction=language_instruction,
+        )
+        if bundle.get("matched"):
+            return bundle.get("response", "")
+        return "I don't have the exact answer in the FAQ database."
+
     async def _final_refinement(
         self,
         response: str,
         query: str,
-        config: Dict
+        config: Dict[str, Any],
+        faq_context: str,
+        language_instruction: str,
     ) -> str:
-        """Apply final refinement to response."""
         try:
-            refinement_prompt = f"""Apply final quality refinement to this response.
+            prompt = f"""Clean this chatbot answer before sending it to the user.
 
-Original Query: {query}
+Language Rule: {language_instruction}
 
-Current Response:
+User Query:
+{query}
+
+FAQ Context:
+{faq_context}
+
+Current Answer:
 {response}
 
-Response Size: {config['size']}
-Target Word Count: {config['word_count']}
+Rules:
+- Keep the same meaning and stay grounded in the FAQ context.
+- Keep the answer size as {config.get("size", "medium")} with about {config.get("word_count", 100)} words maximum.
+- Remove filler, repetition, background explanation, and unnecessary advice.
+- Keep it simple, relevant, accurate, and well organized.
+- Do not add any new facts.
 
-Final Refinement Checklist:
-1. Verify response matches the required size ({config['size']})
-2. Ensure proper Markdown formatting
-3. Check for clarity and professionalism
-4. Verify all information is accurate
-5. Ensure logical organization
-6. Add proper spacing and line breaks
+Return only the cleaned answer."""
 
-Return ONLY the refined response, no explanations."""
-            
-            response_obj = await self.refiner_llm.ainvoke(refinement_prompt)
-            refined = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
-            
-            return refined.strip()
-            
-        except Exception as e:
-            logger.warning(f"[ENHANCED_CHATBOT] Error in final refinement: {e}")
+            response_obj = await self.refiner_llm.ainvoke(prompt)
+            return (response_obj.content if hasattr(response_obj, "content") else str(response_obj)).strip()
+        except Exception as exc:
+            logger.warning(f"[ENHANCED_CHATBOT] Final refinement error: {exc}")
             return response
 
 
