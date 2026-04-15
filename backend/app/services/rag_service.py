@@ -33,6 +33,9 @@ except Exception:
 from ..core.config import Config
 from ..core import database
 from .logging_service import log_event
+from .response_refiner import get_response_refiner
+from .prompt_templates import get_context_cleaning_prompt
+from .enhanced_faq_chatbot import get_enhanced_faq_chatbot
 
 logger = logging.getLogger("uvicorn")
 
@@ -501,23 +504,10 @@ Output format (JSON):
             
             if raw_context.strip() and fast_llm:
                 try:
-                    cleaning_prompt = f"""You are a high-precision University Information Auditor.
-You are given multiple retrieved context chunks.
-
-Your task:
-- Remove irrelevant information that does not help answer the query.
-- Keep only useful content for answering the query.
-- Remove duplicates and combine overlapping information.
-- Keep it concise but complete.
-- Resolve minor format errors.
-
-Query: {rephrased_query}
-
-Context:
-{raw_context}
-
-Cleaned Context:
-"""
+                    cleaning_prompt = get_context_cleaning_prompt(
+                        query=rephrased_query,
+                        raw_context=raw_context
+                    )
                     cleaning_res = await fast_llm.ainvoke(cleaning_prompt)
                     cleaned_context = cleaning_res.content if hasattr(cleaning_res, 'content') else str(cleaning_res)
                 except Exception as cleaning_e:
@@ -550,7 +540,26 @@ User Request: {message}
 """
             
             response = await smart_llm.ainvoke(master_prompt)
-            return response.content if hasattr(response, 'content') else str(response)
+            raw_response = response.content if hasattr(response, 'content') else str(response)
+            
+            # Refine response for better quality
+            refiner = get_response_refiner()
+            refined_response = await refiner.refine_response(
+                raw_response=raw_response,
+                original_query=message,
+                context=cleaned_context
+            )
+            
+            # Enhance with reasoning
+            final_response = await refiner.enhance_with_reasoning(
+                response=refined_response,
+                query=message
+            )
+            
+            # Format for display
+            formatted_response = await refiner.format_for_display(final_response)
+            
+            return formatted_response
             
         except Exception as e:
             error_str = str(e).lower()
