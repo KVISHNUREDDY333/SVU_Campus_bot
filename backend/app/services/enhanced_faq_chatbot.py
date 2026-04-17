@@ -15,9 +15,37 @@ from ..core.config import Config
 logger = logging.getLogger("uvicorn")
 
 STOPWORDS = {
-    "a", "an", "and", "are", "at", "be", "by", "can", "for", "from", "how",
-    "i", "in", "is", "it", "me", "my", "of", "on", "or", "please", "the",
-    "to", "what", "when", "where", "which", "who", "with", "would", "you",
+    "a",
+    "an",
+    "and",
+    "are",
+    "at",
+    "be",
+    "by",
+    "can",
+    "for",
+    "from",
+    "how",
+    "i",
+    "in",
+    "is",
+    "it",
+    "me",
+    "my",
+    "of",
+    "on",
+    "or",
+    "please",
+    "the",
+    "to",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "with",
+    "would",
+    "you",
 }
 
 
@@ -80,12 +108,16 @@ class FAQMatcher:
     def _faq_key(self, faq: Dict[str, Any]) -> str:
         return faq.get("faq_id") or _normalize_text(faq.get("question", ""))[:160]
 
-    def _search_by_keywords(self, keywords: List[str], limit: int) -> List[Dict[str, Any]]:
+    def _search_by_keywords(
+        self, keywords: List[str], limit: int
+    ) -> List[Dict[str, Any]]:
         if database.svu_vectors_db is None or not keywords:
             return []
 
         try:
-            regex = re.compile("|".join(re.escape(word) for word in keywords), re.IGNORECASE)
+            regex = re.compile(
+                "|".join(re.escape(word) for word in keywords), re.IGNORECASE
+            )
             query = {
                 "type": "faq",
                 "$or": [
@@ -96,7 +128,9 @@ class FAQMatcher:
                 ],
             }
             results = list(
-                database.svu_vectors_db.find(query).sort("created_at", -1).limit(max(limit * 4, 10))
+                database.svu_vectors_db.find(query)
+                .sort("created_at", -1)
+                .limit(max(limit * 4, 10))
             )
             normalized = []
             for item in results:
@@ -107,7 +141,9 @@ class FAQMatcher:
             logger.error(f"[FAQ_MATCHER] Keyword search error: {exc}")
             return []
 
-    async def _search_by_similarity(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    async def _search_by_similarity(
+        self, query: str, limit: int
+    ) -> List[Dict[str, Any]]:
         try:
             from . import rag_service
 
@@ -130,8 +166,12 @@ class FAQMatcher:
                 metadata = getattr(doc, "metadata", {}) or {}
                 normalized.append(
                     {
-                        "faq_id": str(metadata.get("faq_id") or metadata.get("_id") or ""),
-                        "question": (metadata.get("question") or parsed["question"]).strip(),
+                        "faq_id": str(
+                            metadata.get("faq_id") or metadata.get("_id") or ""
+                        ),
+                        "question": (
+                            metadata.get("question") or parsed["question"]
+                        ).strip(),
                         "answer": (metadata.get("answer") or parsed["answer"]).strip(),
                         "category": metadata.get("category", "General"),
                         "text": getattr(doc, "page_content", ""),
@@ -162,7 +202,11 @@ class FAQMatcher:
             _normalize_text(faq.get("question", "")),
         ).ratio()
 
-        phrase_bonus = 0.08 if _normalize_text(user_query) in _normalize_text(faq.get("question", "")) else 0.0
+        phrase_bonus = (
+            0.08
+            if _normalize_text(user_query) in _normalize_text(faq.get("question", ""))
+            else 0.0
+        )
         score = (
             (0.40 * question_overlap)
             + (0.18 * answer_overlap)
@@ -187,8 +231,12 @@ class FAQMatcher:
         for faq in keyword_faqs + semantic_faqs:
             key = self._faq_key(faq)
             if key in merged:
-                merged[key]["keyword_hit"] = merged[key]["keyword_hit"] or faq.get("keyword_hit", False)
-                merged[key]["vector_score"] = max(merged[key]["vector_score"], faq.get("vector_score", 0.0))
+                merged[key]["keyword_hit"] = merged[key]["keyword_hit"] or faq.get(
+                    "keyword_hit", False
+                )
+                merged[key]["vector_score"] = max(
+                    merged[key]["vector_score"], faq.get("vector_score", 0.0)
+                )
                 if len(faq.get("answer", "")) > len(merged[key].get("answer", "")):
                     merged[key]["question"] = faq.get("question", "")
                     merged[key]["answer"] = faq.get("answer", "")
@@ -211,7 +259,9 @@ class FAQMatcher:
         )
         return ranked[:limit]
 
-    async def find_relevant_faqs(self, user_query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def find_relevant_faqs(
+        self, user_query: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
         if database.svu_vectors_db is None:
             logger.warning("[FAQ_MATCHER] Database not available")
             return []
@@ -220,7 +270,9 @@ class FAQMatcher:
             keywords = self._extract_keywords(user_query)
             keyword_faqs = self._search_by_keywords(keywords, limit)
             semantic_faqs = await self._search_by_similarity(user_query, limit)
-            ranked = self._combine_and_rank(user_query, keyword_faqs, semantic_faqs, limit)
+            ranked = self._combine_and_rank(
+                user_query, keyword_faqs, semantic_faqs, limit
+            )
             logger.info(f"[FAQ_MATCHER] Ranked {len(ranked)} FAQs for main chat")
             return ranked
         except Exception as exc:
@@ -236,15 +288,37 @@ class ResponseSizer:
         tokens = _tokenize(query)
         faq_words = max(len((faq_content or "").split()), 40)
 
-        explicit_small = any(text in normalized_query for text in ["brief", "short", "one line", "in short"])
-        explicit_large = any(text in normalized_query for text in ["detailed", "full details", "complete", "all details"])
-        process_query = any(text in normalized_query for text in ["how", "process", "procedure", "steps", "apply", "documents"])
-        list_query = any(text in normalized_query for text in ["list", "all", "available", "requirements", "facilities"])
-        comparison_query = any(text in normalized_query for text in ["fee", "fees", "structure", "compare", "comparison", "eligibility"])
+        explicit_small = any(
+            text in normalized_query
+            for text in ["brief", "short", "one line", "in short"]
+        )
+        explicit_large = any(
+            text in normalized_query
+            for text in ["detailed", "full details", "complete", "all details"]
+        )
+        process_query = any(
+            text in normalized_query
+            for text in ["how", "process", "procedure", "steps", "apply", "documents"]
+        )
+        list_query = any(
+            text in normalized_query
+            for text in ["list", "all", "available", "requirements", "facilities"]
+        )
+        comparison_query = any(
+            text in normalized_query
+            for text in [
+                "fee",
+                "fees",
+                "structure",
+                "compare",
+                "comparison",
+                "eligibility",
+            ]
+        )
 
-        short_fact_query = (
-            len(tokens) <= 7
-            and any(normalized_query.startswith(prefix) for prefix in ["what", "when", "where", "who", "which", "is", "are", "can"])
+        short_fact_query = len(tokens) <= 7 and any(
+            normalized_query.startswith(prefix)
+            for prefix in ["what", "when", "where", "who", "which", "is", "are", "can"]
         )
 
         if explicit_small:
@@ -276,15 +350,15 @@ class ResponseSizer:
 
 class FAQResponseGenerator:
     """Generates concise, user-facing responses from FAQ content."""
-    
+
     def __init__(self):
         self.generator_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID,
             groq_api_key=Config.GROQ_API_KEY,
             temperature=0.1,
-            timeout=60
+            timeout=60,
         )
-    
+
     async def generate_response(
         self,
         user_query: str,
@@ -301,17 +375,19 @@ class FAQResponseGenerator:
                 context,
                 language_instruction,
             )
-            
+
             response = await self.generator_llm.ainvoke(prompt)
-            generated = response.content if hasattr(response, 'content') else str(response)
-            
+            generated = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+
             logger.info(f"[FAQ_GENERATOR] Generated response ({len(generated)} chars)")
             return generated.strip()
-            
+
         except Exception as e:
             logger.error(f"[FAQ_GENERATOR] Error generating response: {e}")
             return faq_content
-    
+
     def _build_generation_prompt(
         self,
         query: str,
@@ -320,21 +396,21 @@ class FAQResponseGenerator:
         context: str,
         language_instruction: str,
     ) -> str:
-        size = config.get('size', 'medium')
-        structure = config.get('structure', 'detailed')
-        word_count = config.get('word_count', 100)
-        include_steps = config.get('include_steps', False)
-        include_list = config.get('include_list', False)
-        
+        size = config.get("size", "medium")
+        structure = config.get("structure", "detailed")
+        word_count = config.get("word_count", 100)
+        include_steps = config.get("include_steps", False)
+        include_list = config.get("include_list", False)
+
         size_instructions = {
-            'small': 'Answer in 1-2 sentences only.',
-            'medium': f'Answer in about {word_count} words with only the necessary details.',
-            'large': f'Answer in about {word_count} words with clear structure and only relevant details.',
+            "small": "Answer in 1-2 sentences only.",
+            "medium": f"Answer in about {word_count} words with only the necessary details.",
+            "large": f"Answer in about {word_count} words with clear structure and only relevant details.",
         }
         structure_instructions = {
-            'simple': 'Use a short plain answer.',
-            'detailed': 'Use a direct opening and short bullet points only if needed.',
-            'structured': 'Use short sections or bullets only when they help readability.',
+            "simple": "Use a short plain answer.",
+            "detailed": "Use a direct opening and short bullet points only if needed.",
+            "structured": "Use short sections or bullets only when they help readability.",
         }
 
         return f"""You are refining an answer for the main SVU chatbot using FAQ data from the database.
@@ -367,7 +443,7 @@ Return only the final answer."""
 
 class EnhancedFAQChatbot:
     """FAQ-first chatbot for the main chat experience."""
-    
+
     def __init__(self):
         self.faq_matcher = FAQMatcher()
         self.response_sizer = ResponseSizer()
@@ -376,10 +452,12 @@ class EnhancedFAQChatbot:
             model=Config.GROQ_MODEL_ID,
             groq_api_key=Config.GROQ_API_KEY,
             temperature=0.1,
-            timeout=60
+            timeout=60,
         )
 
-    def _build_context(self, primary_faq: Dict[str, Any], related_faqs: List[Dict[str, Any]]) -> str:
+    def _build_context(
+        self, primary_faq: Dict[str, Any], related_faqs: List[Dict[str, Any]]
+    ) -> str:
         blocks = [
             "Primary FAQ",
             f"Question: {primary_faq.get('question', '').strip()}",
@@ -404,15 +482,27 @@ class EnhancedFAQChatbot:
 
         try:
             lookup_query = retrieval_query or user_query
-            relevant_faqs = await self.faq_matcher.find_relevant_faqs(lookup_query, limit=5)
+            relevant_faqs = await self.faq_matcher.find_relevant_faqs(
+                lookup_query, limit=5
+            )
             if not relevant_faqs:
-                return {"matched": False, "confidence": 0.0, "response": "", "primary_faq": None}
+                return {
+                    "matched": False,
+                    "confidence": 0.0,
+                    "response": "",
+                    "primary_faq": None,
+                }
 
             primary_faq = relevant_faqs[0]
             confidence = float(primary_faq.get("match_confidence", 0.0) or 0.0)
             if confidence < 0.23:
                 logger.info("[ENHANCED_CHATBOT] No strong FAQ match found")
-                return {"matched": False, "confidence": confidence, "response": "", "primary_faq": primary_faq}
+                return {
+                    "matched": False,
+                    "confidence": confidence,
+                    "response": "",
+                    "primary_faq": primary_faq,
+                }
 
             related_faqs = []
             for faq in relevant_faqs[1:]:
@@ -423,7 +513,9 @@ class EnhancedFAQChatbot:
                     break
 
             faq_context = self._build_context(primary_faq, related_faqs)
-            response_config = self.response_sizer.determine_response_size(user_query, faq_context)
+            response_config = self.response_sizer.determine_response_size(
+                user_query, faq_context
+            )
             raw_response = await self.response_generator.generate_response(
                 user_query=user_query,
                 faq_content=faq_context,
@@ -445,8 +537,15 @@ class EnhancedFAQChatbot:
                 "primary_faq": primary_faq,
             }
         except Exception as exc:
-            logger.error(f"[ENHANCED_CHATBOT] Error generating FAQ-based response: {exc}")
-            return {"matched": False, "confidence": 0.0, "response": "", "primary_faq": None}
+            logger.error(
+                f"[ENHANCED_CHATBOT] Error generating FAQ-based response: {exc}"
+            )
+            return {
+                "matched": False,
+                "confidence": 0.0,
+                "response": "",
+                "primary_faq": None,
+            }
 
     async def generate_faq_based_response(
         self,
@@ -498,7 +597,11 @@ Rules:
 Return only the cleaned answer."""
 
             response_obj = await self.refiner_llm.ainvoke(prompt)
-            return (response_obj.content if hasattr(response_obj, "content") else str(response_obj)).strip()
+            return (
+                response_obj.content
+                if hasattr(response_obj, "content")
+                else str(response_obj)
+            ).strip()
         except Exception as exc:
             logger.warning(f"[ENHANCED_CHATBOT] Final refinement error: {exc}")
             return response
@@ -506,6 +609,7 @@ Return only the cleaned answer."""
 
 # Singleton instance
 _enhanced_chatbot_instance = None
+
 
 def get_enhanced_faq_chatbot() -> EnhancedFAQChatbot:
     """Get or create the enhanced FAQ chatbot singleton."""

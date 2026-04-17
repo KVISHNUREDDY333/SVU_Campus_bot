@@ -1,9 +1,9 @@
-import markdown
-from xhtml2pdf import pisa
 from io import BytesIO
+
+import markdown
 from docx import Document
-from docx.shared import Pt
-import re
+from xhtml2pdf import pisa
+
 
 def generate_pdf(markdown_text: str) -> BytesIO:
     """
@@ -11,7 +11,7 @@ def generate_pdf(markdown_text: str) -> BytesIO:
     """
     # Convert Markdown to HTML
     html_content = markdown.markdown(markdown_text)
-    
+
     # Add basic styling for the PDF
     styled_html = f"""
     <html>
@@ -32,44 +32,45 @@ def generate_pdf(markdown_text: str) -> BytesIO:
     </body>
     </html>
     """
-    
+
     pdf_buffer = BytesIO()
     pisa_status = pisa.CreatePDF(styled_html, dest=pdf_buffer)
-    
+
     if pisa_status.err:
         raise Exception("PDF generation failed")
-        
+
     pdf_buffer.seek(0)
     return pdf_buffer
+
 
 def generate_docx(markdown_text: str) -> BytesIO:
     """
     Converts Markdown text to a Word (.docx) file in memory.
     """
     document = Document()
-    
+
     # Basic Markdown parsing (Note: This is a simplified parser)
-    lines = markdown_text.split('\n')
-    
+    lines = markdown_text.split("\n")
+
     for line in lines:
         line = line.strip()
         if not line:
             continue
-            
-        if line.startswith('# '):
+
+        if line.startswith("# "):
             document.add_heading(line[2:], level=1)
-        elif line.startswith('## '):
+        elif line.startswith("## "):
             document.add_heading(line[3:], level=2)
-        elif line.startswith('### '):
+        elif line.startswith("### "):
             document.add_heading(line[4:], level=3)
-        elif line.startswith('- ') or line.startswith('* '):
+        elif line.startswith("- ") or line.startswith("* "):
             # Remove bold/italic markers for cleaner text
-            clean_text = line[2:].replace('**', '').replace('*', '')
-            document.add_paragraph(clean_text, style='List Bullet')
+            clean_text = line[2:].replace("**", "").replace("*", "")
+            document.add_paragraph(clean_text, style="List Bullet")
         else:
             # Regular paragraph
-             # Remove bold/italic markers for cleaner text
-            clean_text = line.replace('**', '').replace('*', '')
+            # Remove bold/italic markers for cleaner text
+            clean_text = line.replace("**", "").replace("*", "")
             document.add_paragraph(clean_text)
 
     docx_buffer = BytesIO()

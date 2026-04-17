@@ -1,6 +1,8 @@
-from pymongo import MongoClient
 import logging
+
 import certifi
+from pymongo import MongoClient
+
 from .config import Config
 
 logger = logging.getLogger("uvicorn")
@@ -23,21 +25,24 @@ trending_queries_db = None
 exam_dates_db = None
 system_logs_db = None
 
+
 def get_db_client():
     global mongo_client, users_db, otps_db, svu_vectors_db, documents_db, analytics_db, tickets_db, calendar_db, notifications_db, suggested_faqs_db, study_materials_db, exam_dates_db, locations_db, trending_queries_db, system_logs_db
     if Config.MONGODB_URI:
         try:
             # Extended timeouts to handle DNS resolution issues (Server Do53 timeouts)
             mongo_client = MongoClient(
-                Config.MONGODB_URI, 
+                Config.MONGODB_URI,
                 tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=30000, # 30s selection timeout
-                connectTimeoutMS=20000          # 20s connection timeout
+                serverSelectionTimeoutMS=30000,  # 30s selection timeout
+                connectTimeoutMS=20000,  # 20s connection timeout
             )
             db = mongo_client[Config.DB_NAME]
             users_db = db["users"]
             otps_db = db["otps"]
-            svu_vectors_db = db[Config.COLLECTION_NAME]  # svu_vectors — single source for all FAQs + vectors
+            svu_vectors_db = db[
+                Config.COLLECTION_NAME
+            ]  # svu_vectors — single source for all FAQs + vectors
             documents_db = db["documents"]
             analytics_db = db["analytics_logs"]
             tickets_db = db["tickets"]
@@ -56,7 +61,8 @@ def get_db_client():
             mongo_client = None
     else:
         logger.warning("MONGODB_URI not set. Running without database.")
-        
+
+
 def close_db_client():
     if mongo_client:
         mongo_client.close()

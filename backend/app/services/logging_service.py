@@ -1,8 +1,10 @@
-from datetime import datetime
-from ..core import database
 import logging
+from datetime import datetime
+
+from ..core import database
 
 logger = logging.getLogger("uvicorn")
+
 
 def log_event(level: str, message: str, details: str = None):
     """
@@ -15,7 +17,7 @@ def log_event(level: str, message: str, details: str = None):
                 "level": level.upper(),
                 "message": message,
                 "details": details,
-                "timestamp": datetime.utcnow()
+                "timestamp": datetime.utcnow(),
             }
             database.system_logs_db.insert_one(log_entry)
             logger.info(f"System Log [{level.upper()}]: {message}")
@@ -23,6 +25,7 @@ def log_event(level: str, message: str, details: str = None):
             logger.warning(f"System Log DB not initialized. Event: {message}")
     except Exception as e:
         logger.error(f"Failed to write to system_logs_db: {e}")
+
 
 def get_recent_logs(limit: int = 50):
     """

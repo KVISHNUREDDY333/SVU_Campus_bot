@@ -228,8 +228,15 @@ FAQ_REFINEMENT_TEMPLATE = """Refine extracted FAQ pairs into high-quality, profe
     ]
 }}"""
 
-def get_master_response_prompt(context: str, user_username: str, user_role: str, 
-                               current_time: str, language_instruction: str, user_query: str) -> str:
+
+def get_master_response_prompt(
+    context: str,
+    user_username: str,
+    user_role: str,
+    current_time: str,
+    language_instruction: str,
+    user_query: str,
+) -> str:
     """Generate the master response prompt with all variables filled in."""
     return MASTER_RESPONSE_TEMPLATE.format(
         context=context,
@@ -237,26 +244,22 @@ def get_master_response_prompt(context: str, user_username: str, user_role: str,
         user_role=user_role,
         current_time=current_time,
         language_instruction=language_instruction,
-        user_query=user_query
+        user_query=user_query,
     )
+
 
 def get_context_cleaning_prompt(query: str, raw_context: str) -> str:
     """Generate the context cleaning prompt."""
-    return CONTEXT_CLEANING_TEMPLATE.format(
-        query=query,
-        raw_context=raw_context
-    )
+    return CONTEXT_CLEANING_TEMPLATE.format(query=query, raw_context=raw_context)
+
 
 def get_query_analysis_prompt(chat_history: str, user_query: str) -> str:
     """Generate the query analysis prompt."""
     return QUERY_ANALYSIS_TEMPLATE.format(
-        chat_history=chat_history,
-        user_query=user_query
+        chat_history=chat_history, user_query=user_query
     )
+
 
 def get_reasoning_enhancement_prompt(query: str, response: str) -> str:
     """Generate the reasoning enhancement prompt."""
-    return REASONING_ENHANCEMENT_TEMPLATE.format(
-        query=query,
-        response=response
-    )
+    return REASONING_ENHANCEMENT_TEMPLATE.format(query=query, response=response)

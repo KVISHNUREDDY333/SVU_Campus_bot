@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+
 
 class LocationModel(BaseModel):
     name: str
@@ -8,8 +10,10 @@ class LocationModel(BaseModel):
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class LocationResponse(LocationModel):
     id: str
+
 
 class LocationUpdate(BaseModel):
     name: Optional[str] = None

@@ -1,12 +1,15 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel
+
 
 class StudyMaterialModel(BaseModel):
     user_id: str
     filename: str
     file_id: str
     upload_date: datetime = datetime.utcnow()
+
 
 class ExamDateModel(BaseModel):
     subject: str
@@ -18,6 +21,7 @@ class ExamDateModel(BaseModel):
 class ResumeAnalysisRequest(BaseModel):
     resume_text: str
     target_role: Optional[str] = None
+
 
 class ResumeGenerationRequest(BaseModel):
     full_name: str
@@ -39,6 +43,7 @@ class ResumeGenerationRequest(BaseModel):
 class StudyBuddyChatRequest(BaseModel):
     material_id: str
     query: str
+
 
 class ZenRequest(BaseModel):
     query: str

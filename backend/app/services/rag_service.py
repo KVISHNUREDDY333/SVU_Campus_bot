@@ -1,41 +1,41 @@
-from langchain_mongodb import MongoDBAtlasVectorSearch
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_groq import ChatGroq
-from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_mongodb.chat_message_histories import MongoDBChatMessageHistory
-from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from langchain_core.output_parsers import StrOutputParser
-from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.schema import Document
+import json
 import logging
 import os
-import json
 import re
 from datetime import datetime
+
+from langchain.schema import Document
+from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_core.chat_history import BaseChatMessageHistory
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from langchain_mongodb.chat_message_histories import MongoDBChatMessageHistory
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # Configure environment variables to suppress Hugging Face warnings
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["TOKENIZERS_PARALLELISM"] = "false" # Avoids potential parallelism warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Avoids potential parallelism warnings
 
 try:
     # Suppress verbose "unauthenticated requests" warnings from huggingface_hub
     from huggingface_hub.utils import logging as hf_logging
+
     hf_logging.set_verbosity_error()
 except Exception:
     pass
-from ..core.config import Config
 from ..core import database
-from .logging_service import log_event
-from .response_refiner import get_response_refiner
-from .prompt_templates import get_context_cleaning_prompt
+from ..core.config import Config
 from .enhanced_faq_chatbot import get_enhanced_faq_chatbot
+from .logging_service import log_event
+from .prompt_templates import get_context_cleaning_prompt
+from .response_refiner import get_response_refiner
 
 logger = logging.getLogger("uvicorn")
 
@@ -66,6 +66,8 @@ You are the Official High-Fidelity Academic Assistant for Sri Venkateswara Unive
 vector_db = None
 llm = None
 retrieval_chain = None
+
+
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     return MongoDBChatMessageHistory(
         session_id=session_id,
@@ -74,12 +76,14 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
         collection_name="chat_history",
     )
 
+
 mock_academic_data = {}
-    
+
+
 def get_session_entities(session_id: str) -> dict:
     if not database.mongo_client:
         return {}
-    
+
     try:
         db = database.mongo_client[Config.DB_NAME]
         session_doc = db["chat_sessions"].find_one({"session_id": session_id})
@@ -88,77 +92,108 @@ def get_session_entities(session_id: str) -> dict:
         logger.error(f"Error fetching session entities: {e}")
         return {}
 
+
 def update_entities(session_id: str, message: str):
     """Simple entity extraction to improve conversational intelligence"""
     entities = get_session_entities(session_id)
     msg_lower = message.lower()
-    
-    if "it lab" in msg_lower: entities["last_location"] = "IT Lab"
-    if "cse" in msg_lower or "computer science" in msg_lower: entities["department"] = "CSE"
-    if "eee" in msg_lower: entities["department"] = "EEE"
-    if "admission" in msg_lower: entities["topic"] = "Admissions"
-    if "exam" in msg_lower or "results" in msg_lower or "syllabus" in msg_lower or "curriculum" in msg_lower: entities["topic"] = "Academics"
-    if "canteen" in msg_lower or "food" in msg_lower: entities["last_location"] = "Campus Canteen"
-    if "hostel" in msg_lower or "mess" in msg_lower or "warden" in msg_lower: 
+
+    if "it lab" in msg_lower:
+        entities["last_location"] = "IT Lab"
+    if "cse" in msg_lower or "computer science" in msg_lower:
+        entities["department"] = "CSE"
+    if "eee" in msg_lower:
+        entities["department"] = "EEE"
+    if "admission" in msg_lower:
+        entities["topic"] = "Admissions"
+    if (
+        "exam" in msg_lower
+        or "results" in msg_lower
+        or "syllabus" in msg_lower
+        or "curriculum" in msg_lower
+    ):
+        entities["topic"] = "Academics"
+    if "canteen" in msg_lower or "food" in msg_lower:
+        entities["last_location"] = "Campus Canteen"
+    if "hostel" in msg_lower or "mess" in msg_lower or "warden" in msg_lower:
         entities["last_location"] = "Student Hostel"
         entities["topic"] = "Hostels"
-    if "admin" in msg_lower or "registrar" in msg_lower or "principal" in msg_lower or "vc" in msg_lower: entities["topic"] = "Administration"
-    
+    if (
+        "admin" in msg_lower
+        or "registrar" in msg_lower
+        or "principal" in msg_lower
+        or "vc" in msg_lower
+    ):
+        entities["topic"] = "Administration"
+
     if database.mongo_client:
         try:
             db = database.mongo_client[Config.DB_NAME]
             db["chat_sessions"].update_one(
                 {"session_id": session_id},
                 {"$set": {"entities": entities, "last_interaction": datetime.utcnow()}},
-                upsert=True
+                upsert=True,
             )
         except Exception as e:
             logger.error(f"Error updating session entities: {e}")
 
+
 def trim_session_history(session_id: str, limit: int = 20):
     """Trims chat history to keep only the last `limit` messages to prevent token overflow."""
-    if not database.mongo_client: return
+    if not database.mongo_client:
+        return
     try:
         db = database.mongo_client[Config.DB_NAME]
         collection = db["chat_history"]
-        
+
         doc_count = collection.count_documents({"SessionId": session_id})
-        
+
         if doc_count > limit:
             delete_count = doc_count - limit
-            
-            cursor = collection.find(
-                {"SessionId": session_id},
-                {"_id": 1}
-            ).sort("_id", 1).limit(delete_count)
-            
+
+            cursor = (
+                collection.find({"SessionId": session_id}, {"_id": 1})
+                .sort("_id", 1)
+                .limit(delete_count)
+            )
+
             ids_to_delete = [doc["_id"] for doc in cursor]
-            
+
             if ids_to_delete:
                 collection.delete_many({"_id": {"$in": ids_to_delete}})
-                logger.info(f"Trimmed session {session_id}: Deleted {len(ids_to_delete)} old messages. Kept {limit}.")
+                logger.info(
+                    f"Trimmed session {session_id}: Deleted {len(ids_to_delete)} old messages. Kept {limit}."
+                )
     except Exception as e:
         logger.error(f"Error trimming history: {e}")
+
 
 CURRENT_TEMPERATURE = 0.0
 
 try:
     # Reverted to all-MiniLM-L6-v2 (384) to match existing MongoDB Vector Index
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    )
 except Exception as e:
-    logger.warning(f"Connection error downloading embeddings ({e}), attempting to load from local cache...")
+    logger.warning(
+        f"Connection error downloading embeddings ({e}), attempting to load from local cache..."
+    )
     try:
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'local_files_only': True}
+            model_kwargs={"local_files_only": True},
         )
         logger.info("Successfully loaded embeddings from local cache.")
     except Exception as e2:
-        logger.error(f"Critical: Failed to load embeddings both from Hub and Cache: {e2}")
+        logger.error(
+            f"Critical: Failed to load embeddings both from Hub and Cache: {e2}"
+        )
         raise e2
 
 smart_llm = None
 fast_llm = None
+
 
 def setup_rag_chain(force_reload: bool = False):
     global vector_db, smart_llm, fast_llm, retrieval_chain, llm
@@ -167,37 +202,41 @@ def setup_rag_chain(force_reload: bool = False):
         # Streamlined startup logs
         logger.info("Initializing Intelligence Engine (Groq)...")
         smart_llm = ChatGroq(
-            model=Config.GROQ_MODEL_ID, 
-            groq_api_key=Config.GROQ_API_KEY, 
+            model=Config.GROQ_MODEL_ID,
+            groq_api_key=Config.GROQ_API_KEY,
             temperature=CURRENT_TEMPERATURE,
             model_kwargs={"top_p": 0.9},
-            timeout=60
+            timeout=60,
         )
         fast_llm = ChatGroq(
-            model=Config.GROQ_FAST_MODEL_ID, 
-            groq_api_key=Config.GROQ_API_KEY, 
+            model=Config.GROQ_FAST_MODEL_ID,
+            groq_api_key=Config.GROQ_API_KEY,
             temperature=0.1,
-            timeout=60
+            timeout=60,
         )
-        
+
         llm = smart_llm
 
         if not database.mongo_client:
-            logger.warning("MongoDB client not initialized yet. Skipping Vector DB setup.")
+            logger.warning(
+                "MongoDB client not initialized yet. Skipping Vector DB setup."
+            )
             log_event("WARN", "MongoDB client not ready for RAG setup.")
             return
 
         logger.info("Initializing Embeddings and Vector DB...")
-        
+
         if not vector_db or force_reload:
-             vector_db = MongoDBAtlasVectorSearch(
-                collection=database.mongo_client[Config.DB_NAME][Config.COLLECTION_NAME],
+            vector_db = MongoDBAtlasVectorSearch(
+                collection=database.mongo_client[Config.DB_NAME][
+                    Config.COLLECTION_NAME
+                ],
                 embedding=embeddings,
                 index_name="vector_index",
                 relevance_score_fn="cosine",
-             )
-             log_event("SUCCESS", "Connected to MongoDB Atlas Vector Store.")
-        
+            )
+            log_event("SUCCESS", "Connected to MongoDB Atlas Vector Store.")
+
         contextualize_q_system_prompt = """Given a chat history and the latest user question, formulate a standalone question which can be understood without the chat history. 
         
         CRITICAL: 
@@ -205,7 +244,7 @@ def setup_rag_chain(force_reload: bool = False):
         2. EXCLUSION: If the user query is clearly UNSAFE, offensive, or non-educational (e.g., adult content, hate speech, violence), DO NOT rephrase it. Instead, return the string "UNSAFE_QUERY".
         
         The standalone question must be in English to search the database effectively."""
-        
+
         contextualize_q_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", contextualize_q_system_prompt),
@@ -213,18 +252,14 @@ def setup_rag_chain(force_reload: bool = False):
                 ("human", "{input}"),
             ]
         )
-        
+
         base_retriever = vector_db.as_retriever(
-            search_type="similarity",
-            search_kwargs={"k": 5}
+            search_type="similarity", search_kwargs={"k": 5}
         )
 
-        history_aware_retriever = (
-            RunnablePassthrough.assign(
-                rephrased_query=contextualize_q_prompt | fast_llm | StrOutputParser()
-            )
-            | (lambda x: base_retriever.invoke(x["rephrased_query"]))
-        )
+        history_aware_retriever = RunnablePassthrough.assign(
+            rephrased_query=contextualize_q_prompt | fast_llm | StrOutputParser()
+        ) | (lambda x: base_retriever.invoke(x["rephrased_query"]))
 
         qa_system_prompt = """You are the official University Safe Academic Assistant for SVU. 
 
@@ -251,7 +286,7 @@ Cleaned Context:
 Known Entities: {entities}
 Language Rule: {language_instruction}
 """
-        
+
         qa_prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", qa_system_prompt),
@@ -259,7 +294,7 @@ Language Rule: {language_instruction}
                 ("human", "{input}"),
             ]
         )
-        
+
         def format_docs(docs):
             if not docs:
                 return ""
@@ -267,31 +302,34 @@ Language Rule: {language_instruction}
 
         async def safe_rag_chain(input_dict):
             context_str = input_dict["context"]
-            
-            logger.info(f"[RAG] Context length: {len(context_str)} chars for query: {input_dict.get('input', '')[:80]}")
+
+            logger.info(
+                f"[RAG] Context length: {len(context_str)} chars for query: {input_dict.get('input', '')[:80]}"
+            )
             if context_str.strip():
                 logger.info(f"[RAG] Context preview: {context_str[:200]}...")
-            
+
             if len(context_str.strip()) < 10:
                 logger.warning("[RAG] Context empty or too short")
                 return "I don’t have enough information to answer that. Please contact the university office."
-            
+
             return await (qa_prompt | smart_llm | StrOutputParser()).ainvoke(input_dict)
 
-        question_answer_chain = (
-            {
-                "context": history_aware_retriever | format_docs,
-                "chat_history": lambda x: x["chat_history"],
-                "input": lambda x: x["input"],
-                "user_context": lambda x: x.get("user_context", "No personal data available."),
-                "current_time": lambda x: x.get("current_time", "Unknown Time"),
-                "entities": lambda x: x.get("entities", "None"),
-                "language_instruction": lambda x: x.get("language_instruction", "Reply in English"),
-                "user_username": lambda x: x.get("user_username", "guest")
-            }
-            | RunnableLambda(safe_rag_chain)
-        )
-        
+        question_answer_chain = {
+            "context": history_aware_retriever | format_docs,
+            "chat_history": lambda x: x["chat_history"],
+            "input": lambda x: x["input"],
+            "user_context": lambda x: x.get(
+                "user_context", "No personal data available."
+            ),
+            "current_time": lambda x: x.get("current_time", "Unknown Time"),
+            "entities": lambda x: x.get("entities", "None"),
+            "language_instruction": lambda x: x.get(
+                "language_instruction", "Reply in English"
+            ),
+            "user_username": lambda x: x.get("user_username", "guest"),
+        } | RunnableLambda(safe_rag_chain)
+
         retrieval_chain = RunnableWithMessageHistory(
             question_answer_chain,
             get_session_history,
@@ -299,13 +337,18 @@ Language Rule: {language_instruction}
             history_messages_key="chat_history",
         )
         logger.info("RAG Chain Setup Complete.")
-        
+
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
 
-
-async def _search_keywords_directly(query: str, limit: int = 5, return_list: bool = False, doc_type: str = None, keywords: list = None):
+async def _search_keywords_directly(
+    query: str,
+    limit: int = 5,
+    return_list: bool = False,
+    doc_type: str = None,
+    keywords: list = None,
+):
     """
     Search by keyword directly in svu_vectors collection (useful if vector search misses exact terms).
     Optional 'doc_type' allows targeting specific results like 'faq'.
@@ -313,44 +356,52 @@ async def _search_keywords_directly(query: str, limit: int = 5, return_list: boo
     if database.svu_vectors_db is None:
         return [] if return_list else ""
     try:
-        search_words = keywords if keywords else [w for w in query.split() if len(w) > 3]
+        search_words = (
+            keywords if keywords else [w for w in query.split() if len(w) > 3]
+        )
         if not search_words:
             return [] if return_list else ""
-        
+
         # Use OR logic to match any of the important keywords across multiple fields
         regex_pattern = "|".join(re.escape(word) for word in search_words)
         regex_obj = re.compile(regex_pattern, re.IGNORECASE)
-        
+
         search_query = {
             "$or": [
                 {"text": {"$regex": regex_obj}},
                 {"category": {"$regex": regex_obj}},
-                {"keywords": {"$in": [regex_obj]}} 
+                {"keywords": {"$in": [regex_obj]}},
             ]
         }
-        
+
         if doc_type:
             search_query["type"] = doc_type
-            
-        results = list(database.svu_vectors_db.find(
-            search_query,
-            {"text": 1, "category": 1, "_id": 0}
-        ).sort("created_at", -1).limit(limit)) # Prioritize newer records
-        
+
+        results = list(
+            database.svu_vectors_db.find(
+                search_query, {"text": 1, "category": 1, "_id": 0}
+            )
+            .sort("created_at", -1)
+            .limit(limit)
+        )  # Prioritize newer records
+
         if not results:
             return [] if return_list else ""
-            
+
         texts = [doc.get("text", "") for doc in results if "text" in doc]
         if return_list:
             return texts
-            
+
         context = "\n\n".join(texts)
         scope = f"(Type: {doc_type})" if doc_type else ""
-        logger.info(f"Keyword search {scope} found {len(results)} results using words: {search_words}")
+        logger.info(
+            f"Keyword search {scope} found {len(results)} results using words: {search_words}"
+        )
         return context
     except Exception as e:
         logger.error(f"Keyword search error: {e}")
         return [] if return_list else ""
+
 
 def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = False):
     """Search svu_vectors collection using embedding-based similarity search.
@@ -359,50 +410,59 @@ def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = Fa
         return [] if return_list else ""
     try:
         results = vector_db.similarity_search_with_score(query, k=limit + 3)
-        
+
         if not results:
             return [] if return_list else ""
-            
+
         # Threshold: 0.50 (cosine similarity) - Lowered from 0.60 to improve recall
         valid_docs = [doc for doc, score in results if score >= 0.50]
         valid_docs = valid_docs[:limit]
-        
+
         if not valid_docs:
-            logger.info(f"Vector search found results, but none met the 0.50 threshold for query: {query[:50]}")
+            logger.info(
+                f"Vector search found results, but none met the 0.50 threshold for query: {query[:50]}"
+            )
             return [] if return_list else ""
-        
+
         if return_list:
             return valid_docs
-            
-        context = "\n\n".join(doc.page_content for doc in valid_docs if doc.page_content)
-        logger.info(f"Vectors similarity search found {len(valid_docs)} valid results for query: {query[:50]}")
+
+        context = "\n\n".join(
+            doc.page_content for doc in valid_docs if doc.page_content
+        )
+        logger.info(
+            f"Vectors similarity search found {len(valid_docs)} valid results for query: {query[:50]}"
+        )
         return context
     except Exception as e:
         logger.error(f"Vectors similarity search error: {e}")
         return [] if return_list else ""
 
+
 def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
     """Combines vector and keyword results using Reciprocal Rank Fusion."""
     scores = {}
     from langchain.schema import Document
-    
+
     # Vector results processing
     for rank, doc in enumerate(vector_results):
-        content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
+        content = doc.page_content if hasattr(doc, "page_content") else str(doc)
         if content not in scores:
             scores[content] = {"score": 0.0, "doc": doc}
         scores[content]["score"] += 1.0 / (rank + k + 1)
-        
+
     # Keyword results processing
     for rank, content in enumerate(keyword_results):
-        if not content: continue
+        if not content:
+            continue
         if content not in scores:
             scores[content] = {"score": 0.0, "doc": Document(page_content=content)}
         scores[content]["score"] += 1.0 / (rank + k + 1)
-        
+
     # Sort and return top documents
     fused = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
     return [item["doc"] for item in fused]
+
 
 async def _hybrid_search(query: str, limit: int = 10, keywords: list = None):
     """
@@ -410,29 +470,41 @@ async def _hybrid_search(query: str, limit: int = 10, keywords: list = None):
     Prioritizes FAQ-specific keyword hits to ensure official answers are delivered first.
     """
     # 1. Targeted Keyword Search (FAQs only)
-    faq_keyword_results = await _search_keywords_directly(query, limit=5, return_list=True, doc_type="faq", keywords=keywords)
-    
+    faq_keyword_results = await _search_keywords_directly(
+        query, limit=5, return_list=True, doc_type="faq", keywords=keywords
+    )
+
     # 2. Broader Keyword Search (All sources)
-    broad_keyword_results = await _search_keywords_directly(query, limit=limit, return_list=True, keywords=keywords)
-    
+    broad_keyword_results = await _search_keywords_directly(
+        query, limit=limit, return_list=True, keywords=keywords
+    )
+
     # 3. Vector Similarity Search (All sources)
     # Note: _search_vectors_directly is currently sync but wrapped for future-proofing
     vector_docs = _search_vectors_directly(query, limit=limit, return_list=True)
-    
+
     # Combine results using RRF
     # We pass both sets of keyword results; RRF handles the overlap naturally
-    fused_docs = _reciprocal_rank_fusion(vector_docs, faq_keyword_results + broad_keyword_results)
-    
+    fused_docs = _reciprocal_rank_fusion(
+        vector_docs, faq_keyword_results + broad_keyword_results
+    )
+
     return fused_docs[:limit]
 
 
-async def generate_response(message: str, session_id: str, user_role: str, current_time: str, language: str = "en"):
+async def generate_response(
+    message: str,
+    session_id: str,
+    user_role: str,
+    current_time: str,
+    language: str = "en",
+):
     if not smart_llm:
         return "System initializing, please try again in a moment."
 
     user_role_key = user_role
     personal_info = mock_academic_data.get(user_role_key, {})
-    
+
     personal_context_str = ""
     if personal_info:
         for k, v in personal_info.items():
@@ -448,8 +520,8 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
         lang_instruction = "Reply in English."
 
     try:
-        user_username = session_id
-        
+        pass
+
         trim_session_history(session_id, limit=10)
         update_entities(session_id, message)
         entities_str = str(get_session_entities(session_id))
@@ -460,7 +532,7 @@ async def generate_response(message: str, session_id: str, user_role: str, curre
             extracted_keywords = []
             user_requirements = "Standard 3-Part Answer"
             rephrased_query = message
-            
+
             if fast_llm:
                 try:
                     history = get_session_history(session_id).messages[-3:]
@@ -482,14 +554,22 @@ Output format (JSON):
 }}
 """
                     analysis_res = await fast_llm.ainvoke(analysis_prompt)
-                    analysis_content = analysis_res.content if hasattr(analysis_res, 'content') else str(analysis_res)
-                    
+                    analysis_content = (
+                        analysis_res.content
+                        if hasattr(analysis_res, "content")
+                        else str(analysis_res)
+                    )
+
                     if "{" in analysis_content and "}" in analysis_content:
-                        json_str = analysis_content[analysis_content.find("{"):analysis_content.rfind("}")+1]
+                        json_str = analysis_content[
+                            analysis_content.find("{") : analysis_content.rfind("}") + 1
+                        ]
                         analysis_data = json.loads(json_str)
                         rephrased_query = analysis_data.get("standalone_query", message)
                         extracted_keywords = analysis_data.get("keywords", [])
-                        user_requirements = analysis_data.get("requirements", "Standard 3-Part Answer")
+                        user_requirements = analysis_data.get(
+                            "requirements", "Standard 3-Part Answer"
+                        )
                         logger.info(f"[RAG] Rewritten Query: {rephrased_query}")
                 except Exception as analysis_e:
                     logger.warning(f"Query analysis failed: {analysis_e}")
@@ -517,28 +597,33 @@ Output format (JSON):
                 return await refiner.format_for_display(faq_result["response"])
 
             # 3. RETRIEVAL PHASE: Optimized Hybrid Search
-            fused_docs = await _hybrid_search(rephrased_query, limit=10, keywords=extracted_keywords)
+            fused_docs = await _hybrid_search(
+                rephrased_query, limit=10, keywords=extracted_keywords
+            )
             raw_context = "\n\n".join([doc.page_content for doc in fused_docs])
-            
+
             # 4. CONTEXT CLEANING PHASE
             logger.info(f"[RAG] Cleaning Context ({len(raw_context)} chars)")
             cleaned_context = "I don’t have enough information to answer that. Please contact the university office."
-            
+
             if raw_context.strip() and fast_llm:
                 try:
                     cleaning_prompt = get_context_cleaning_prompt(
-                        query=rephrased_query,
-                        raw_context=raw_context
+                        query=rephrased_query, raw_context=raw_context
                     )
                     cleaning_res = await fast_llm.ainvoke(cleaning_prompt)
-                    cleaned_context = cleaning_res.content if hasattr(cleaning_res, 'content') else str(cleaning_res)
+                    cleaned_context = (
+                        cleaning_res.content
+                        if hasattr(cleaning_res, "content")
+                        else str(cleaning_res)
+                    )
                 except Exception as cleaning_e:
                     logger.warning(f"Context cleaning failed: {cleaning_e}")
-                    cleaned_context = raw_context # Fallback to raw
+                    cleaned_context = raw_context  # Fallback to raw
 
             # 5. GENERATION PHASE: Standardized Answer Structure
             if len(cleaned_context.strip()) < 15:
-                 return "I don’t have enough information to answer that. Please contact the university office."
+                return "I don’t have enough information to answer that. Please contact the university office."
 
             master_prompt = f"""{MASTER_AGENT_PROMPT}
 
@@ -561,35 +646,46 @@ User Request: {message}
 4. **LENGTH CONTROL**: If the question needs a short factual answer, answer in 1-2 sentences. Give longer detail only when the question asks for it.
 5. **ZERO HALLUCINATION**: Only state what is confirmed by context or verified academic knowledge (GK).
 """
-            
+
             response = await smart_llm.ainvoke(master_prompt)
-            raw_response = response.content if hasattr(response, 'content') else str(response)
-            
+            raw_response = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+
             # Refine response for better quality
             refiner = get_response_refiner()
             refined_response = await refiner.refine_response(
                 raw_response=raw_response,
                 original_query=message,
-                context=cleaned_context
+                context=cleaned_context,
             )
-            
+
             # Format for display
             formatted_response = await refiner.format_for_display(refined_response)
-            
+
             return formatted_response
-            
+
         except Exception as e:
             error_str = str(e).lower()
-            if "413" in error_str or "429" in error_str or "rate limit" in error_str or "too large" in error_str:
-                logger.warning(f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history...")
+            if (
+                "413" in error_str
+                or "429" in error_str
+                or "rate limit" in error_str
+                or "too large" in error_str
+            ):
+                logger.warning(
+                    f"Rate Limit or Context Limit Hit ({e}). Retrying with trimmed history..."
+                )
                 trim_session_history(session_id, limit=2)
                 return "The system is currently experiencing high demand. Please try again in a few minutes."
             else:
                 raise e
     except Exception as e:
         import traceback
+
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
         raise e
+
 
 async def process_and_refine_knowledge(text: str, source: str):
     """
@@ -603,11 +699,11 @@ async def process_and_refine_knowledge(text: str, source: str):
         if not raw_faqs:
             logger.warning(f"[AUTO-TRAIN] No FAQs extracted from: {source}")
             return 0
-            
+
         # 2. Refine FAQs using full context
         logger.info(f"[AUTO-TRAIN] Refining {len(raw_faqs)} FAQs for: {source}")
         refined_faqs = await refine_kb_data(raw_faqs, text)
-        
+
         # 3. Ingest each refined FAQ (ingest_faq handles embeddings)
         inserted_count = 0
         for faq in refined_faqs:
@@ -615,16 +711,19 @@ async def process_and_refine_knowledge(text: str, source: str):
                 question=faq.get("question"),
                 answer=faq.get("answer"),
                 category=faq.get("category", "General"),
-                source=source
+                source=source,
             )
             if success:
                 inserted_count += 1
-        
-        logger.info(f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}")
+
+        logger.info(
+            f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}"
+        )
         return inserted_count
     except Exception as e:
         logger.error(f"[AUTO-TRAIN] Error processing knowledge for {source}: {e}")
         return 0
+
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
@@ -632,49 +731,53 @@ async def ingest_url(url: str, store_vectors: bool = True):
     Returns tuple: (num_chunks, full_text_content)
     """
     if not vector_db:
-         setup_rag_chain()
-         if not vector_db:
-             raise Exception("Vector DB not initialized")
+        setup_rag_chain()
+        if not vector_db:
+            raise Exception("Vector DB not initialized")
 
     try:
         logger.info(f"Ingesting URL: {url}")
         loader = WebBaseLoader(url, requests_kwargs={"verify": False})
         docs = loader.load()
-        
+
         full_text = "\n\n".join([d.page_content for d in docs])
 
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=75)
         splits = text_splitter.split_documents(docs)
-        
+
         if store_vectors and vector_db:
-             vector_db.add_documents(splits)
+            vector_db.add_documents(splits)
         elif store_vectors:
-             logger.warning("Vector DB not initialized, skipping storage")
-        
+            logger.warning("Vector DB not initialized, skipping storage")
+
         logger.info(f"Successfully ingested {len(splits)} chunks from {url}")
         return len(splits), full_text
     except Exception as e:
         logger.error(f"URL Ingestion Error: {e}")
         raise e
 
-async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: bool = True):
+
+async def ingest_pdf(
+    file_path: str, user_id: str = "public", store_vectors: bool = True
+):
     """
     Parses a PDF, splits it, and stores vectors.
     Returns tuple: (num_chunks, full_text_content)
     """
     if not vector_db:
-         setup_rag_chain()
+        setup_rag_chain()
 
     try:
         if not os.path.exists(file_path):
             logger.error(f"File not found: {file_path}")
             return 0, f"Error: File not found at {file_path}"
-            
+
         logger.info(f"Ingesting PDF: {file_path} for user: {user_id}")
-        
+
         full_text = ""
         try:
             from pypdf import PdfReader
+
             reader = PdfReader(file_path)
             text_parts = []
             for page in reader.pages:
@@ -683,63 +786,75 @@ async def ingest_pdf(file_path: str, user_id: str = "public", store_vectors: boo
             logger.info(f"Extracted {len(full_text)} chars using pypdf directly.")
         except Exception as e:
             logger.error(f"pypdf extraction failed: {e}, falling back to loader.")
-        
+
         loader = PyPDFLoader(file_path)
         pages = loader.load()
-        
+
         if not full_text.strip():
             full_text = "\n\n".join([d.page_content for d in pages])
             logger.info(f"Extracted {len(full_text)} chars using PyPDFLoader.")
 
         filename = os.path.basename(file_path)
-        
+
         for page in pages:
             page.metadata["user_id"] = user_id
-            page.metadata["source"] = filename 
-        
+            page.metadata["source"] = filename
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=75)
-        
+
         if full_text.strip() and not pages:
-             splits = text_splitter.create_documents([full_text], metadatas=[{"source": filename, "user_id": user_id}])
+            splits = text_splitter.create_documents(
+                [full_text], metadatas=[{"source": filename, "user_id": user_id}]
+            )
         else:
-             splits = text_splitter.split_documents(pages)
-        
+            splits = text_splitter.split_documents(pages)
+
         if store_vectors and vector_db:
-             vector_db.add_documents(splits)
+            vector_db.add_documents(splits)
         elif store_vectors:
-             logger.warning("Vector DB not initialized, skipping storage")
-        
+            logger.warning("Vector DB not initialized, skipping storage")
+
         logger.info(f"Successfully ingested {len(splits)} chunks from {file_path}")
         return len(splits), full_text
     except Exception as e:
         logger.error(f"Ingestion Error: {e}")
         raise e
 
+
 async def ingest_text(text: str, metadata: dict = None):
     """
     Ingests raw text into the vector database.
     """
     if not vector_db:
-         setup_rag_chain()
-         if not vector_db:
-             raise Exception("Vector DB not initialized")
-    
+        setup_rag_chain()
+        if not vector_db:
+            raise Exception("Vector DB not initialized")
+
     try:
 
         logger.info("Ingesting Text Chunk...")
-        
+
         doc = Document(page_content=text, metadata=metadata or {})
-        
+
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=75)
         splits = text_splitter.split_documents([doc])
-        
+
         vector_db.add_documents(splits)
         return len(splits)
     except Exception as e:
         logger.error(f"Text Ingestion Error: {e}")
         raise e
 
-async def ingest_calendar_event(event_id: str, title: str, from_date: str, to_date: str, event_type: str, location: str = "", description: str = ""):
+
+async def ingest_calendar_event(
+    event_id: str,
+    title: str,
+    from_date: str,
+    to_date: str,
+    event_type: str,
+    location: str = "",
+    description: str = "",
+):
     """
     Ingests a calendar event/exam into the vector database.
     Formats the event as a searchable entry for the RAG system.
@@ -748,9 +863,9 @@ async def ingest_calendar_event(event_id: str, title: str, from_date: str, to_da
         # Formulate a clear, descriptive question and answer pair for the vector store
         # This structure helps the RAG retrieve the event when the user asks about it.
         # Adding 'upcoming' keywords to improve relevance for future-dated queries.
-        
+
         question = f"What are the details for the upcoming {event_type}: {title}?"
-        
+
         # Clean up dates for better readability in the answer
         try:
             start_dt = datetime.fromisoformat(from_date)
@@ -760,31 +875,34 @@ async def ingest_calendar_event(event_id: str, title: str, from_date: str, to_da
         except:
             start = from_date
             end = to_date
-            
+
         answer = f"Yes, there is an upcoming {event_type} titled '{title}'. It is scheduled from {start} to {end}."
         if location:
             answer += f" Location: {location}."
         if description:
             answer += f" Additional Details: {description}"
-            
+
         # Use existing ingest_faq to handle the embedding and storage
         # We prefix the ID to avoid collisions and allow targeted deletion
         vector_id = f"event_{event_id}"
-        
+
         success = await ingest_faq(
             question=question,
             answer=answer,
             category="Calendar",
             source="calendar",
-            faq_id=vector_id
+            faq_id=vector_id,
         )
-        
+
         if success:
-            logger.info(f"Successfully ingested calendar event: {title} (ID: {vector_id})")
+            logger.info(
+                f"Successfully ingested calendar event: {title} (ID: {vector_id})"
+            )
         return success
     except Exception as e:
         logger.error(f"Error ingesting calendar event {title}: {e}")
         return False
+
 
 async def remove_calendar_event(event_id: str):
     """
@@ -792,7 +910,7 @@ async def remove_calendar_event(event_id: str):
     """
     if database.svu_vectors_db is None:
         return False
-        
+
     try:
         vector_id = f"event_{event_id}"
         result = database.svu_vectors_db.delete_one({"faq_id": vector_id})
@@ -804,7 +922,14 @@ async def remove_calendar_event(event_id: str):
         logger.error(f"Error removing calendar event vector {event_id}: {e}")
         return False
 
-async def ingest_faq(question: str, answer: str, category: str = "General", source: str = "manual", faq_id: str = None):
+
+async def ingest_faq(
+    question: str,
+    answer: str,
+    category: str = "General",
+    source: str = "manual",
+    faq_id: str = None,
+):
     """
     Ingests a single FAQ into the svu_vectors collection with a flat structure.
     Generates embeddings manually and inserts directly to ensure consistency with admin management.
@@ -812,22 +937,29 @@ async def ingest_faq(question: str, answer: str, category: str = "General", sour
     if database.svu_vectors_db is None:
         logger.error("Database not available for FAQ ingestion")
         return False
-        
+
     try:
         import re
+
         from bson import ObjectId
+
         # Check for duplicates based on exact or highly similar question text
-        existing_faq = database.svu_vectors_db.find_one({
-            "type": "faq",
-            "text": {"$regex": f"Question:\\s*{re.escape(question)}", "$options": "i"}
-        })
-        
+        existing_faq = database.svu_vectors_db.find_one(
+            {
+                "type": "faq",
+                "text": {
+                    "$regex": f"Question:\\s*{re.escape(question)}",
+                    "$options": "i",
+                },
+            }
+        )
+
         if existing_faq and not faq_id:
             logger.info(f"Skipping duplicate FAQ: {question[:50]}")
             return False
 
         content = f"Question: {question}\nAnswer: {answer}"
-        
+
         # Generate embedding
         embedding = None
         if embeddings:
@@ -835,34 +967,35 @@ async def ingest_faq(question: str, answer: str, category: str = "General", sour
                 embedding = embeddings.embed_query(content)
             except Exception as e:
                 logger.error(f"Error generating embedding for FAQ: {e}")
-        
+
         # Prepare flat document
         faq_doc = {
             "text": content,
+            "question": question,
+            "answer": answer,
             "source": source,
             "type": "faq",
             "faq_id": faq_id or str(ObjectId()),
             "category": category,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.utcnow(),
         }
-        
+
         if embedding:
             faq_doc["embedding"] = embedding
-            
+
         if faq_id:
             # Upsert by faq_id
             database.svu_vectors_db.update_one(
-                {"faq_id": faq_id},
-                {"$set": faq_doc},
-                upsert=True
+                {"faq_id": faq_id}, {"$set": faq_doc}, upsert=True
             )
         else:
             database.svu_vectors_db.insert_one(faq_doc)
-            
+
         return True
     except Exception as e:
         logger.error(f"FAQ Ingestion Error: {e}")
         return False
+
 
 async def extract_faqs_from_text(text: str):
     """
@@ -870,30 +1003,34 @@ async def extract_faqs_from_text(text: str):
     Strategy: smaller chunks + aggressive prompt + second-pass extraction + deduplication.
     """
     if not llm:
-         return []
-    
+        return []
+
+    import asyncio
     import json
     import re
-    import asyncio
 
     chunk_size = 3000
     overlap = 500  # Overlap to avoid cutting information at boundaries
     chunks = []
     for i in range(0, len(text), chunk_size - overlap):
-        chunks.append(text[i:i + chunk_size])
-    
+        chunks.append(text[i : i + chunk_size])
+
     all_faqs = []
-    
-    logger.info(f"[MAX-FAQ] Extracting FAQs from {len(text)} chars in {len(chunks)} chunks (3k each)...")
+
+    logger.info(
+        f"[MAX-FAQ] Extracting FAQs from {len(text)} chars in {len(chunks)} chunks (3k each)..."
+    )
 
     async def _parse_faq_response(content: str) -> list:
         """Parse LLM response to extract FAQ list from JSON."""
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
         if not json_match:
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
+
         if json_match:
-            json_str = json_match.group(1) if json_match.groups() else json_match.group(0)
+            json_str = (
+                json_match.group(1) if json_match.groups() else json_match.group(0)
+            )
             try:
                 data = json.loads(json_str)
                 return data.get("faqs", [])
@@ -907,7 +1044,9 @@ PHASE 2: FAQ GENERATION — MODE: EXHAUSTIVE MAXIMUM EXTRACTION
 
 You are analyzing text fragment Part {i+1}/{len(chunks)}.
 
-**CRITICAL INSTRUCTION**: Generate AT LEAST 15-20 FAQ pairs from this text. Extract EVERY possible piece of information as a separate FAQ. Do NOT summarize or merge related facts — keep them as individual Q&A pairs.
+**CRITICAL INSTRUCTION**: Generate AT LEAST 30 to 100 FAQ pairs from this text. Extract EVERY SINGLE PIECE of factual information as a structured Question and Answer pair. Do NOT summarize or merge related facts — keep them as individual Q&A pairs. 
+
+**TABLE/LIST EXTRACTION RULE**: If there is a table or a list with 20 items, you MUST create 20 distinct FAQs (one for each row/item). Do not bundle them.
 
 **Mine EVERY detail for FAQs including but not limited to**:
 - Dates (deadlines, schedules, academic calendar dates)
@@ -948,13 +1087,15 @@ Example: If text says "Hostel fee is ₹5000 per semester, due by July 15":
     ]
 }}
 """
-        
+
         pass1_faqs = []
         try:
             response = await llm.ainvoke(pass1_prompt)
             pass1_faqs = await _parse_faq_response(response.content)
             all_faqs.extend(pass1_faqs)
-            logger.info(f"[MAX-FAQ] Chunk {i+1} Pass 1: Extracted {len(pass1_faqs)} FAQs")
+            logger.info(
+                f"[MAX-FAQ] Chunk {i+1} Pass 1: Extracted {len(pass1_faqs)} FAQs"
+            )
         except Exception as e:
             logger.error(f"[MAX-FAQ] Pass 1 Error (Chunk {i+1}): {e}")
 
@@ -977,7 +1118,7 @@ The following FAQs were already extracted from this text:
 - Comparative questions (e.g., "What is the difference between X and Y?")
 - Yes/No questions about policies and eligibility
 
-Generate AT LEAST 5-10 additional FAQs.
+Generate AT LEAST 15-30 additional FAQs. Dig incredibly deep. Leave absolutely no detail behind.
 
 **Source Text**:
 {chunk}
@@ -998,7 +1139,9 @@ Generate AT LEAST 5-10 additional FAQs.
             response2 = await llm.ainvoke(pass2_prompt)
             pass2_faqs = await _parse_faq_response(response2.content)
             all_faqs.extend(pass2_faqs)
-            logger.info(f"[MAX-FAQ] Chunk {i+1} Pass 2: Extracted {len(pass2_faqs)} additional FAQs")
+            logger.info(
+                f"[MAX-FAQ] Chunk {i+1} Pass 2: Extracted {len(pass2_faqs)} additional FAQs"
+            )
         except Exception as e:
             logger.error(f"[MAX-FAQ] Pass 2 Error (Chunk {i+1}): {e}")
 
@@ -1009,13 +1152,16 @@ Generate AT LEAST 5-10 additional FAQs.
     unique_faqs = []
     for faq in all_faqs:
         q = faq.get("question", "").strip().lower()
-        q_normalized = re.sub(r'[^\w\s]', '', q)
+        q_normalized = re.sub(r"[^\w\s]", "", q)
         if q_normalized and q_normalized not in seen_questions:
             seen_questions.add(q_normalized)
             unique_faqs.append(faq)
-    
-    logger.info(f"[MAX-FAQ] Total: {len(all_faqs)} raw → {len(unique_faqs)} unique FAQs after dedup")
+
+    logger.info(
+        f"[MAX-FAQ] Total: {len(all_faqs)} raw → {len(unique_faqs)} unique FAQs after dedup"
+    )
     return unique_faqs
+
 
 async def refine_kb_data(faqs: list, context: str):
     """
@@ -1025,14 +1171,14 @@ async def refine_kb_data(faqs: list, context: str):
     if not llm or not faqs:
         return faqs
 
+    import asyncio
     import json
     import re
-    
-    import asyncio
-    
+
     batch_size = 10
-    
+
     sem = asyncio.Semaphore(5)
+
     async def process_batch(batch):
         async with sem:
             batch_json = json.dumps(batch, indent=2)
@@ -1069,11 +1215,11 @@ async def refine_kb_data(faqs: list, context: str):
             try:
                 response = await llm.ainvoke(refine_prompt)
                 content = response.content
-            
-                json_match = re.search(r'```json\s*(\{.*?\})\s*```', content, re.DOTALL)
+
+                json_match = re.search(r"```json\s*(\{.*?\})\s*```", content, re.DOTALL)
                 if not json_match:
-                    json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            
+                    json_match = re.search(r"\{.*\}", content, re.DOTALL)
+
                 if json_match:
                     data = json.loads(json_match.group(0))
                     return data.get("faqs", [])
@@ -1088,32 +1234,34 @@ async def refine_kb_data(faqs: list, context: str):
     for i in range(0, len(faqs), batch_size):
         batch = faqs[i : i + batch_size]
         tasks.append(process_batch(batch))
-        
+
     # Run concurrently (Groq API handles high concurrency well)
     logger.info(f"Refining {len(tasks)} batches concurrently...")
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     refined_faqs = []
     for res in results:
         if isinstance(res, Exception):
             logger.error(f"Batch gathering error: {res}")
         elif isinstance(res, list):
             refined_faqs.extend(res)
-            
+
     return refined_faqs
+
 
 async def validate_faq_with_web(question: str, answer: str):
     """
     Validates the FAQ against the official SVU website.
     Returns Dictionary: { status: "VERIFIED"|"PARTIALLY_VERIFIED"|"INVALID", score: float, source_url: str }
     """
-    if not llm: return {"status": "VERIFIED", "score": 0.5, "source_url": ""} # Fail open
-    
+    if not llm:
+        return {"status": "VERIFIED", "score": 0.5, "source_url": ""}  # Fail open
+
     try:
         search = DuckDuckGoSearchRun()
         query = f"site:svuniversity.edu.in {question}"
         search_results = search.run(query)
-        
+
         validation_prompt = f"""
         PHASE 3: TRUTH VALIDATION (CRITICAL)
         
@@ -1141,26 +1289,26 @@ async def validate_faq_with_web(question: str, answer: str):
         - "PARTIALLY_VERIFIED": Plausible but details missing.
         - "INVALID": Contradicted or Not Found.
         """
-        
+
         response = await llm.ainvoke(validation_prompt)
         content = response.content
         import json
         import re
-        
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match:
             try:
                 result = json.loads(json_match.group(0))
                 return {
                     "status": result.get("status", "PARTIALLY_VERIFIED"),
                     "score": result.get("confidence", 0.5),
-                    "source_url": "https://svuniversity.edu.in/" # Ideally extract from search results but DDG tool text often hides pure URLs 
+                    "source_url": "https://svuniversity.edu.in/",  # Ideally extract from search results but DDG tool text often hides pure URLs
                 }
             except:
                 pass
-        
+
         return {"status": "PARTIALLY_VERIFIED", "score": 0.5, "source_url": ""}
-        
+
     except Exception as e:
         logger.error(f"Validation Error: {e}")
         return {"status": "PARTIALLY_VERIFIED", "score": 0.1, "source_url": "error"}

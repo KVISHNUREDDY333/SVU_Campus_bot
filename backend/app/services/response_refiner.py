@@ -1,35 +1,40 @@
 import logging
+
 from langchain_groq import ChatGroq
+
 from ..core.config import Config
 
 logger = logging.getLogger("uvicorn")
 
+
 class ResponseRefiner:
     """Refines raw RAG responses into high-quality, well-structured answers."""
-    
+
     def __init__(self):
         self.refiner_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID,
             groq_api_key=Config.GROQ_API_KEY,
             temperature=0.3,
-            timeout=60
+            timeout=60,
         )
-    
-    async def refine_response(self, raw_response: str, original_query: str, context: str = "") -> str:
+
+    async def refine_response(
+        self, raw_response: str, original_query: str, context: str = ""
+    ) -> str:
         """
         Refines a raw response into a polished, well-structured answer.
-        
+
         Args:
             raw_response: The initial response from RAG
             original_query: The user's original question
             context: Optional context about the query
-            
+
         Returns:
             Refined, high-quality response
         """
         if not raw_response or len(raw_response.strip()) < 10:
             return raw_response
-        
+
         refine_prompt = f"""You are an academic response editor. Clean the response without adding extra content.
 
 **Original User Query**: {original_query}
@@ -54,12 +59,16 @@ class ResponseRefiner:
 - Ensure the response directly answers the user's query
 
 Refined Response:"""
-        
+
         try:
             response = await self.refiner_llm.ainvoke(refine_prompt)
-            refined = response.content if hasattr(response, 'content') else str(response)
-            
-            logger.info(f"[REFINER] Refined response ({len(raw_response)} → {len(refined)} chars)")
+            refined = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+
+            logger.info(
+                f"[REFINER] Refined response ({len(raw_response)} → {len(refined)} chars)"
+            )
             return refined.strip()
         except Exception as e:
             logger.error(f"[REFINER] Error refining response: {e}")
@@ -68,17 +77,17 @@ Refined Response:"""
     async def enhance_with_reasoning(self, response: str, query: str) -> str:
         """
         Adds clear reasoning and logical flow to responses.
-        
+
         Args:
             response: The response to enhance
             query: The original query
-            
+
         Returns:
             Response with improved reasoning and structure
         """
         if not response or len(response.strip()) < 10:
             return response
-        
+
         reasoning_prompt = f"""You are an expert at explaining complex academic concepts with clear reasoning.
 
 **User Question**: {query}
@@ -95,11 +104,15 @@ Refined Response:"""
 6. Maintaining professional academic tone
 
 **Output**: Return ONLY the enhanced response with improved reasoning and flow. Do not add meta-commentary."""
-        
+
         try:
             response_obj = await self.refiner_llm.ainvoke(reasoning_prompt)
-            enhanced = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
-            
+            enhanced = (
+                response_obj.content
+                if hasattr(response_obj, "content")
+                else str(response_obj)
+            )
+
             logger.info(f"[REASONING] Enhanced response with better reasoning")
             return enhanced.strip()
         except Exception as e:
@@ -109,7 +122,7 @@ Refined Response:"""
     async def validate_accuracy(self, response: str, context: str) -> dict:
         """
         Validates response accuracy against provided context.
-        
+
         Returns:
             {
                 "is_accurate": bool,
@@ -119,8 +132,13 @@ Refined Response:"""
             }
         """
         if not response or not context:
-            return {"is_accurate": True, "confidence": 0.5, "issues": [], "suggestions": []}
-        
+            return {
+                "is_accurate": True,
+                "confidence": 0.5,
+                "issues": [],
+                "suggestions": [],
+            }
+
         validation_prompt = f"""You are a fact-checker for university information.
 
 **Context (Source of Truth)**:
@@ -138,21 +156,25 @@ Return ONLY valid JSON:
     "issues": ["issue1", "issue2"],
     "suggestions": ["suggestion1", "suggestion2"]
 }}"""
-        
+
         try:
             import json
             import re
-            
+
             response_obj = await self.refiner_llm.ainvoke(validation_prompt)
-            content = response_obj.content if hasattr(response_obj, 'content') else str(response_obj)
-            
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            content = (
+                response_obj.content
+                if hasattr(response_obj, "content")
+                else str(response_obj)
+            )
+
+            json_match = re.search(r"\{.*\}", content, re.DOTALL)
             if json_match:
                 result = json.loads(json_match.group(0))
                 return result
         except Exception as e:
             logger.error(f"[VALIDATOR] Error validating response: {e}")
-        
+
         return {"is_accurate": True, "confidence": 0.5, "issues": [], "suggestions": []}
 
     async def format_for_display(self, response: str) -> str:
@@ -162,22 +184,27 @@ Return ONLY valid JSON:
         """
         if not response:
             return response
-        
+
         # Ensure proper spacing around headers
         response = response.replace("##", "\n##").replace("###", "\n###")
-        
+
         # Ensure proper spacing around lists
-        response = response.replace("\n•", "\n• ").replace("\n-", "\n- ").replace("\n*", "\n* ")
-        
+        response = (
+            response.replace("\n•", "\n• ")
+            .replace("\n-", "\n- ")
+            .replace("\n*", "\n* ")
+        )
+
         # Clean up multiple line breaks
         while "\n\n\n" in response:
             response = response.replace("\n\n\n", "\n\n")
-        
+
         return response.strip()
 
 
 # Singleton instance
 _refiner_instance = None
+
 
 def get_response_refiner() -> ResponseRefiner:
     """Get or create the response refiner singleton."""
