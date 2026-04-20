@@ -11,33 +11,28 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:     %(message)s')
 logger = logging.getLogger("uvicorn")
 
-# Suppress noisy third-party logs
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
 logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
-# Handle asyncio loop policy for Windows and suppress deprecation warnings in Python 3.12+
 if platform.system() == 'Windows':
     import warnings
-    # Suppress the specific deprecation warning for WindowsSelectorEventLoopPolicy and set_event_loop_policy
+                                                                                                            
     warnings.filterwarnings("ignore", category=DeprecationWarning, message=".*asyncio.*(WindowsSelectorEventLoopPolicy|set_event_loop_policy).*")
     
     try:
-        # Use ProactorEventLoopPolicy for better performance on Windows if available
-        # It's also the default in newer Python versions
+                                                                                    
         if hasattr(asyncio, 'WindowsProactorEventLoopPolicy'):
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         else:
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     except Exception as e:
         logger.warning(f"Loop policy configuration skipped: {e}")
-
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(project_root)
@@ -129,19 +124,16 @@ def display_app_stats(app: FastAPI):
         print("|" + " SVU CAMPUS BOT - APPLICATION STARTUP STATS ".center(68) + "|")
         print("+" + "-"*68 + "+")
         
-        # System Info
         print(f"| [SYSTEM INFO]")
         print(f"|   OS        : {platform.system()} {platform.release()}")
         print(f"|   Python    : {sys.version.split()[0]}")
         print(f"|   PID       : {os.getpid()}")
         
-        # Status Flags
         print(f"|")
         print(f"| [APPLICATION COMPONENTS]")
         print(f"|   FastAPI   : Loaded")
         print(f"|   RAG Chain : Initialized")
         
-        # Database Stats
         print(f"|")
         print(f"| [DATABASE STATUS]")
         if database.mongo_client:
@@ -149,7 +141,6 @@ def display_app_stats(app: FastAPI):
                 print(f"|   Connection: Active")
                 print(f"|   Database  : {Config.DB_NAME}")
                 
-                # Check if collections are accessible
                 collections = {
                     "Users": database.users_db,
                     "Tickets": database.tickets_db,
@@ -169,7 +160,6 @@ def display_app_stats(app: FastAPI):
         else:
             print("|   Connection: Disconnected")
             
-        # Router Action Summary
         print(f"|")
         print(f"| [API ROUTE SUMMARY]")
         routes = [r for r in app.routes if hasattr(r, "path")]
@@ -184,7 +174,6 @@ def display_app_stats(app: FastAPI):
         methods_display = [f"{m}: {method_counts[m]}" for m in important_methods if method_counts[m] > 0]
         print(f"|   Methods     : {', '.join(methods_display)}")
 
-        # Environment Preview (Masked)
         print(f"|")
         print(f"| [ENVIRONMENT]")
         print(f"|   Port      : {os.getenv('PORT', '8888')}")
@@ -234,10 +223,7 @@ async def read_root(request: Request):
     return response
 
 if __name__ == "__main__":
-    # Port configuration from environment or default
+                                                    
     port = int(os.getenv("PORT", 8888))
-    # Use import string for better reload support
+                                                 
     uvicorn.run("backend.main:app", host="127.0.0.1", port=port, reload=True)
-
-
-# .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8888 --reload

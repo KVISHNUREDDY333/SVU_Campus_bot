@@ -6,7 +6,6 @@ from ..core.config import Config
 
 logger = logging.getLogger("uvicorn")
 
-
 class ResponseRefiner:
     """Refines raw RAG responses into high-quality, well-structured answers."""
 
@@ -150,12 +149,12 @@ Refined Response:"""
 **Task**: Check if the response is accurate based on the context provided.
 
 Return ONLY valid JSON:
-{{
+{ 
     "is_accurate": true/false,
     "confidence": 0.0-1.0,
     "issues": ["issue1", "issue2"],
     "suggestions": ["suggestion1", "suggestion2"]
-}}"""
+} """
 
         try:
             import json
@@ -185,26 +184,20 @@ Return ONLY valid JSON:
         if not response:
             return response
 
-        # Ensure proper spacing around headers
         response = response.replace("##", "\n##").replace("###", "\n###")
 
-        # Ensure proper spacing around lists
         response = (
             response.replace("\n•", "\n• ")
             .replace("\n-", "\n- ")
             .replace("\n*", "\n* ")
         )
 
-        # Clean up multiple line breaks
         while "\n\n\n" in response:
             response = response.replace("\n\n\n", "\n\n")
 
         return response.strip()
 
-
-# Singleton instance
 _refiner_instance = None
-
 
 def get_response_refiner() -> ResponseRefiner:
     """Get or create the response refiner singleton."""

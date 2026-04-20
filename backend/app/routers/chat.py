@@ -13,13 +13,12 @@ from .auth import get_current_user
 router = APIRouter(prefix="/chat", tags=["Chat"])
 logger = logging.getLogger("uvicorn")
 
-
 @router.post("")
 async def chat_endpoint(
     request: ChatRequest, current_user: User = Depends(get_current_user)
 ):
     try:
-        # Check content restrictions
+                                    
         if not await ModerationService.check_content(request.message):
             return {
                 "status": "success",
@@ -47,7 +46,7 @@ async def chat_endpoint(
                     "question": request.message,
                     "response": response_text,
                     "length": len(request.message),
-                    "sentiment": "Neutral",  # Default to Neutral
+                    "sentiment": "Neutral",                      
                     "rating": 0,
                     "latency_ms": int(
                         (datetime.now() - start_time).total_seconds() * 1000
@@ -59,7 +58,6 @@ async def chat_endpoint(
     except Exception as e:
         logger.error(f"Chat Error: {e}")
         return {"status": "error", "error": f"Processing error: {str(e)}"}
-
 
 @router.post("/feedback")
 async def chat_feedback(
@@ -87,7 +85,7 @@ async def chat_feedback(
                         "feedback_timestamp": datetime.utcnow(),
                     }
                 },
-                sort=[("timestamp", -1)],  # Target newest if multiple identical
+                sort=[("timestamp", -1)],                                       
             )
 
             if not res:

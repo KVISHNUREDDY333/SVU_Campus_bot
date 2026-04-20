@@ -3,20 +3,17 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-
 class TrendingQueryModel(BaseModel):
     text: str
     subtext: str
-    icon: str  # FontAwesome class, e.g., "fa-solid fa-graduation-cap"
+    icon: str                                                         
     response: Optional[str] = None
     link: Optional[str] = None
     order: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-
 class TrendingQueryResponse(TrendingQueryModel):
     id: str
-
 
 class TrendingQueryUpdate(BaseModel):
     text: Optional[str] = None

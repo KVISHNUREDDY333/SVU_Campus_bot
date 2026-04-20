@@ -42,7 +42,6 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
-
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,7 +62,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     return User(**user)
 
-
 async def get_current_admin_user(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(
@@ -71,7 +69,6 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
             detail="The user doesn't have enough privileges",
         )
     return current_user
-
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -109,7 +106,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         "last_name": user.get("last_name"),
     }
 
-
 @router.post("/register", response_model=Token)
 async def register_user(user_data: RegisterRequest):
     if not is_valid_email(user_data.email):
@@ -122,7 +118,7 @@ async def register_user(user_data: RegisterRequest):
         )
 
     try:
-        # SMTP / DNS Authenticity Check
+                                       
         verified, msg = probe_email_authenticity(user_data.email)
         if verified is False:
             raise HTTPException(status_code=400, detail=msg)
@@ -167,7 +163,6 @@ async def register_user(user_data: RegisterRequest):
             status_code=500, detail="Internal Server Error during registration"
         )
 
-
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     user = database.users_db.find_one({"username": request.email})
@@ -184,7 +179,6 @@ async def forgot_password(request: ForgotPasswordRequest):
     send_otp_email(request.email, otp)
 
     return {"status": "success", "message": "OTP sent to email"}
-
 
 @router.post("/verify-otp-reset")
 async def verify_otp_reset(request: VerifyOTPRequest):
@@ -216,7 +210,6 @@ async def verify_otp_reset(request: VerifyOTPRequest):
 
     return {"status": "success", "message": "Password updated"}
 
-
 @router.post("/verify-otp")
 async def verify_otp_only(request: VerifyOnlyOTPRequest):
     input_otp = request.otp.strip()
@@ -234,7 +227,6 @@ async def verify_otp_only(request: VerifyOnlyOTPRequest):
 
     return {"status": "success", "message": "OTP verified"}
 
-
 @router.post("/auth/verify-google-email")
 async def verify_google_email_endpoint(request: ForgotPasswordRequest):
     email = request.email.strip()
@@ -249,7 +241,6 @@ async def verify_google_email_endpoint(request: ForgotPasswordRequest):
         raise HTTPException(status_code=400, detail=message)
 
     return {"verified": True, "message": message}
-
 
 @router.post("/auth/google-id-token")
 async def google_id_token_login(request: Request):
@@ -276,7 +267,7 @@ async def google_id_token_login(request: Request):
 
     db_user = database.users_db.find_one({"username": email})
     if not db_user:
-        # Auto-create with random secure password
+                                                 
         random_pass = secrets.token_urlsafe(16)
         hashed_password = get_password_hash(random_pass)
         new_user = {
@@ -305,19 +296,15 @@ async def google_id_token_login(request: Request):
         "full_name": name,
     }
 
-
-# Keeping legacy /verify-email-authenticity for compatibility but aliasing to the new logic
 @router.post("/verify-email-authenticity")
 async def verify_email_authenticity_legacy(request: ForgotPasswordRequest):
     return await verify_google_email_endpoint(request)
-
 
 @router.get("/login/google")
 async def login_google(request: Request):
     redirect_uri = request.url_for("auth_google")
     logger.info(f"Initiating Google OAuth with redirect_uri: {redirect_uri}")
     return await oauth.google.authorize_redirect(request, redirect_uri)
-
 
 @router.get("/auth/callback")
 async def auth_google(request: Request):
@@ -364,7 +351,6 @@ async def auth_google(request: Request):
         traceback.print_exc()
         logger.error(f"Google Auth Error: {e}")
         return RedirectResponse(url="/?error=GoogleAuthFailed")
-
 
 @router.put("/update-profile")
 async def update_profile(

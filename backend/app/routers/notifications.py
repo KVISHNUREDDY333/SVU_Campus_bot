@@ -7,7 +7,6 @@ from ..services import notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-
 @router.get("", response_model=NotificationList)
 async def get_notifications(current_user: User = Depends(get_current_user)):
     """
@@ -17,15 +16,11 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
         current_user.username
     )
 
-    # Map MongoDB data to response model
     notifications = []
     unread_count = 0
     for n in notifications_data:
         notif_type = n.get("type", "common")
 
-        # Calculate is_read:
-        # For personal: use the field directly
-        # For common: check if username is in read_by list
         if notif_type == "personal":
             is_read = n.get("is_read", False)
         else:
@@ -48,7 +43,6 @@ async def get_notifications(current_user: User = Depends(get_current_user)):
 
     return NotificationList(notifications=notifications, unread_count=unread_count)
 
-
 @router.patch("/{notification_id}/read")
 async def mark_as_read(
     notification_id: str, current_user: User = Depends(get_current_user)
@@ -65,7 +59,6 @@ async def mark_as_read(
         )
     return {"message": "Notification marked as read"}
 
-
 @router.patch("/read-all")
 async def mark_all_as_read(current_user: User = Depends(get_current_user)):
     """
@@ -78,7 +71,6 @@ async def mark_all_as_read(current_user: User = Depends(get_current_user)):
         )
     return {"message": "All notifications marked as read"}
 
-
 @router.delete("/clear-all")
 async def clear_all_notifications(current_user: User = Depends(get_current_user)):
     """
@@ -88,7 +80,6 @@ async def clear_all_notifications(current_user: User = Depends(get_current_user)
     if not success:
         raise HTTPException(status_code=400, detail="Failed to clear notifications")
     return {"message": "Notifications cleared"}
-
 
 @router.delete("/{notification_id}")
 async def delete_notification(

@@ -2,7 +2,6 @@ import asyncio
 import os
 import sys
 
-# Add the project root to sys.path
 sys.path.append(os.getcwd())
 
 from backend.app.core import database
@@ -122,18 +121,16 @@ locations_data = [
     {"name": "Lord Venkateswara Swamy Temple", "category": "Campus Facilities"},
 ]
 
-
 async def seed():
     database.get_db_client()
     if database.locations_db is not None:
-        # Clear existing
+                        
         database.locations_db.delete_many({})
-        # Insert new
+                    
         database.locations_db.insert_many(locations_data)
         print(f"Successfully seeded {len(locations_data)} locations.")
     else:
         print("Error: locations_db is None")
-
 
 if __name__ == "__main__":
     asyncio.run(seed())

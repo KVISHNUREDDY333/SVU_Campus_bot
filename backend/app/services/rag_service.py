@@ -6,7 +6,7 @@ from datetime import datetime
 
 from langchain.schema import Document
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
-from langchain_community.tools import DuckDuckGoSearchRun
+
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -18,13 +18,12 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_mongodb.chat_message_histories import MongoDBChatMessageHistory
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-# Configure environment variables to suppress Hugging Face warnings
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Avoids potential parallelism warnings
+os.environ["TOKENIZERS_PARALLELISM"] = "false"                                         
 
 try:
-    # Suppress verbose "unauthenticated requests" warnings from huggingface_hub
+                                                                               
     from huggingface_hub.utils import logging as hf_logging
 
     hf_logging.set_verbosity_error()
@@ -39,34 +38,33 @@ from .response_refiner import get_response_refiner
 
 logger = logging.getLogger("uvicorn")
 
-MASTER_AGENT_PROMPT = """🛡️ UNIVERSITY ELITE ACADEMIC ASSISTANT POLICY (SVU-OFFICIAL)
+MASTER_AGENT_PROMPT = """UNIVERSITY ELITE ACADEMIC ASSISTANT POLICY (SVU-OFFICIAL)
 You are the Official High-Fidelity Academic Assistant for Sri Venkateswara University (SVU). Your mission is to provide the absolute best, most factual, and highly relevant academic support to students and staff.
 
-🔒 STRICT RESPONSE POLICY & SAFETY:
-1. ✅ ALLOWED CONTENT (Strictly Academic):
+STRICT RESPONSE POLICY & SAFETY:
+1. ALLOWED CONTENT (Strictly Academic):
    - Comprehensive subject matter explanations
    - Official University info (Admissions, Fees, Results, Calendar)
    - Career growth, coding help, and competitive exam preparation (GATE, UPSC)
    - Verified General Knowledge (GK) and Current Affairs
 
-2. 🧠 RESPONSE QUALITY STANDARDS (ELITE-TIER):
+2. RESPONSE QUALITY STANDARDS (ELITE-TIER):
    - **FACTUALITY**: Never hallucinate. Every detail must be cross-verified against the provided Context.
    - **STRUCTURE**: Use professional Markdown (Bold titles, Bulleted lists, Tables for data).
    - **TONE**: Authoritative yet student-friendly. Maintain the dignity of Sri Venkateswara University.
    - **RELEVANCE**: Focus purely on the user's intent. Do not include fluff.
 
-3. ❌ PROHIBITED CONTENT:
+3. PROHIBITED CONTENT:
    - No hate speech, offensive content, or inappropriate topics.
    - Reject non-educational casual chat with the official Rejection Response.
 
-4. 🚫 OFFICIAL REJECTION RESPONSE:
+4. OFFICIAL REJECTION RESPONSE:
    "I'm here to support academic and knowledge-related queries only. Please ask something related to studies, exams, or general knowledge."
 """
 
 vector_db = None
 llm = None
 retrieval_chain = None
-
 
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     return MongoDBChatMessageHistory(
@@ -76,9 +74,7 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
         collection_name="chat_history",
     )
 
-
 mock_academic_data = {}
-
 
 def get_session_entities(session_id: str) -> dict:
     if not database.mongo_client:
@@ -91,7 +87,6 @@ def get_session_entities(session_id: str) -> dict:
     except Exception as e:
         logger.error(f"Error fetching session entities: {e}")
         return {}
-
 
 def update_entities(session_id: str, message: str):
     """Simple entity extraction to improve conversational intelligence"""
@@ -137,7 +132,6 @@ def update_entities(session_id: str, message: str):
         except Exception as e:
             logger.error(f"Error updating session entities: {e}")
 
-
 def trim_session_history(session_id: str, limit: int = 20):
     """Trims chat history to keep only the last `limit` messages to prevent token overflow."""
     if not database.mongo_client:
@@ -167,11 +161,10 @@ def trim_session_history(session_id: str, limit: int = 20):
     except Exception as e:
         logger.error(f"Error trimming history: {e}")
 
-
 CURRENT_TEMPERATURE = 0.0
 
 try:
-    # Reverted to all-MiniLM-L6-v2 (384) to match existing MongoDB Vector Index
+                                                                               
     embeddings = HuggingFaceEmbeddings(
         model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
@@ -194,12 +187,11 @@ except Exception as e:
 smart_llm = None
 fast_llm = None
 
-
 def setup_rag_chain(force_reload: bool = False):
     global vector_db, smart_llm, fast_llm, retrieval_chain, llm
     log_event("INFO", "Starting RAG Pipeline init...")
     try:
-        # Streamlined startup logs
+                                  
         logger.info("Initializing Intelligence Engine (Groq)...")
         smart_llm = ChatGroq(
             model=Config.GROQ_MODEL_ID,
@@ -341,7 +333,6 @@ Language Rule: {language_instruction}
     except Exception as e:
         logger.error(f"Error setting up RAG chain: {e}")
 
-
 async def _search_keywords_directly(
     query: str,
     limit: int = 5,
@@ -362,7 +353,6 @@ async def _search_keywords_directly(
         if not search_words:
             return [] if return_list else ""
 
-        # Use OR logic to match any of the important keywords across multiple fields
         regex_pattern = "|".join(re.escape(word) for word in search_words)
         regex_obj = re.compile(regex_pattern, re.IGNORECASE)
 
@@ -377,13 +367,16 @@ async def _search_keywords_directly(
         if doc_type:
             search_query["type"] = doc_type
 
-        results = list(
-            database.svu_vectors_db.find(
-                search_query, {"text": 1, "category": 1, "_id": 0}
+        import asyncio
+        results = await asyncio.to_thread(
+            lambda: list(
+                database.svu_vectors_db.find(
+                    search_query, {"text": 1, "category": 1, "_id": 0}
+                )
+                .sort("created_at", -1)
+                .limit(limit)
             )
-            .sort("created_at", -1)
-            .limit(limit)
-        )  # Prioritize newer records
+        )                            
 
         if not results:
             return [] if return_list else ""
@@ -402,19 +395,17 @@ async def _search_keywords_directly(
         logger.error(f"Keyword search error: {e}")
         return [] if return_list else ""
 
-
-def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = False):
+async def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = False):
     """Search svu_vectors collection using embedding-based similarity search.
     Uses similarity threshold filtering to ensure high confidence."""
     if not vector_db:
         return [] if return_list else ""
     try:
-        results = vector_db.similarity_search_with_score(query, k=limit + 3)
+        results = await vector_db.asimilarity_search_with_score(query, k=limit + 3)
 
         if not results:
             return [] if return_list else ""
 
-        # Threshold: 0.50 (cosine similarity) - Lowered from 0.60 to improve recall
         valid_docs = [doc for doc, score in results if score >= 0.50]
         valid_docs = valid_docs[:limit]
 
@@ -438,20 +429,17 @@ def _search_vectors_directly(query: str, limit: int = 10, return_list: bool = Fa
         logger.error(f"Vectors similarity search error: {e}")
         return [] if return_list else ""
 
-
 def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
     """Combines vector and keyword results using Reciprocal Rank Fusion."""
     scores = {}
     from langchain.schema import Document
 
-    # Vector results processing
     for rank, doc in enumerate(vector_results):
         content = doc.page_content if hasattr(doc, "page_content") else str(doc)
         if content not in scores:
             scores[content] = {"score": 0.0, "doc": doc}
         scores[content]["score"] += 1.0 / (rank + k + 1)
 
-    # Keyword results processing
     for rank, content in enumerate(keyword_results):
         if not content:
             continue
@@ -459,38 +447,30 @@ def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
             scores[content] = {"score": 0.0, "doc": Document(page_content=content)}
         scores[content]["score"] += 1.0 / (rank + k + 1)
 
-    # Sort and return top documents
     fused = sorted(scores.values(), key=lambda x: x["score"], reverse=True)
     return [item["doc"] for item in fused]
-
 
 async def _hybrid_search(query: str, limit: int = 10, keywords: list = None):
     """
     Performs hybrid search combining Vector and Keyword retrieval via RRF.
     Prioritizes FAQ-specific keyword hits to ensure official answers are delivered first.
     """
-    # 1. Targeted Keyword Search (FAQs only)
+                                            
     faq_keyword_results = await _search_keywords_directly(
         query, limit=5, return_list=True, doc_type="faq", keywords=keywords
     )
 
-    # 2. Broader Keyword Search (All sources)
     broad_keyword_results = await _search_keywords_directly(
         query, limit=limit, return_list=True, keywords=keywords
     )
 
-    # 3. Vector Similarity Search (All sources)
-    # Note: _search_vectors_directly is currently sync but wrapped for future-proofing
-    vector_docs = _search_vectors_directly(query, limit=limit, return_list=True)
+    vector_docs = await _search_vectors_directly(query, limit=limit, return_list=True)
 
-    # Combine results using RRF
-    # We pass both sets of keyword results; RRF handles the overlap naturally
     fused_docs = _reciprocal_rank_fusion(
         vector_docs, faq_keyword_results + broad_keyword_results
     )
 
     return fused_docs[:limit]
-
 
 async def generate_response(
     message: str,
@@ -527,7 +507,7 @@ async def generate_response(
         entities_str = str(get_session_entities(session_id))
 
         try:
-            # 1. QUERY ANALYSIS: Advanced Query Rewriting
+                                                         
             logger.info(f"[RAG] Rephrasing query: {message[:50]}")
             extracted_keywords = []
             user_requirements = "Standard 3-Part Answer"
@@ -547,11 +527,11 @@ Chat History: {history}
 User Query: {message}
 
 Output format (JSON):
-{{
+{{ 
     "standalone_query": "Expanded search-optimized English query",
     "keywords": ["key", "words", "only"],
     "requirements": "any specific user-requested structure"
-}}
+}} 
 """
                     analysis_res = await fast_llm.ainvoke(analysis_prompt)
                     analysis_content = (
@@ -574,7 +554,6 @@ Output format (JSON):
                 except Exception as analysis_e:
                     logger.warning(f"Query analysis failed: {analysis_e}")
 
-            # 2. FAQ-FIRST RESPONSE PATH FOR MAIN CHAT
             faq_chatbot = get_enhanced_faq_chatbot()
             faq_result = await faq_chatbot.generate_faq_response_bundle(
                 user_query=message,
@@ -596,13 +575,11 @@ Output format (JSON):
                 refiner = get_response_refiner()
                 return await refiner.format_for_display(faq_result["response"])
 
-            # 3. RETRIEVAL PHASE: Optimized Hybrid Search
             fused_docs = await _hybrid_search(
                 rephrased_query, limit=10, keywords=extracted_keywords
             )
             raw_context = "\n\n".join([doc.page_content for doc in fused_docs])
 
-            # 4. CONTEXT CLEANING PHASE
             logger.info(f"[RAG] Cleaning Context ({len(raw_context)} chars)")
             cleaned_context = "I don’t have enough information to answer that. Please contact the university office."
 
@@ -619,9 +596,8 @@ Output format (JSON):
                     )
                 except Exception as cleaning_e:
                     logger.warning(f"Context cleaning failed: {cleaning_e}")
-                    cleaned_context = raw_context  # Fallback to raw
+                    cleaned_context = raw_context                   
 
-            # 5. GENERATION PHASE: Standardized Answer Structure
             if len(cleaned_context.strip()) < 15:
                 return "I don’t have enough information to answer that. Please contact the university office."
 
@@ -652,7 +628,6 @@ User Request: {message}
                 response.content if hasattr(response, "content") else str(response)
             )
 
-            # Refine response for better quality
             refiner = get_response_refiner()
             refined_response = await refiner.refine_response(
                 raw_response=raw_response,
@@ -660,7 +635,6 @@ User Request: {message}
                 context=cleaned_context,
             )
 
-            # Format for display
             formatted_response = await refiner.format_for_display(refined_response)
 
             return formatted_response
@@ -686,25 +660,22 @@ User Request: {message}
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
         raise e
 
-
 async def process_and_refine_knowledge(text: str, source: str):
     """
     Automated pipeline: Extract -> Refine -> Ingest (with embeddings).
     This replaces the manual 'Train the Brain' feature.
     """
     try:
-        # 1. Extract raw FAQs
+                             
         logger.info(f"[AUTO-TRAIN] Extracting FAQs from: {source}")
         raw_faqs = await extract_faqs_from_text(text)
         if not raw_faqs:
             logger.warning(f"[AUTO-TRAIN] No FAQs extracted from: {source}")
             return 0
 
-        # 2. Refine FAQs using full context
         logger.info(f"[AUTO-TRAIN] Refining {len(raw_faqs)} FAQs for: {source}")
         refined_faqs = await refine_kb_data(raw_faqs, text)
 
-        # 3. Ingest each refined FAQ (ingest_faq handles embeddings)
         inserted_count = 0
         for faq in refined_faqs:
             success = await ingest_faq(
@@ -723,7 +694,6 @@ async def process_and_refine_knowledge(text: str, source: str):
     except Exception as e:
         logger.error(f"[AUTO-TRAIN] Error processing knowledge for {source}: {e}")
         return 0
-
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
@@ -755,7 +725,6 @@ async def ingest_url(url: str, store_vectors: bool = True):
     except Exception as e:
         logger.error(f"URL Ingestion Error: {e}")
         raise e
-
 
 async def ingest_pdf(
     file_path: str, user_id: str = "public", store_vectors: bool = True
@@ -820,8 +789,7 @@ async def ingest_pdf(
         logger.error(f"Ingestion Error: {e}")
         raise e
 
-
-async def ingest_text(text: str, metadata: dict = None):
+async def ingest_text(text: str, metadata: dict = None, store_vectors: bool = True):
     """
     Ingests raw text into the vector database.
     """
@@ -839,12 +807,15 @@ async def ingest_text(text: str, metadata: dict = None):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=75)
         splits = text_splitter.split_documents([doc])
 
-        vector_db.add_documents(splits)
+        if store_vectors and vector_db:
+            vector_db.add_documents(splits)
+        elif store_vectors:
+            logger.warning("Vector DB not initialized, skipping storage")
+            
         return len(splits)
     except Exception as e:
         logger.error(f"Text Ingestion Error: {e}")
         raise e
-
 
 async def ingest_calendar_event(
     event_id: str,
@@ -860,13 +831,9 @@ async def ingest_calendar_event(
     Formats the event as a searchable entry for the RAG system.
     """
     try:
-        # Formulate a clear, descriptive question and answer pair for the vector store
-        # This structure helps the RAG retrieve the event when the user asks about it.
-        # Adding 'upcoming' keywords to improve relevance for future-dated queries.
-
+                                                                                      
         question = f"What are the details for the upcoming {event_type}: {title}?"
 
-        # Clean up dates for better readability in the answer
         try:
             start_dt = datetime.fromisoformat(from_date)
             end_dt = datetime.fromisoformat(to_date)
@@ -882,8 +849,6 @@ async def ingest_calendar_event(
         if description:
             answer += f" Additional Details: {description}"
 
-        # Use existing ingest_faq to handle the embedding and storage
-        # We prefix the ID to avoid collisions and allow targeted deletion
         vector_id = f"event_{event_id}"
 
         success = await ingest_faq(
@@ -903,7 +868,6 @@ async def ingest_calendar_event(
         logger.error(f"Error ingesting calendar event {title}: {e}")
         return False
 
-
 async def remove_calendar_event(event_id: str):
     """
     Removes a calendar event from the vector database.
@@ -921,7 +885,6 @@ async def remove_calendar_event(event_id: str):
     except Exception as e:
         logger.error(f"Error removing calendar event vector {event_id}: {e}")
         return False
-
 
 async def ingest_faq(
     question: str,
@@ -943,7 +906,6 @@ async def ingest_faq(
 
         from bson import ObjectId
 
-        # Check for duplicates based on exact or highly similar question text
         existing_faq = database.svu_vectors_db.find_one(
             {
                 "type": "faq",
@@ -960,7 +922,6 @@ async def ingest_faq(
 
         content = f"Question: {question}\nAnswer: {answer}"
 
-        # Generate embedding
         embedding = None
         if embeddings:
             try:
@@ -968,7 +929,6 @@ async def ingest_faq(
             except Exception as e:
                 logger.error(f"Error generating embedding for FAQ: {e}")
 
-        # Prepare flat document
         faq_doc = {
             "text": content,
             "question": question,
@@ -984,7 +944,7 @@ async def ingest_faq(
             faq_doc["embedding"] = embedding
 
         if faq_id:
-            # Upsert by faq_id
+                              
             database.svu_vectors_db.update_one(
                 {"faq_id": faq_id}, {"$set": faq_doc}, upsert=True
             )
@@ -995,7 +955,6 @@ async def ingest_faq(
     except Exception as e:
         logger.error(f"FAQ Ingestion Error: {e}")
         return False
-
 
 async def extract_faqs_from_text(text: str):
     """
@@ -1010,7 +969,7 @@ async def extract_faqs_from_text(text: str):
     import re
 
     chunk_size = 3000
-    overlap = 500  # Overlap to avoid cutting information at boundaries
+    overlap = 500                                                      
     chunks = []
     for i in range(0, len(text), chunk_size - overlap):
         chunks.append(text[i : i + chunk_size])
@@ -1044,7 +1003,7 @@ PHASE 2: FAQ GENERATION — MODE: EXHAUSTIVE MAXIMUM EXTRACTION
 
 You are analyzing text fragment Part {i+1}/{len(chunks)}.
 
-**CRITICAL INSTRUCTION**: Generate AT LEAST 30 to 100 FAQ pairs from this text. Extract EVERY SINGLE PIECE of factual information as a structured Question and Answer pair. Do NOT summarize or merge related facts — keep them as individual Q&A pairs. 
+**CRITICAL INSTRUCTION**: There is NO LIMIT to the number of FAQs you can generate. Extract EVERY SINGLE PIECE of factual information as a structured Question and Answer pair. Generate as many FAQs as necessary to completely exhaust the text. Do NOT summarize or merge related facts — keep them as individual Q&A pairs. 
 
 **TABLE/LIST EXTRACTION RULE**: If there is a table or a list with 20 items, you MUST create 20 distinct FAQs (one for each row/item). Do not bundle them.
 
@@ -1076,16 +1035,16 @@ Example: If text says "Hostel fee is ₹5000 per semester, due by July 15":
 {chunk}
 
 **Output Format** — Return ONLY valid JSON, nothing else:
-{{
+{{ 
     "faqs": [
-        {{
+        {{ 
             "question": "Natural question a student would ask",
             "answer": "Complete, detailed answer extracted from source text.",
             "category": "Admissions|Courses & Programs|Eligibility|Entrance Exams|Fees|Scholarships|Academic Calendar|Examinations|Results|Departments|Faculty|Research|Hostels|Placements|Rules & Regulations|Notifications|Contact & Administration|General",
             "keywords": ["keyword1", "keyword2", "keyword3"]
-        }}
+        }} 
     ]
-}}
+}} 
 """
 
         pass1_faqs = []
@@ -1118,22 +1077,22 @@ The following FAQs were already extracted from this text:
 - Comparative questions (e.g., "What is the difference between X and Y?")
 - Yes/No questions about policies and eligibility
 
-Generate AT LEAST 15-30 additional FAQs. Dig incredibly deep. Leave absolutely no detail behind.
+Generate as many additional FAQs as possible until the text is completely exhausted. There is NO LIMIT. Dig incredibly deep. Leave absolutely no detail behind.
 
 **Source Text**:
 {chunk}
 
 **Output Format** — Return ONLY valid JSON:
-{{
+{{ 
     "faqs": [
-        {{
+        {{ 
             "question": "Question not covered in first pass",
             "answer": "Detailed answer from source.",
             "category": "Appropriate category",
             "keywords": ["keyword1", "keyword2"]
-        }}
+        }} 
     ]
-}}
+}} 
 """
         try:
             response2 = await llm.ainvoke(pass2_prompt)
@@ -1161,7 +1120,6 @@ Generate AT LEAST 15-30 additional FAQs. Dig incredibly deep. Leave absolutely n
         f"[MAX-FAQ] Total: {len(all_faqs)} raw → {len(unique_faqs)} unique FAQs after dedup"
     )
     return unique_faqs
-
 
 async def refine_kb_data(faqs: list, context: str):
     """
@@ -1201,16 +1159,16 @@ async def refine_kb_data(faqs: list, context: str):
         
             **Output Format**:
             Return ONLY valid JSON in the exact same structure as the input:
-            {{
+            {{ 
                 "faqs": [
-                    {{
+                    {{ 
                         "question": "Refined question",
                         "answer": "Deeply refined, high-context answer.",
                         "category": "Category",
                         "keywords": ["key", "words"]
-                    }}
+                    }} 
                 ]
-            }}
+            }} 
             """
             try:
                 response = await llm.ainvoke(refine_prompt)
@@ -1229,13 +1187,11 @@ async def refine_kb_data(faqs: list, context: str):
                 logger.error(f"Refinement Batch Error: {e}")
                 return batch
 
-    # Prepare all tasks
     tasks = []
     for i in range(0, len(faqs), batch_size):
         batch = faqs[i : i + batch_size]
         tasks.append(process_batch(batch))
 
-    # Run concurrently (Groq API handles high concurrency well)
     logger.info(f"Refining {len(tasks)} batches concurrently...")
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -1248,67 +1204,3 @@ async def refine_kb_data(faqs: list, context: str):
 
     return refined_faqs
 
-
-async def validate_faq_with_web(question: str, answer: str):
-    """
-    Validates the FAQ against the official SVU website.
-    Returns Dictionary: { status: "VERIFIED"|"PARTIALLY_VERIFIED"|"INVALID", score: float, source_url: str }
-    """
-    if not llm:
-        return {"status": "VERIFIED", "score": 0.5, "source_url": ""}  # Fail open
-
-    try:
-        search = DuckDuckGoSearchRun()
-        query = f"site:svuniversity.edu.in {question}"
-        search_results = search.run(query)
-
-        validation_prompt = f"""
-        PHASE 3: TRUTH VALIDATION (CRITICAL)
-        
-        You are the University Truth Officer.
-        
-        **Question**: {question}
-        **Proposed Answer**: {answer}
-        
-        **Official Search Results**:
-        {search_results}
-        
-        **Task**:
-        Verify the Proposed Answer effectively against the Search Results.
-        
-        **Output Format**:
-        VALID JSON ONLY:
-        {{
-            "status": "VERIFIED" | "PARTIALLY_VERIFIED" | "INVALID",
-            "confidence": 0.0 to 1.0,
-            "reason": "Brief explanation"
-        }}
-        
-        **Rules**:
-        - "VERIFIED": Validated by search results.
-        - "PARTIALLY_VERIFIED": Plausible but details missing.
-        - "INVALID": Contradicted or Not Found.
-        """
-
-        response = await llm.ainvoke(validation_prompt)
-        content = response.content
-        import json
-        import re
-
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        if json_match:
-            try:
-                result = json.loads(json_match.group(0))
-                return {
-                    "status": result.get("status", "PARTIALLY_VERIFIED"),
-                    "score": result.get("confidence", 0.5),
-                    "source_url": "https://svuniversity.edu.in/",  # Ideally extract from search results but DDG tool text often hides pure URLs
-                }
-            except:
-                pass
-
-        return {"status": "PARTIALLY_VERIFIED", "score": 0.5, "source_url": ""}
-
-    except Exception as e:
-        logger.error(f"Validation Error: {e}")
-        return {"status": "PARTIALLY_VERIFIED", "score": 0.1, "source_url": "error"}

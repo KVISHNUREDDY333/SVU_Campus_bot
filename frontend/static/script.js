@@ -2,23 +2,18 @@ const API_URL = window.location.origin;
 console.log("Using API_URL:", API_URL);
 console.log("SVU Bot Script v11-DEBUG Loaded");
 
-// DOM Elements
 const chatBox = document.getElementById("chat-box");
 const userInput = document.getElementById("user-input");
 const sendBtn = document.getElementById("send-btn");
 const welcomeScreen = document.getElementById("welcome-screen");
 const typingIndicator = document.getElementById("typing-indicator");
 
-// Global state for chat active request
 let currentChatController = null;
 
-// Mobile Sidebar Toggle
 function toggleSidebar(forceClose = null) {
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebar-overlay");
 
-  // Safety check: if overlay doesn't exist in DOM, look for it or skip it
-  // The CSS/HTML should have it, but we can be resilient
   const currentOverlay = overlay || document.querySelector(".sidebar-overlay");
 
   if (forceClose === true) {
@@ -31,9 +26,8 @@ function toggleSidebar(forceClose = null) {
   if (currentOverlay) currentOverlay.classList.toggle("active");
 }
 
-// Theme Logic
 function toggleTheme() {
-  // Check if user is logged in
+  
   if (!ACCESS_TOKEN) {
     showStatusPopup("Please log in to switch themes");
     return;
@@ -42,10 +36,8 @@ function toggleTheme() {
   const body = document.body;
   body.classList.toggle("dark-mode");
 
-  // Update Icon and Text
   updateThemeUI(body.classList.contains("dark-mode"));
 
-  // Save preference
   const isDarkModeNow = body.classList.contains("dark-mode");
   const themeValue = isDarkModeNow ? "dark" : "light";
   sessionStorage.setItem("svu_theme", themeValue);
@@ -62,13 +54,10 @@ function updateThemeUI(isDark) {
     headerIcon.className = isDark ? "fa-solid fa-sun" : "fa-solid fa-moon";
   if (text) text.textContent = isDark ? "Light Mode" : "Dark Mode";
 
-  // Sync with profile modal toggle if exists
   const modalToggle = document.getElementById("modal-dark-mode-toggle");
   if (modalToggle) modalToggle.checked = isDark;
 }
 
-// Splash Screen Logic
-// Auth State
 let ACCESS_TOKEN = sessionStorage.getItem("access_token");
 let USER_ROLE = sessionStorage.getItem("user_role");
 
@@ -76,7 +65,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const splashScreen = document.getElementById("splash-screen");
 
   if (splashScreen) {
-    // Show splash screen for 2 seconds by default
+    
     setTimeout(() => {
       splashScreen.classList.add("fade-out");
       splashScreen.style.pointerEvents = "none";
@@ -86,24 +75,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 2000);
   }
 
-  // Load Theme Preference
   const savedTheme = sessionStorage.getItem("svu_theme");
   const hasSession = !!sessionStorage.getItem("access_token");
 
-  // Default to light unless there's an active session AND dark was saved
   if (hasSession && savedTheme === "dark") {
     document.body.classList.add("dark-mode");
     updateThemeUI(true);
   } else {
     document.body.classList.remove("dark-mode");
     updateThemeUI(false);
-    // If no session, ensure storage is also light
+    
     if (!hasSession) {
       sessionStorage.setItem("svu_theme", "light");
     }
   }
 
-  // Check for Google OAuth callback params
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
   const error = urlParams.get("error");
@@ -124,18 +110,15 @@ document.addEventListener("DOMContentLoaded", async () => {
       full_name: fullName,
     });
 
-    // Clean URL
     window.history.replaceState({}, document.title, "/");
   }
 
-  // Check Auth first
   if (checkAuth()) {
     initRoleUI();
     loadChatHistory();
     populateSidebarProfile();
     startNotificationPolling();
     
-    // Ensure session_start exists for existing sessions
     if (!sessionStorage.getItem("session_start")) {
        const savedStart = localStorage.getItem("login_timestamp");
        if (savedStart) {
@@ -149,11 +132,9 @@ document.addEventListener("DOMContentLoaded", async () => {
        }
     }
     
-    // Synchro user type to local storage
     if (USER_ROLE) localStorage.setItem("user_type", USER_ROLE);
   }
 
-  // Force Unregister Service Worker to clear cache
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.getRegistrations().then(function (registrations) {
       for (let registration of registrations) {
@@ -164,29 +145,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Request Notification Permission
   if ("Notification" in window && Notification.permission !== "granted") {
     Notification.requestPermission();
   }
 
-  // Theme extracted to top of DOMContentLoaded
-
   loadTrendingQueries();
 
   if (userInput) {
-    userInput.value = ""; // Prevent browser autofill
+    userInput.value = ""; 
     userInput.focus();
   }
 
-  // Ensure the default section is shown
   setTimeout(() => {
     showSection("chat");
   }, 100);
 
-  // Clear Auth Inputs on Load with delay to fight autofill
   setTimeout(clearAuthInputs, 500);
 
-  // Also clear on page show (bfcache)
   window.addEventListener("pageshow", () => {
     setTimeout(clearAuthInputs, 500);
   });
@@ -203,23 +178,22 @@ function clearAuthInputs() {
     const el = document.getElementById(id);
     if (el) {
         el.value = "";
-        el.setAttribute('autocomplete', 'new-password'); // Stronger auto-fill block
+        el.setAttribute('autocomplete', 'new-password'); 
     }
   });
-  // Also reset forms
+  
   document.getElementById('loginForm')?.reset();
   document.getElementById('signupForm')?.reset();
   document.getElementById('modalResetForm')?.reset();
 }
 
-// --- Auth Functions ---
 function checkAuth() {
   const overlay = document.getElementById("auth-overlay");
   const ACCESS_TOKEN = sessionStorage.getItem("access_token");
 
   if (!ACCESS_TOKEN) {
     if (overlay) { 
-        clearAuthInputs(); // Force clear on entrance
+        clearAuthInputs(); 
         overlay.classList.add("active"); 
         if(window.initAuthUI) window.initAuthUI(); 
     }
@@ -229,14 +203,6 @@ function checkAuth() {
     return true;
   }
 }
-
-
-
-
-
-// ==========================================
-// NEW SLIDING AUTH UI LOGIC
-// ==========================================
 
 window.initAuthUI = function() {
     const container = document.getElementById('container');
@@ -341,7 +307,6 @@ window.initAuthUI = function() {
             if(!isValid) allValid = false;
         }
 
-        // Real-time color feedback for password field
         if (isEmpty) {
             passInput.classList.remove('input-pure-success', 'input-pure-danger');
         } else {
@@ -370,7 +335,6 @@ window.initAuthUI = function() {
     document.getElementById('signup_first_name')?.addEventListener('input', updateSubmitButton);
     document.getElementById('signup_last_name')?.addEventListener('input', updateSubmitButton);
     
-    // Real Email Authenticity Scan (Backend Driven)
     let emailCheckTimeout;
     signupEmailInput?.addEventListener('input', () => {
         window.emailIsAuthentic = false;
@@ -381,7 +345,6 @@ window.initAuthUI = function() {
         clearTimeout(emailCheckTimeout);
         const email = signupEmailInput.value.trim();
 
-        // Apply red border while unverified, clear if empty
         if (email.length === 0) {
             signupEmailInput.classList.remove('input-pure-danger', 'input-pure-success');
         } else {
@@ -421,7 +384,6 @@ window.initAuthUI = function() {
         }, 1200);
     });
 
-    // Initialize Google Sign-In
     function initGoogleSignIn() {
         if (typeof google === 'undefined') {
             setTimeout(initGoogleSignIn, 500);
@@ -485,7 +447,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("submit", async (e) => {
-    // LOGIN
+    
     if (e.target.id === 'loginForm') {
         e.preventDefault();
         const msgEl = document.getElementById('loginMessage');
@@ -515,7 +477,6 @@ document.addEventListener("submit", async (e) => {
         } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Server connection error'; }
     }
     
-    // FORGOT PASS STEP 1
     if (e.target.id === 'step1Form') {
         e.preventDefault();
         window.resetEmail = document.getElementById('reset_email').value;
@@ -543,7 +504,6 @@ document.addEventListener("submit", async (e) => {
         } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Verification error.'; }
     }
     
-    // FORGOT PASS STEP 2 - VERIFY ONLY
     if (e.target.id === 'step2Form') {
         e.preventDefault();
         const msgEl = document.getElementById('forgotMessage');
@@ -570,7 +530,6 @@ document.addEventListener("submit", async (e) => {
         } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Connection Error.'; }
     }
 
-    // MODAL RESET FINAL
     if (e.target.id === 'modalResetForm') {
         e.preventDefault();
         const pass = document.getElementById('modal_new_pass').value;
@@ -601,7 +560,6 @@ document.addEventListener("submit", async (e) => {
         } catch(err) { msgEl.style.color = '#ef4444'; msgEl.textContent = 'Server error.'; }
     }
 
-    // REGISTER FINAL
     if (e.target.id === 'signupForm') {
         e.preventDefault();
         const msgEl = document.getElementById('signupMessage');
@@ -650,7 +608,6 @@ window.openAuthOverlay = function(mode="login") {
     else document.getElementById("signInGhost")?.click();
 };
 
-
 function initRoleUI() {
   const role = sessionStorage.getItem("user_role");
   if (role === "admin") {
@@ -679,7 +636,7 @@ function initRoleUI() {
 }
 
 function saveSession(data) {
-  // Force Light Mode on New Session (as per requirements)
+  
   sessionStorage.setItem("svu_theme", "light");
   document.body.classList.remove("dark-mode");
   if (typeof updateThemeUI === "function") updateThemeUI(false);
@@ -707,7 +664,6 @@ function saveSession(data) {
   localStorage.setItem("login_timestamp", loginTime);
   localStorage.setItem("svu_theme", "light");
 
-  // Redirection: Hide auth overlay and show chat
   const authOverlay = document.getElementById("auth-overlay");
   if (authOverlay) authOverlay.classList.remove("active");
 
@@ -716,7 +672,6 @@ function saveSession(data) {
   initRoleUI();
   if (typeof startNotificationPolling === "function") startNotificationPolling();
 
-  // Reset chat to "New Chat" on login
   if (typeof clearChat === "function") clearChat();
 }
 
@@ -737,14 +692,12 @@ function logout() {
 
   if (typeof stopNotificationPolling === "function") stopNotificationPolling();
 
-  // Reset to Light Mode on Logout
   sessionStorage.setItem("svu_theme", "light");
   localStorage.removeItem("svu_theme"); 
 
   document.body.classList.remove("dark-mode");
   if (typeof updateThemeUI === "function") updateThemeUI(false);
 
-  // Hide restricted links immediately
   const navAdmin = document.getElementById("nav-admin");
   const navDashboard = document.getElementById("nav-dashboard");
   if (navAdmin) navAdmin.style.display = "none";
@@ -757,8 +710,6 @@ window.logout = logout;
 window.saveSession = saveSession;
 window.initRoleUI = initRoleUI;
 
-
-// Chat History State
 let chatHistory = JSON.parse(
   sessionStorage.getItem("svu_chat_history") || "[]",
 );
@@ -770,7 +721,6 @@ function loadChatHistory() {
   chatHistory.forEach((msg) => appendMessage(msg.text, msg.sender, false));
   if (chatHistory.length > 0) scrollToBottom();
 }
-
 
 function populateSidebarProfile() {
   const fullName = sessionStorage.getItem("full_name");
@@ -787,7 +737,6 @@ function populateSidebarProfile() {
     if (roleEl) roleEl.textContent = role;
     if (avatarEl) avatarEl.textContent = fullName.charAt(0).toUpperCase();
 
-    // Delegate to shared role UI initializer
     initRoleUI();
   } else if (profileEl) {
     profileEl.style.display = "none";
@@ -802,12 +751,10 @@ function openProfileModal() {
   const username = sessionStorage.getItem("username") || "user";
   const sessionStart = sessionStorage.getItem("session_start") || "N/A";
   
-  // Update details
   document.getElementById("modal-full-name").textContent = fullName;
   document.getElementById("modal-email").textContent = username.includes("@") ? username : `${username}@svuniversity.edu.in`;
   document.getElementById("modal-session-time").textContent = sessionStart;
   
-  // Profile ID (Deterministic for same user session)
   let profileID = sessionStorage.getItem("svu_profile_id");
   if (!profileID) {
     profileID = '8880a051-fb39-49f3-804b-97d35bee' + Math.floor(1000 + Math.random() * 9000);
@@ -815,7 +762,6 @@ function openProfileModal() {
   }
   document.getElementById("modal-profile-id").textContent = profileID;
 
-  // Sync dark mode toggle
   const isDark = document.body.classList.contains("dark-mode");
   const toggle = document.getElementById("modal-dark-mode-toggle");
   if (toggle) toggle.checked = isDark;
@@ -845,7 +791,6 @@ function editProfile() {
     const editModal = document.getElementById("edit-profile-modal");
     if (!editModal) return;
 
-    // Pre-fill from session
     const firstName = sessionStorage.getItem("first_name") || "";
     const lastName = sessionStorage.getItem("last_name") || "";
     
@@ -886,15 +831,13 @@ async function submitProfileUpdate() {
 
        const result = await response.json();
        if (response.ok) {
-           // Update Local and Session Storage
+           
            sessionStorage.setItem("full_name", result.full_name);
            sessionStorage.setItem("first_name", result.first_name);
            sessionStorage.setItem("last_name", result.last_name);
            
-           // Update Sidebar UI
            populateSidebarProfile();
            
-           // Update Profile Modal if it's open
            const modalName = document.getElementById("modal-full-name");
            if (modalName) modalName.textContent = result.full_name;
            
@@ -911,8 +854,6 @@ async function submitProfileUpdate() {
    }
 }
 
-
-
 async function loadTrendingQueries() {
   console.time("TrendingQueriesLoad");
   try {
@@ -924,7 +865,7 @@ async function loadTrendingQueries() {
     container.innerHTML = "";
 
     if (data.length === 0) {
-      // Fallback if no dynamic queries
+      
       container.innerHTML =
         '<p style="color:var(--text-secondary); text-align:center; padding:10px;">Ask me anything!</p>';
       console.timeEnd("TrendingQueriesLoad");
@@ -934,7 +875,7 @@ async function loadTrendingQueries() {
     data.forEach((q) => {
       const card = document.createElement("div");
       card.className = "suggestion-card";
-      // Pass response if it exists, otherwise null
+      
       const responseArg = q.response
         ? `'${q.response.replace(/'/g, "\\'")}'`
         : "null";
@@ -959,14 +900,12 @@ async function loadTrendingQueries() {
 function showSection(section) {
   console.warn(`[DEBUG] showSection called for: ${section}`);
 
-  // Auto-close sidebar on mobile
   if (window.innerWidth <= 768) {
     if (typeof toggleSidebar === "function") {
       toggleSidebar(true);
     }
   }
 
-  // Prevent non-admins from accessing restricted sections
   if (
     (section === "admin" || section === "dashboard") &&
     USER_ROLE !== "admin"
@@ -1000,7 +939,7 @@ function showSection(section) {
   const activeSection = document.getElementById(`${section}-section`);
   if (activeSection) {
     activeSection.classList.remove("hidden");
-    // We use flex for core interactive sections to maintain stationary header/inputs
+    
     const flexSections = ["chat", "locations", "study"];
     activeSection.style.display =
       flexSections.includes(section) ? "flex" : "block";
@@ -1009,44 +948,43 @@ function showSection(section) {
   const activeNav = document.getElementById(`nav-${section}`);
   if (activeNav) activeNav.classList.add("active");
 
-  // Trigger specific loaders
   if (section === "dashboard") {
     console.warn("[DEBUG] Triggering loadDashboard from showSection");
     loadDashboard();
   }
   if (section === "admin") {
-    loadDashboard(); // Ensure dashboard stats/charts are loaded
+    loadDashboard(); 
     loadDocuments();
     loadAllTickets();
-    loadAcademicCalendar(); // Load admin calendar management table
+    loadAcademicCalendar(); 
     loadUsers();
     fetchLocations();
     loadSystemHealth();
     loadSuggestedFAQs();
     loadAdminTrending();
-    loadTrainStatus(); // Load training status dashboard
+    loadTrainStatus(); 
   }
 
   if (section === "calendar") {
-    loadCalendar(); // Load student calendar view
+    loadCalendar(); 
   }
   if (section === "study") {
     loadStudyBuddy();
   }
   if (section === "locations") {
-    fetchLocations(); // Fetch locations for all users
+    fetchLocations(); 
   }
   if (section === "career") {
     loadCareerCenter();
   }
   if (section === "chat") {
-    // Countdown widget removed
+    
   }
 }
 
 async function appendQuick(text, preDefinedResponse = null, link = null) {
   if (preDefinedResponse || link) {
-    // Hide welcome screen if visible
+    
     const welcomeScreen = document.getElementById("welcome-screen");
     if (welcomeScreen && welcomeScreen.style.display !== "none") {
       welcomeScreen.style.display = "none";
@@ -1055,7 +993,6 @@ async function appendQuick(text, preDefinedResponse = null, link = null) {
     appendMessage(text, "user", true);
     showTypingIndicator();
 
-    // Simulate a small delay for natural feeling
     setTimeout(() => {
       hideTypingIndicator();
       let responseText = preDefinedResponse || "";
@@ -1076,18 +1013,18 @@ async function appendQuick(text, preDefinedResponse = null, link = null) {
 function setChatButtonState(isFetching) {
   if (!sendBtn) return;
   if (isFetching) {
-    // Change to a stop icon and red hover state to imply cancellation
+    
     sendBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
     sendBtn.classList.add("stop-state");
   } else {
-    // Revert to arrow icon
+    
     sendBtn.innerHTML = '<i class="fa-solid fa-arrow-up"></i>';
     sendBtn.classList.remove("stop-state");
   }
 }
 
 async function sendMessage() {
-  // If a request is active, pressing the button acts as "Stop"
+  
   if (currentChatController) {
     console.warn("User cancelled generation early.");
     currentChatController.abort();
@@ -1100,26 +1037,20 @@ async function sendMessage() {
   const text = userInput.value?.trim();
   if (!text) return;
 
-  // Hide welcome screen if visible
   if (welcomeScreen && welcomeScreen.style.display !== "none") {
     welcomeScreen.style.display = "none";
   }
 
-  // Add user message
   appendMessage(text, "user", true);
   userInput.value = "";
 
-  // Show typing indicator
   showTypingIndicator();
 
-  // Set UI to cancel mode and instantiate abort controller
   currentChatController = new AbortController();
   setChatButtonState(true);
 
-  // Scroll to bottom
   scrollToBottom();
 
-  // Get Session ID (if using session history)
   let sessionId = sessionStorage.getItem("chat_session_id");
   if (!sessionId) {
     sessionId =
@@ -1154,17 +1085,14 @@ async function sendMessage() {
     if (!response.ok) throw new Error("Backend unavailable");
     const data = await response.json();
 
-    // Hide typing indicator before showing response
     hideTypingIndicator();
 
-    // Add Chat Message
     const msgDiv = appendMessage(
       data.response || "I'm having trouble connecting right now.",
       "bot",
       true,
     );
 
-    // If bot is unsure, add Ticket Button
     if (
       data.response &&
       (data.response.toLowerCase().includes("raise a ticket") ||
@@ -1173,7 +1101,7 @@ async function sendMessage() {
       const ticketBtn = document.createElement("button");
       ticketBtn.className = "ticket-action-btn";
       ticketBtn.innerText = "🎫 Raise a Ticket";
-      ticketBtn.onclick = () => openTicketModal(text, data.response); // Pass context
+      ticketBtn.onclick = () => openTicketModal(text, data.response); 
       msgDiv.appendChild(ticketBtn);
     }
   } catch (err) {
@@ -1197,11 +1125,11 @@ async function sendMessage() {
 
 function speak(text) {
   if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel(); // Stop previous
+    window.speechSynthesis.cancel(); 
     const utterance = new SpeechSynthesisUtterance(text);
-    // Try to select a natural voice
+    
     const voices = window.speechSynthesis.getVoices();
-    // Indian English or fallback to first available
+    
     const preferredVoice =
       voices.find((v) => v.lang.includes("IN")) || voices[0];
     if (preferredVoice) utterance.voice = preferredVoice;
@@ -1210,9 +1138,6 @@ function speak(text) {
   }
 }
 
-// Removing duplicate saveSession placeholder
-
-// Analytics Chart
 let roleChartInstance = null;
 let sentimentChartInstance = null;
 
@@ -1237,7 +1162,6 @@ async function loadDashboard() {
     const data = await res.json();
     console.warn("[DEBUG] Dashboard Data Received:", data);
 
-    // precise helpers to update text
     const setText = (id, val) => {
       const el = document.getElementById(id);
       if (el) el.textContent = val;
@@ -1246,20 +1170,12 @@ async function loadDashboard() {
     setText("total-queries", data.total_queries);
     setText("active-users", data.active_users);
 
-    // Update Documents Count
     const docCount =
       data.total_documents !== undefined ? data.total_documents : 0;
     setText("total-documents", docCount);
 
-    // Update description text in Settings card if it exists
-    // const docDesc = document.querySelector('.settings-card p');
-    // if (docDesc && docDesc.textContent.includes('documents in your knowledge base')) {
-    //      docDesc.textContent = `You have ${docCount} documents in your knowledge base. Use the Admin Settings to add, remove, or update documents.`;
-    // }
-
     renderCharts(data.role_distribution, data.sentiment_stats);
 
-    // Start live updates for other components
     loadSystemHealth();
     loadFAQs();
     loadDocuments();
@@ -1271,7 +1187,7 @@ async function loadDashboard() {
 }
 
 async function loadUsers() {
-  // Function removed - see optimized version below
+  
   console.warn("Using deprecated loadUsers - check script.js structure");
 }
 
@@ -1297,9 +1213,9 @@ function refreshAdminData() {
   if (typeof loadDocuments === "function") loadDocuments();
   if (typeof loadTrainStatus === "function") loadTrainStatus();
   if (typeof loadDashboard === "function") loadDashboard();
-  if (typeof loadAllFAQs === "function") loadAllFAQs(); // Refresh the all FAQs modal
-  if (typeof loadSuggestedFAQs === "function") loadSuggestedFAQs(); // Refresh suggested FAQs
-  if (typeof loadFAQs === "function") loadFAQs(); // Refresh the main FAQ list
+  if (typeof loadAllFAQs === "function") loadAllFAQs(); 
+  if (typeof loadSuggestedFAQs === "function") loadSuggestedFAQs(); 
+  if (typeof loadFAQs === "function") loadFAQs(); 
 }
 
 function renderDocuments(docs) {
@@ -1397,7 +1313,6 @@ async function loadAllFAQs() {
     '<div style="text-align:center; padding:40px;"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;color:var(--primary-color);"></i><p style="margin-top:15px;color:var(--text-secondary);">Loading FAQs...</p></div>';
   empty.style.display = "none";
 
-  // Update modal header actions
   const actionContainer = document.getElementById("modal-action-container");
   if (actionContainer) {
     actionContainer.innerHTML = "";
@@ -1416,7 +1331,7 @@ async function loadAllFAQs() {
     const faqs = await res.json();
 
     allFaqsData = Array.isArray(faqs) ? faqs : [];
-    currentFilteredFAQs = allFaqsData; // Backend already filtered if needed
+    currentFilteredFAQs = allFaqsData; 
 
     currentFAQPage = 0;
     renderAllFAQs(true);
@@ -1435,13 +1350,11 @@ async function viewDocFaqs(docId, filename) {
   if (modal) {
     modal.classList.add("active");
 
-    // Update header for document-specific view
     const modalTitle = document.getElementById("faq-modal-title");
     const modalSubtitle = document.getElementById("faq-modal-subtitle");
     if (modalTitle) modalTitle.textContent = "Extracted FAQs";
     if (modalSubtitle) modalSubtitle.textContent = `Source: ${filename}`;
 
-    // Reset sub-filters when viewing specific doc
     const categoryFilter = document.getElementById("faq-category-filter");
     const searchInput = document.getElementById("faq-search-input");
     if (categoryFilter) categoryFilter.value = "";
@@ -1459,7 +1372,6 @@ async function openAllFaqsModal() {
   if (modal) {
     modal.classList.add("active");
 
-    // Update header for all FAQs view
     const modalTitle = document.getElementById("faq-modal-title");
     const modalSubtitle = document.getElementById("faq-modal-subtitle");
     if (modalTitle) modalTitle.textContent = "Knowledge Base FAQs";
@@ -1519,7 +1431,6 @@ function renderAllFAQs(reset = false) {
     list.appendChild(renderFAQItem(f));
   });
 
-  // Handle "View More" button
   const existingBtn = document.getElementById("faq-view-more-btn");
   if (existingBtn) existingBtn.remove();
 
@@ -1656,7 +1567,7 @@ async function updateAllFAQ(id) {
 
     if (res.ok) {
       showStatusPopup("FAQ Updated Successfully");
-      refreshAdminData(); // Refresh both KB and Train tables
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to update FAQ", "Update Failed", "error");
     }
@@ -1676,7 +1587,7 @@ async function deleteAllFAQ(id) {
 
     if (res.ok) {
       showStatusPopup("FAQ Deleted");
-      refreshAdminData(); // Refresh both KB and Train tables
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to delete FAQ", "Delete Failed", "error");
     }
@@ -1686,7 +1597,7 @@ async function deleteAllFAQ(id) {
 }
 
 function renderCharts(roleData, sentimentData) {
-  // 1. Role Chart
+  
   const ctxRole = document.getElementById("roleChart").getContext("2d");
 
   if (roleChartInstance) roleChartInstance.destroy();
@@ -1711,7 +1622,6 @@ function renderCharts(roleData, sentimentData) {
     },
   });
 
-  // 2. Sentiment Chart
   const ctxSent = document.getElementById("sentimentChart").getContext("2d");
   if (sentimentChartInstance) sentimentChartInstance.destroy();
   sentimentChartInstance = new Chart(ctxSent, {
@@ -1739,10 +1649,9 @@ function renderCharts(roleData, sentimentData) {
   });
 }
 
-// Chat Logic
 if (userInput) {
   userInput.addEventListener("keypress", (e) => {
-    // Prevent stacking requests on enter key if already generating
+    
     if (e.key === "Enter") {
       e.preventDefault();
       if (!currentChatController) {
@@ -1751,8 +1660,6 @@ if (userInput) {
     }
   });
 }
-
-// Section for consolidated functions - removing duplicate sendMessage placeholder
 
 function appendMessage(text, sender, save = true) {
   if (save) {
@@ -1764,10 +1671,10 @@ function appendMessage(text, sender, save = true) {
   div.classList.add("message", sender);
 
   const contentWrapper = document.createElement("div");
-  contentWrapper.className = "message-body"; // Container for bubble + actions
+  contentWrapper.className = "message-body"; 
 
   const bubble = document.createElement("div");
-  bubble.className = "text"; // This is the actual bubble
+  bubble.className = "text"; 
 
   if (sender === "bot") {
     const botIconDiv = document.createElement("div");
@@ -1775,47 +1682,39 @@ function appendMessage(text, sender, save = true) {
     botIconDiv.innerHTML =
       '<img src="/static/images/bot_avatar.svg" alt="Bot" style="width: 100%; height: 100%;">';
 
-    // Message text container
     const textSpan = document.createElement("div");
     textSpan.className = "message-content";
     
-    // Use marked for bot responses to handle Markdown/HTML properly
     textSpan.innerHTML = marked.parse(text);
 
     const actionsDiv = document.createElement("div");
     actionsDiv.className = "msg-actions";
 
-    // Copy Button
     const copyBtn = document.createElement("button");
     copyBtn.className = "speech-btn";
     copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
     copyBtn.onclick = () => copyText(textSpan, copyBtn);
 
-    // Speak Button
     const speakBtn = document.createElement("button");
     speakBtn.className = "speech-btn";
     speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
     speakBtn.onclick = () => speakText(text, textSpan, speakBtn);
 
-    // Raise Ticket Button
     const ticketBtn = document.createElement("button");
     ticketBtn.className = "speech-btn";
     ticketBtn.title = "Raise Support Ticket";
     ticketBtn.innerHTML = '<i class="fa-solid fa-ticket"></i>';
 
-    // Thumbs Up
     const upBtn = document.createElement("button");
     upBtn.className = "speech-btn feedback-up";
     upBtn.title = "Good Response";
     upBtn.innerHTML = '<i class="fa-regular fa-thumbs-up"></i>';
 
-    // Thumbs Down
     const downBtn = document.createElement("button");
     downBtn.className = "speech-btn feedback-down";
     downBtn.title = "Poor Response";
     downBtn.innerHTML = '<i class="fa-regular fa-thumbs-down"></i>';
 
-    // Find the user query that triggered this bot response
     let triggeredQuery = "Unknown context";
     for (let i = chatHistory.length - 2; i >= 0; i--) {
       if (chatHistory[i].sender === "user") {
@@ -1872,7 +1771,7 @@ function appendMessage(text, sender, save = true) {
 }
 
 async function sendFeedback(userQuery, botResponse, rating, btn) {
-  // Visual feedback
+  
   const originalContent = btn.innerHTML;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
   btn.disabled = true;
@@ -1892,7 +1791,7 @@ async function sendFeedback(userQuery, botResponse, rating, btn) {
     });
 
     if (res.ok) {
-      // Use solid icons for the selected rating
+      
       if (rating === 1) {
         btn.innerHTML = '<i class="fa-solid fa-thumbs-up"></i>';
         btn.style.color = "#10b981";
@@ -1901,7 +1800,6 @@ async function sendFeedback(userQuery, botResponse, rating, btn) {
         btn.style.color = "#ef4444";
       }
 
-      // Disable and dim the group
       const parent = btn.parentElement;
       parent.querySelectorAll(".feedback-up, .feedback-down").forEach((b) => {
         b.disabled = true;
@@ -1941,28 +1839,23 @@ function hideTypingIndicator() {
   if (typingIndicator) typingIndicator.classList.add("hidden");
 }
 
-// Guard against API_URL and ACCESS_TOKEN not being defined before attempting to fetch
-// loadSystemHealth definition moved to Admin section
-
-
-
 function copyText(textContainer, btn) {
   let textToCopy = "";
-  // If called from the new speech UI, textContainer is the DIV element
+  
   if (textContainer instanceof HTMLElement) {
-    // Clone to strip out any buttons (like speak/copy) before copying text
+    
     const clone = textContainer.cloneNode(true);
     const buttons = clone.querySelectorAll("button");
     buttons.forEach((b) => b.remove());
     textToCopy = clone.innerText;
   }
-  // Fallback for any legacy calls (just in case)
+  
   else if (typeof textContainer === "string") {
     textToCopy = textContainer;
   }
-  // Legacy button-only call (from old structure if it existed)
+  
   else if (textContainer.tagName === "BUTTON") {
-    btn = textContainer; // The first arg was actually the button
+    btn = textContainer; 
     const parent = btn.parentElement;
     const clone = parent.cloneNode(true);
     const copyBtnClone = clone.querySelector(".copy-btn");
@@ -1984,14 +1877,11 @@ function copyText(textContainer, btn) {
 }
 
 function formatText(text) {
-  // Basic formatting: URLs to links, newlines to <br>
+  
   let safeText = escapeHtml(text);
 
-  // Map Link Parsing
   if (safeText.includes("[Map Link]")) {
-    // Extract the location context from the text (heuristic)
-    // We'll search for "Where is X?" in previous context or just map the keyword "Location"
-    // For simplicity, let's link to SVU Map generally, or use the query
+    
     safeText = safeText.replace(
       "[Map Link]",
       `<a href="https://www.google.com/maps/search/?api=1&query=Sri+Venkateswara+University+Tirupati" target="_blank" class="map-link-btn"><i class="fa-solid fa-map-location-dot"></i> View on Map</a>`,
@@ -2000,8 +1890,8 @@ function formatText(text) {
 
   return safeText
     .replace(/\n/g, "<br>")
-    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>") // Bold
-    .replace(/\*(.*?)\*/g, "<i>$1</i>") // Italic
+    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>") 
+    .replace(/\*(.*?)\*/g, "<i>$1</i>") 
     .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank">$1</a>');
 }
 
@@ -2015,12 +1905,10 @@ function escapeHtml(text) {
 }
 
 function clearChat() {
-  // Clear History
+  
   chatHistory = [];
   sessionStorage.removeItem("svu_chat_history");
 
-  // Reset to welcome state
-  // Remove all messages except welcome screen and typing indicator
   const messages = chatBox.querySelectorAll(".message");
   messages.forEach((msg) => msg.remove());
 
@@ -2029,16 +1917,12 @@ function clearChat() {
   userInput.focus();
 }
 
-// --- Voice Assistant Implementation ---
-
-// 1. Text-to-Speech (TTS)
 const synth = window.speechSynthesis;
 let currentSpeechBtn = null;
-let currentUtterance = null; // GLOBAL reference to prevent GC
+let currentUtterance = null; 
 let currentHighlightedElement = null;
 let originalHtmlContent = null;
 
-// Helper logic for voices
 let availableVoices = [];
 function loadVoices() {
   availableVoices = synth.getVoices();
@@ -2057,16 +1941,13 @@ function speakText(text, element = null, button = null) {
     return;
   }
 
-  // 1. Cancel existing speech & Reset
-  // 1. Cancel existing speech & Reset
   if (synth.speaking || currentHighlightedElement) {
-    // Capture logic state BEFORE reset
+    
     const isSameElement = currentHighlightedElement === element;
 
     resetHighlighting();
     synth.cancel();
 
-    // If clicking the same button, just stop (toggle off)
     if (isSameElement) {
       return;
     }
@@ -2078,7 +1959,6 @@ function speakText(text, element = null, button = null) {
     button.style.color = "#ef4444";
   }
 
-  // 2. Setup Highlighting & Text Construction
   let textToSpeak = text;
   let spans = [];
 
@@ -2086,7 +1966,6 @@ function speakText(text, element = null, button = null) {
     currentHighlightedElement = element;
     originalHtmlContent = element.innerHTML;
 
-    // Wrap words and get the EXACT text that matches the DOM structure
     const result = wrapWordsAndGetText(element);
     spans = result.spans;
     textToSpeak = result.fullText;
@@ -2099,17 +1978,15 @@ function speakText(text, element = null, button = null) {
     return;
   }
 
-  // 3. Prepare Utterance
   const utterance = new SpeechSynthesisUtterance(textToSpeak);
 
-  // 4. Voice Selection (Synchronous Best Effort)
   if (availableVoices.length === 0) {
     availableVoices = synth.getVoices();
   }
 
   const selectedLang = document.getElementById("lang-select")?.value || "en";
   let targetLangCode = "en-US";
-  // Priority keywords for "Sweet/Natural Female/Clear" voices
+  
   let voiceKeywords = [
     "google us english",
     "microsoft zira",
@@ -2121,7 +1998,7 @@ function speakText(text, element = null, button = null) {
 
   if (selectedLang === "te") {
     targetLangCode = "te-IN";
-    // "Shruti" (Microsoft) and "Google Telugu" are the gold standards
+    
     voiceKeywords = [
       "shruti",
       "google telugu",
@@ -2132,37 +2009,34 @@ function speakText(text, element = null, button = null) {
     ];
   } else if (selectedLang === "hi") {
     targetLangCode = "hi-IN";
-    // "Swara" (Microsoft) and "Google Hindi" are best
+    
     voiceKeywords = ["swara", "google hindi", "kalpana", "heera", "female"];
   }
 
   console.log(`[TTS] Target Lang: ${targetLangCode}`);
 
-  // Helper to score voices (higher score = better match for 'sweet female')
   const getVoiceScore = (voice) => {
     let score = 0;
     const nameLower = voice.name.toLowerCase();
 
     if (voice.lang === targetLangCode) score += 20;
     else if (voice.lang.split("-")[0] === selectedLang) score += 10;
-    else return -1; // Wrong language
+    else return -1; 
 
     for (const kw of voiceKeywords) {
       if (nameLower.includes(kw.toLowerCase())) {
-        score += 5; // Keyword match
-        if (kw === "natural") score += 10; // High priority for natural
-        if (kw === "premium") score += 10; // High priority for premium
+        score += 5; 
+        if (kw === "natural") score += 10; 
+        if (kw === "premium") score += 10; 
       }
     }
 
-    // Bonus for "Microsoft" online voices which are usually better
     if (nameLower.includes("microsoft") && nameLower.includes("online"))
       score += 15;
 
     return score;
   };
 
-  // Sort voices by score
   const bestVoice = availableVoices
     .map((v) => ({ voice: v, score: getVoiceScore(v) }))
     .filter((item) => item.score > 0)
@@ -2170,7 +2044,6 @@ function speakText(text, element = null, button = null) {
 
   let preferredVoice = bestVoice ? bestVoice.voice : null;
 
-  // Fallback to English preferred if non-English voice not found (better than silence)
   if (!preferredVoice && selectedLang !== "en") {
     console.warn(
       `[TTS] No voice found for ${selectedLang}, falling back to English.`,
@@ -2182,9 +2055,8 @@ function speakText(text, element = null, button = null) {
     );
   }
 
-  // Default English Logic
   if (!preferredVoice && selectedLang === "en") {
-    // Prioritize "Microsoft Zira" or "Google US English"
+    
     preferredVoice = availableVoices.find(
       (v) =>
         v.name.includes("Zira") ||
@@ -2192,9 +2064,8 @@ function speakText(text, element = null, button = null) {
     );
   }
 
-  // 4.1 Force Reset if voice is stuck (Safety Mechanism)
   if (!preferredVoice && availableVoices.length > 0) {
-    // If still no voice, just take the first one that matches the language prefix
+    
     preferredVoice =
       availableVoices.find((v) => v.lang.startsWith(selectedLang)) ||
       availableVoices[0];
@@ -2207,15 +2078,13 @@ function speakText(text, element = null, button = null) {
     utterance.voice = preferredVoice;
     utterance.lang = preferredVoice.lang;
   } else {
-    // Fallback
+    
     utterance.lang = targetLangCode;
   }
 
-  // Adjust rate/pitch for better naturalness
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
 
-  // Store in global to prevent Garbage Collection (CRITICAL FIX)
   currentUtterance = utterance;
 
   if (element) {
@@ -2230,22 +2099,19 @@ function speakText(text, element = null, button = null) {
       resetHighlighting();
     };
 
-    // Handle interruption/error
     utterance.onerror = (e) => {
       console.error("[TTS] Utterance Error:", e);
       resetHighlighting();
     };
   }
 
-  // 5. Execution - Immediate & Robust
   console.log("[TTS] Executing commands...");
   try {
-    // Browser quirk fix: Cancel before speaking to clear queue
+    
     synth.cancel();
 
-    // Timeout to detect if speech didn't start (common Chrome bug)
     const speechTimeout = setTimeout(() => {
-      if (synth.speaking) return; // Started fine
+      if (synth.speaking) return; 
       console.warn("[TTS] Speech didn't start, forcing resume...");
       synth.cancel();
       synth.resume();
@@ -2260,7 +2126,7 @@ function speakText(text, element = null, button = null) {
 }
 
 function wrapWordsAndGetText(element) {
-  // We use a TreeWalker to find all text nodes
+  
   const walker = document.createTreeWalker(
     element,
     NodeFilter.SHOW_TEXT,
@@ -2271,7 +2137,7 @@ function wrapWordsAndGetText(element) {
   let node;
   while ((node = walker.nextNode())) {
     if (node.nodeValue.length > 0) {
-      // Keep all text nodes including pure whitespace for structure
+      
       textNodes.push(node);
     }
   }
@@ -2282,7 +2148,7 @@ function wrapWordsAndGetText(element) {
 
   textNodes.forEach((textNode) => {
     const originalText = textNode.nodeValue;
-    // Split by whitespace but keep delimiters
+    
     const parts = originalText.split(/(\s+)/);
 
     const fragment = document.createDocumentFragment();
@@ -2290,13 +2156,12 @@ function wrapWordsAndGetText(element) {
     parts.forEach((part) => {
       if (part.length === 0) return;
 
-      // Check if it's purely whitespace
       if (/^\s+$/.test(part)) {
         fragment.appendChild(document.createTextNode(part));
         fullText += part;
         runningCharCount += part.length;
       } else {
-        // It's a word
+        
         const span = document.createElement("span");
         span.textContent = part;
         span.dataset.start = runningCharCount;
@@ -2320,32 +2185,26 @@ function wrapWordsAndGetText(element) {
 function highlightWordAt(charIndex, spans) {
   if (!currentHighlightedElement) return;
 
-  // Remove previous highlights
   const active = currentHighlightedElement.querySelector(".speaking-word");
   if (active) active.classList.remove("speaking-word");
 
-  // Find the span that COVERS the current charIndex
-  // We treat the charIndex as 'start of the current word being spoken'
   let targetSpan = spans.find((span) => {
     const start = parseInt(span.dataset.start);
     const end = parseInt(span.dataset.end);
-    // Standard check: is index inside the word or right at start?
-    // Note: charIndex matches the start position of the words in the original string
+    
     return charIndex >= start && charIndex < end;
   });
 
-  // Fallback 1: Exact Start Match (Most reliable for boundaries)
   if (!targetSpan) {
     targetSpan = spans.find(
       (span) => parseInt(span.dataset.start) === charIndex,
     );
   }
 
-  // Fallback 2: Nearest Forward Neighbour (Handle slight drift/whitespace skips)
   if (!targetSpan) {
-    // Find smallest positive difference
+    
     let closest = null;
-    let minDiff = 5; // Tolerance window
+    let minDiff = 5; 
 
     spans.forEach((span) => {
       const start = parseInt(span.dataset.start);
@@ -2360,8 +2219,7 @@ function highlightWordAt(charIndex, spans) {
 
   if (targetSpan) {
     targetSpan.classList.add("speaking-word");
-    // Auto-scroll disabled per user request to allow manual navigation
-    // targetSpan.scrollIntoView({ behavior: "smooth", block: "center" });
+    
   }
 }
 
@@ -2378,10 +2236,9 @@ function resetHighlighting() {
   currentSpeechBtn = null;
 }
 
-// 2. Speech-to-Text (STT) Refactored
 const micBtn = document.getElementById("mic-btn");
 let recognition = null;
-let isListening = false; // Explicit state tracking
+let isListening = false; 
 
 function initializeSTT() {
   if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
@@ -2397,11 +2254,9 @@ function initializeSTT() {
   recognizer.continuous = false;
   recognizer.interimResults = false;
 
-  // Dynamic Language Selection based on dropdown
   const langSelect = document.getElementById("lang-select");
   const selectedLang = langSelect ? langSelect.value : "en";
 
-  // Map short codes to full BCP-47 codes
   const langMap = {
     en: "en-US",
     te: "te-IN",
@@ -2413,14 +2268,14 @@ function initializeSTT() {
   recognizer.onstart = () => {
     isListening = true;
     micBtn.classList.add("listening");
-    // micBtn.innerHTML = '<i class="fa-solid fa-microphone-lines"></i>'; // Optional icon change
+    
     userInput.placeholder = "Listening... Speak now";
   };
 
   recognizer.onend = () => {
     isListening = false;
     micBtn.classList.remove("listening");
-    // micBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    
     userInput.placeholder = "Ask anything... (Type or Speak)";
   };
 
@@ -2429,7 +2284,6 @@ function initializeSTT() {
     console.log(`[STT] Heard: "${transcript}"`);
     userInput.value = transcript;
 
-    // Optional: Auto-send after short delay
     setTimeout(() => sendMessage(), 500);
   };
 
@@ -2452,13 +2306,12 @@ function initializeSTT() {
 }
 
 function toggleVoiceInput() {
-  // Always re-initialize to pick up latest language selection
+  
   if (isListening && recognition) {
     recognition.stop();
     return;
   }
 
-  // Create new instance with current settings
   recognition = initializeSTT();
 
   if (recognition) {
@@ -2466,7 +2319,7 @@ function toggleVoiceInput() {
       recognition.start();
     } catch (e) {
       console.error("Failed to start recognition:", e);
-      // Sometimes it throws if already started, force stop and retry logic could go here
+      
     }
   }
 }
@@ -2476,16 +2329,6 @@ function stopVoiceInput() {
     recognition.stop();
   }
 }
-// --- End Voice Assistant ---
-
-// --- Navigation Logic ---
-// Navigation Logic moved to top of file
-// Duplicate showSection removed
-
-// --- Dashboard Logic ---
-
-// Dashboard Logic moved to top of file
-// Duplicate loadDashboard removed
 
 function animateValue(id, start, end, duration) {
   const obj = document.getElementById(id);
@@ -2502,15 +2345,11 @@ function animateValue(id, start, end, duration) {
   window.requestAnimationFrame(step);
 }
 
-// --- Document Management ---
-
 function scrollToBottom() {
   const chatBox = document.getElementById("chat-box");
   if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
 }
 
-// Admin Logic
-// Global variable to store FAQs
 let allFAQs = [];
 
 async function loadFAQs() {
@@ -2541,8 +2380,6 @@ function renderFAQs(faqsToRender) {
         ? `<button onclick="deleteFAQ('${item.id}')" style="float:right; color:#ef4444; background:none; border:none; cursor:pointer;" title="Delete"><i class="fa-solid fa-trash"></i></button>`
         : "";
 
-    // Safe parsed HTML using marked.js (assuming it's loaded)
-    // If marked isn't available, fallback to simple escape
     let answerHtml = "";
     if (typeof marked !== "undefined") {
       try {
@@ -2565,11 +2402,8 @@ function renderFAQs(faqsToRender) {
   });
 }
 
-// Admin Search Listener
-// Global Store for Docs
 let allDocuments = [];
 
-// Admin Search Listener
 const adminSearchInput = document.getElementById("admin-search-input");
 if (adminSearchInput) {
   adminSearchInput.addEventListener("input", (e) => {
@@ -2587,7 +2421,7 @@ const modal = document.getElementById("faq-modal");
 function openModal() {
   const modal = document.getElementById("faq-modal");
   if (modal) {
-    // Reset to default (Admin mode)
+    
     const header = modal.querySelector(".modal-header h3");
     const subTitle = modal.querySelector(".modal-header p");
     const submitBtnText = modal.querySelector("#faq-submit-btn span");
@@ -2615,13 +2449,12 @@ function closeModal() {
 
 function openSuggestModal() {
   if (!ACCESS_TOKEN) {
-    checkAuth(); // Show login overlay if not logged in
+    checkAuth(); 
     return;
   }
   const modal = document.getElementById("faq-modal");
   if (!modal) return;
 
-  // Set UI for suggestion mode
   const header = modal.querySelector(".modal-header h3");
   const subTitle = modal.querySelector(".modal-header p");
   const submitBtnText = modal.querySelector("#faq-submit-btn span");
@@ -2664,10 +2497,10 @@ async function submitFAQSuggestion() {
       showStatusPopup(
         "Thank you! Your FAQ suggestion has been submitted for review.",
       );
-      // Clear form
+      
       document.getElementById("faq-question").value = "";
       document.getElementById("faq-answer").value = "";
-      refreshAdminData(); // Refresh suggested FAQs in admin panel
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to submit suggestion.", "Submission Failed", "error");
     }
@@ -2687,7 +2520,7 @@ async function loadSuggestedFAQs() {
     if (!res.ok) return;
 
     const suggestions = await res.json();
-    window.allSuggestions = suggestions; // Store for lookup
+    window.allSuggestions = suggestions; 
     renderSuggestedFAQsTable(suggestions);
   } catch (e) {
     console.error("Load Suggestions Error", e);
@@ -2754,7 +2587,6 @@ function openReviewModal(id) {
   const modal = document.getElementById("review-suggestion-modal");
   if (!modal) return;
 
-  // Fill content
   document.getElementById("review-contributor").textContent = s.suggested_by;
   document.getElementById("review-avatar").textContent = s.suggested_by
     .charAt(0)
@@ -2765,7 +2597,6 @@ function openReviewModal(id) {
   document.getElementById("review-question").textContent = s.question;
   document.getElementById("review-answer").textContent = s.answer;
 
-  // Set actions
   document.getElementById("review-approve-btn").onclick = () =>
     approveSuggestion(id, true);
   document.getElementById("review-reject-btn").onclick = () =>
@@ -2792,7 +2623,7 @@ async function approveSuggestion(id, fromModal = false) {
     if (res.ok) {
       showStatusPopup("FAQ approved and published!");
       if (fromModal) closeReviewModal();
-      refreshAdminData(); // Refresh all relevant FAQ lists
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to approve suggestion.", "Approval Failed", "error");
     }
@@ -2814,7 +2645,7 @@ async function rejectSuggestion(id, fromModal = false) {
     if (res.ok) {
       showStatusPopup("Suggestion rejected.");
       if (fromModal) closeReviewModal();
-      refreshAdminData(); // Refresh suggested FAQs
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to reject suggestion.", "Action Failed", "error");
     }
@@ -2845,8 +2676,8 @@ async function saveFAQ() {
 
     if (res.ok) {
       closeModal();
-      refreshAdminData(); // Refresh everything
-      // Clear form
+      refreshAdminData(); 
+      
       document.getElementById("faq-question").value = "";
       document.getElementById("faq-answer").value = "";
     } else {
@@ -2868,7 +2699,7 @@ async function deleteFAQ(id) {
     });
 
     if (res.ok) {
-      refreshAdminData(); // Refresh all relevant FAQ lists
+      refreshAdminData(); 
     } else {
       await CustomDialog.alert("Failed to delete FAQ", "Delete Failed", "error");
     }
@@ -2877,14 +2708,12 @@ async function deleteFAQ(id) {
   }
 }
 
-// --- Ticketing System ---
 let currentTicketContext = { userQuery: "", botResponse: "" };
 
 function openTicketModal(userQuery, botResponse) {
   currentTicketContext = { userQuery, botResponse };
   let modal = document.getElementById("ticket-modal");
 
-  // Dynamically Create Modal if not exists
   if (!modal) {
     modal = document.createElement("div");
     modal.id = "ticket-modal";
@@ -2949,7 +2778,6 @@ function openTicketModal(userQuery, botResponse) {
     document.body.appendChild(modal);
   }
 
-  // Pre-fill with animation/focus
   const context = `Context (Auto-generated):\nUser asked: "${userQuery || ""}"\nBot replied: "${botResponse ? botResponse.substring(0, 100) + "..." : ""}"\n\nMy Issue:\n`;
 
   setTimeout(() => {
@@ -3012,7 +2840,6 @@ async function submitTicket() {
   }
 }
 
-// --- Calendar Logic ---
 async function loadCalendar() {
   const list = document.getElementById("calendar-list");
   list.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-secondary);">
@@ -3124,7 +2951,6 @@ async function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
   const fromDate = new Date(fromDateStr);
   const toDate = new Date(toDateStr);
 
-  // Format for Google Calendar: YYYYMMDDTHHmmss
   const fmtDateTime = (d) => {
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -3145,12 +2971,6 @@ async function addToGoogleCalendar(title, fromDateStr, toDateStr, desc) {
   }
 }window.addToGoogleCalendar = addToGoogleCalendar;
 
-// --- Calendar Admin Logic ---
-
-// Consolidating calendar loading logic - removing duplicate function here
-// The main function is defined below around line 2900
-
-// Alias for compatibility
 async function loadCalendarAdmin() {
   const events = await loadAcademicCalendar();
   window.allAdminEvents = events || [];
@@ -3173,29 +2993,24 @@ function renderCalendarAdminTable(events) {
       const fromDate = e.from_date || e.date || "";
       const toDate = e.to_date || e.date || "";
 
-      // Parse as datetime
       const fromDateTime = new Date(fromDate);
       const toDateTime = new Date(toDate);
 
-      // Validation check for dates
       if (isNaN(fromDateTime.getTime()) || isNaN(toDateTime.getTime())) {
         console.warn("Invalid date found in admin calendar event:", e);
-        return ""; // Skip this invalid row
+        return ""; 
       }
 
-      // Extract date parts for comparison
       const fromDateOnly = fromDateTime.toISOString().split("T")[0];
       const toDateOnly = toDateTime.toISOString().split("T")[0];
       const isSingleDay = fromDateOnly === toDateOnly;
 
-      // Format time in 24-hour format
       const formatTime = (date) => {
         const hours = String(date.getHours()).padStart(2, "0");
         const minutes = String(date.getMinutes()).padStart(2, "0");
         return `${hours}:${minutes}`;
       };
 
-      // Date display with time
       let dateDisplay;
       if (isSingleDay) {
         const dateFormatted = fromDateTime.toLocaleDateString("en-IN", {
@@ -3222,7 +3037,6 @@ function renderCalendarAdminTable(events) {
         dateDisplay = `${fromFormatted} ${startTime} → ${toFormatted} ${endTime}`;
       }
 
-      // Escaping ID for literal safety
       const escapedId = (e.id || "").replace(/'/g, "\\'");
 
       return `
@@ -3273,13 +3087,12 @@ function openCalendarModal(eventData = null) {
   const modal = document.getElementById("calendar-event-modal");
 
   if (eventData) {
-    // Edit mode
+    
     currentEditEventId = eventData.id;
     document.getElementById("event-title").value = eventData.title;
     document.getElementById("event-from-date").value = eventData.from_date;
     document.getElementById("event-to-date").value = eventData.to_date;
 
-    // Restrict to future dates (even for edit)
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const minDateTime = now.toISOString().slice(0, 16);
@@ -3287,7 +3100,6 @@ function openCalendarModal(eventData = null) {
     document.getElementById("event-from-date").min = minDateTime;
     document.getElementById("event-to-date").min = minDateTime;
 
-    // Check if it's a predefined type or custom
     const predefinedTypes = ["Event", "Exam", "Holiday"];
     if (predefinedTypes.includes(eventData.type)) {
       document.getElementById("calendar-event-type").value = eventData.type;
@@ -3303,13 +3115,12 @@ function openCalendarModal(eventData = null) {
     document.getElementById("event-location").value = eventData.location || "";
     document.getElementById("event-desc").value = eventData.description || "";
   } else {
-    // Create mode
+    
     currentEditEventId = null;
     document.getElementById("event-title").value = "";
     document.getElementById("event-from-date").value = "";
     document.getElementById("event-to-date").value = "";
 
-    // Restrict to future dates
     const now = new Date();
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     const minDateTime = now.toISOString().slice(0, 16);
@@ -3341,7 +3152,6 @@ async function saveCalendarEvent() {
   const location = document.getElementById("event-location").value;
   const desc = document.getElementById("event-desc").value;
 
-  // If custom type is selected, use the custom input value
   if (type === "Custom") {
     const customType = document
       .getElementById("custom-event-type-input")
@@ -3403,7 +3213,7 @@ async function saveCalendarEvent() {
 }
 
 async function editCalendarEvent(eventId) {
-  // Find the event from the cached list
+  
   const event = window.allCalendarEvents.find((e) => e.id === eventId);
   if (event) {
     openCalendarModal(event);
@@ -3413,14 +3223,11 @@ async function editCalendarEvent(eventId) {
 }
 window.editCalendarEvent = editCalendarEvent;
 
-// --- Restored Calendar Admin Logic ---
-
 async function loadCalendarAdmin() {
-  // Alias for consistency with other load functions
+  
   await loadAcademicCalendar();
 }
 
-// Global alias for HTML onclick access if needed
 window.loadCalendarAdmin = loadCalendarAdmin;
 
 async function loadAcademicCalendar() {
@@ -3438,9 +3245,9 @@ async function loadAcademicCalendar() {
     if (res.ok) {
       const events = await res.json();
       window.allCalendarEvents = events;
-      window.allAdminEvents = events; // Fix for search filter
+      window.allAdminEvents = events; 
       renderCalendarAdminTable(events);
-      return events; // Return events for other callers
+      return events; 
     } else {
       tableBody.innerHTML =
         '<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 20px;">Failed to load events.</td></tr>';
@@ -3455,9 +3262,9 @@ window.loadAcademicCalendar = loadAcademicCalendar;
 
 function getEventTypeBadge(type) {
   const typeMap = {
-    Exam: "error", // Red for exams
-    Holiday: "success", // Green for holidays
-    Event: "info", // Blue for events
+    Exam: "error", 
+    Holiday: "success", 
+    Event: "info", 
   };
   return typeMap[type] || "info";
 }
@@ -3473,8 +3280,8 @@ async function deleteCalendarEvent(eventId) {
 
     if (res.ok) {
       showStatusPopup("Event deleted successfully");
-      loadAcademicCalendar(); // Refresh admin list
-      loadCalendar(); // Refresh student view
+      loadAcademicCalendar(); 
+      loadCalendar(); 
     } else {
       const data = await res.json();
       showStatusPopup(data.detail || "Failed to delete event", "error");
@@ -3495,7 +3302,7 @@ async function loadAllTickets() {
 
     if (!res.ok) return;
     const tickets = await res.json();
-    // Store globally
+    
     window.allTickets = tickets;
     renderTicketsTable(tickets);
   } catch (e) {
@@ -3517,9 +3324,8 @@ function renderTicketsTable(tickets) {
   tickets.forEach((t) => {
     const badgeClass = t.status === "open" ? "warning" : "success";
 
-    // Delete Button Logic (Only for Closed Tickets and Admins)
     let deleteBtn = "";
-    // Strict role check from storage to ensure freshness
+    
     const currentRole = sessionStorage.getItem("user_role");
     if (t.status.toLowerCase() === "closed" && currentRole === "admin") {
       deleteBtn = `
@@ -3630,7 +3436,6 @@ function viewTicketDetails(id) {
   const modal = document.getElementById("ticket-view-modal");
   if (!modal) return;
 
-  // Robust Lookup
   const ticket = window.allTickets
     ? window.allTickets.find((t) => t.id === id)
     : null;
@@ -3702,7 +3507,7 @@ async function submitTicketResponse() {
       loadAllTickets();
       showStatusPopup("Response sent & Ticket closed!");
       if (saveFaq) {
-        refreshAdminData(); // Refresh FAQs if a new one was saved
+        refreshAdminData(); 
       }
     } else {
       await CustomDialog.alert("Failed to submit response", "Submit Error", "error");
@@ -3712,7 +3517,6 @@ async function submitTicketResponse() {
   }
 }
 
-// Locations Logic
 const locations = [
   "Sri Venkateswara University, Tirupati",
   "SVU Central Library",
@@ -3763,16 +3567,13 @@ const locations = [
 const locationsModal = document.getElementById("locations-modal");
 const locationsListEl = document.getElementById("locations-list");
 
-// --- Document Upload Logic ---
-
-let currentUploadTarget = "admin"; // 'admin' or 'study'
+let currentUploadTarget = "admin"; 
 
 function openUploadModal(target = "admin") {
   currentUploadTarget = target;
   const modal = document.getElementById("upload-modal");
   if (!modal) return;
 
-  // Update header based on target
   const header = modal.querySelector(".modal-header h3");
   if (header) {
     header.textContent =
@@ -3780,7 +3581,7 @@ function openUploadModal(target = "admin") {
   }
 
   modal.classList.add("active");
-  document.getElementById("upload-file").value = ""; // Reset
+  document.getElementById("upload-file").value = ""; 
   const label = document.getElementById("file-label-text");
   if (label) label.textContent = "Click to upload PDF";
   document.getElementById("upload-progress").style.display = "none";
@@ -3804,7 +3605,6 @@ async function submitDocument() {
 
   progressDiv.style.display = "block";
 
-  // Customized Status Message
   if (currentUploadTarget === "study") {
     statusText.textContent =
       "Uploading & Analyzing with AI... (This may take a moment)";
@@ -3843,19 +3643,18 @@ async function submitDocument() {
       if (currentUploadTarget === "study") {
         showStatusPopup("Notes uploaded & Summarized!");
         loadStudyBuddy();
-        // Inject Summary
+        
         if (data.summary) {
           const summaryEl = document.getElementById("material-summary-content");
           if (summaryEl) {
             summaryEl.innerHTML = `<div class="markdown-body">${marked.parse(data.summary)}</div>`;
-            // Highlight the sidebar to show user something happened
+            
             summaryEl.parentElement.style.border =
               "2px solid var(--accent-color)";
             setTimeout(() => {
               summaryEl.parentElement.style.border = "none";
             }, 2000);
             
-            // UI Interaction: Hide Archive, Show Analysis
             toggleStudyArchive(false);
           }
         }
@@ -3863,7 +3662,7 @@ async function submitDocument() {
         showStatusPopup(
           `Uploaded! ${data.faqs_extracted || 0} FAQs extracted.`,
         );
-        refreshAdminData(); // Refresh documents and FAQs
+        refreshAdminData(); 
       }
     }, 1500);
   } catch (e) {
@@ -3872,7 +3671,6 @@ async function submitDocument() {
   }
 }
 
-// URL Ingestion
 const urlModal = document.getElementById("url-modal");
 function openUrlModal() {
   if (urlModal) urlModal.classList.add("active");
@@ -3918,7 +3716,7 @@ async function submitUrl() {
     setTimeout(() => {
       closeUrlModal();
       showStatusPopup(`URL added! ${data.faqs_extracted || 0} FAQs found.`);
-      refreshAdminData(); // Refresh documents and FAQs
+      refreshAdminData(); 
     }, 1500);
   } catch (e) {
     statusText.textContent = "Error: " + e.message;
@@ -3926,7 +3724,6 @@ async function submitUrl() {
   }
 }
 
-// Text Entry Ingestion
 const textModal = document.getElementById("text-modal");
 function openTextModal() {
   if (textModal) textModal.classList.add("active");
@@ -3973,9 +3770,8 @@ async function submitText() {
     setTimeout(() => {
       closeTextModal();
       showStatusPopup(`Text Ingested! ${data.faqs_extracted || 0} FAQs added.`);
-      refreshAdminData(); // Refresh documents and FAQs
+      refreshAdminData(); 
 
-      // Reset fields
       document.getElementById("text-title").value = "";
       document.getElementById("text-content").value = "";
       progressDiv.style.display = "none";
@@ -3986,23 +3782,16 @@ async function submitText() {
   }
 }
 
-// --- Resume Checker Logic ---
-// checkResume defined below
-
-// --- Locations Logic ---
-
-
 function openLocations() {
   const listEl = document.getElementById("locations-list");
   const searchInput = document.getElementById("locations-search");
 
-  // Reset search on open
   if (searchInput) searchInput.value = "";
 
   if (listEl) {
-    // Keep the highlighter, clear and re-populate the rest
+    
     const highlighter = document.getElementById("locations-highlighter");
-    // Clear all except highlighter
+    
     Array.from(listEl.children).forEach((child) => {
       if (child.id !== "locations-highlighter") child.remove();
     });
@@ -4050,9 +3839,6 @@ function openLocationMap(name) {
   window.open(url, "_blank");
 }
 
-// --- Rich UI Interactions ---
-
-// Ripple Effect
 function createRipple(event) {
   const button = event.currentTarget;
   const circle = document.createElement("span");
@@ -4077,7 +3863,6 @@ for (const button of buttons) {
   button.addEventListener("click", createRipple);
 }
 
-// Range Slider Value Update
 const rangeInputs = document.querySelectorAll(".custom-range");
 rangeInputs.forEach((input) => {
   input.addEventListener("input", (e) => {
@@ -4085,14 +3870,12 @@ rangeInputs.forEach((input) => {
   });
 });
 
-// Simulate System Health Logic (For demo)
 setInterval(() => {
   const healthBar = document.querySelector(".progress-bar-fill");
   if (healthBar) {
     const usage = Math.floor(Math.random() * (80 - 40 + 1) + 40);
     healthBar.style.width = `${usage}%`;
 
-    // Update color based on usage
     if (usage > 75) {
       healthBar.style.background = "linear-gradient(90deg, #f59e0b, #ef4444)";
     } else {
@@ -4148,7 +3931,7 @@ async function reindexData() {
 
     if (res.ok) {
       showStatusPopup("Knowledge base connection refreshed!");
-      // Refresh health status to show new state
+      
       loadSystemHealth();
     } else {
       await CustomDialog.alert("Failed to refresh connection.", "Refresh Failed", "error");
@@ -4159,9 +3942,6 @@ async function reindexData() {
   }
 }
 
-// Switch auth tab removed, legacy layout replaced.
-
-
 function startNewChat() {
   const chatBox = document.getElementById("chat-box");
   const welcomeScreen = document.getElementById("welcome-screen");
@@ -4170,7 +3950,6 @@ function startNewChat() {
   showStatusPopup("Thread cleared");
 }
 
-// --- Helper for File Upload UI ---
 function handleFileSelect(input) {
   const label = input.nextElementSibling;
   const span = label.querySelector("span");
@@ -4185,10 +3964,9 @@ function handleFileSelect(input) {
   }
 }
 
-// --- New Toast Notification Implementation ---
 function showStatusPopup(message, duration = 2000) {
   let toast = document.getElementById("toast-notification");
-  // Remove old style popup if it exists (legacy cleanup)
+  
   const oldPopup = document.getElementById("status-popup");
   if (oldPopup) oldPopup.remove();
 
@@ -4199,7 +3977,6 @@ function showStatusPopup(message, duration = 2000) {
     document.body.appendChild(toast);
   }
 
-  // Icon based on message type
   let icon = '<i class="fa-solid fa-circle-info" style="color: #2dd4bf;"></i>';
   if (message.toLowerCase().includes("error"))
     icon =
@@ -4209,7 +3986,6 @@ function showStatusPopup(message, duration = 2000) {
 
   toast.innerHTML = `${icon} <span>${message}</span>`;
 
-  // Force Reflow
   void toast.offsetWidth;
 
   toast.classList.add("show");
@@ -4221,8 +3997,6 @@ function showStatusPopup(message, duration = 2000) {
   }, duration);
 }
 
-// --- User Management Logic ---
-
 async function loadUsers() {
   try {
     const res = await fetch(`${API_URL}/admin/users?limit=50`, {
@@ -4230,9 +4004,9 @@ async function loadUsers() {
     });
     if (!res.ok) return;
     const users = await res.json();
-    // Store globally for see more/less functionality
+    
     window.allUsers = users;
-    // Render only first 3 users initially
+    
     renderUsersTable(users);
   } catch (e) {
     console.error("Load Users Error", e);
@@ -4253,8 +4027,8 @@ function renderUsersTable(users) {
   users.forEach((u) => {
     const initial = u.username.charAt(0).toUpperCase();
     let roleBadge = "info";
-    if (u.role === "admin") roleBadge = "success"; // Admin = Green
-    if (u.role === "student") roleBadge = "warning"; // Student = Orange/Yellow
+    if (u.role === "admin") roleBadge = "success"; 
+    if (u.role === "student") roleBadge = "warning"; 
 
     const roleLabel = u.role.charAt(0).toUpperCase() + u.role.slice(1);
     const joinedDate = new Date(u.created_at).toLocaleDateString();
@@ -4313,9 +4087,6 @@ async function deleteUser(id) {
   }
 }
 
-// --- Data Mutation Logic (User) ---
-
-// 1. User Creation Logic
 const addUserModal = document.getElementById("add-user-modal");
 
 async function toggleUserRole(id, currentRole) {
@@ -4344,8 +4115,6 @@ async function toggleUserRole(id, currentRole) {
 }
 window.toggleUserRole = toggleUserRole;
 
-// --- System Health and LLM Config Logic ---
-
 async function loadSystemHealth() {
   if (!ACCESS_TOKEN) return;
   try {
@@ -4356,16 +4125,12 @@ async function loadSystemHealth() {
     const latency = Date.now() - start;
     const data = await res.json();
 
-    // Map to "System Health & Governance" card IDs
-
-    // 1. API Status (Latency) -> #health-api
     const apiBadge = document.getElementById("health-api");
     if (apiBadge) {
       apiBadge.textContent = `${latency}ms`;
       apiBadge.className = `badge ${latency < 200 ? "success" : "warning"}`;
     }
 
-    // 2. Vector DB -> #health-vector
     const vectorStatus = data.vector_db_status || "unknown";
     const vectorBadge = document.getElementById("health-vector");
     if (vectorBadge) {
@@ -4374,7 +4139,6 @@ async function loadSystemHealth() {
       vectorBadge.className = `badge ${vectorStatus === "active" ? "success" : "error"}`;
     }
 
-    // 3. MongoDB -> #health-mongo
     const mongoStatus = data.mongodb_status || "unknown";
     const mongoBadge = document.getElementById("health-mongo");
     if (mongoBadge) {
@@ -4382,14 +4146,12 @@ async function loadSystemHealth() {
       mongoBadge.className = `badge ${mongoStatus === "connected" ? "success" : "error"}`;
     }
 
-    // 4. LLM Service -> #health-llm
     const llmBadge = document.getElementById("health-llm");
     if (llmBadge) {
       llmBadge.textContent = data.llm_service.toUpperCase();
       llmBadge.className = `badge ${data.llm_service === "online" ? "success" : "error"}`;
     }
 
-    // Also fetch system logs
     fetchSystemLogs();
   } catch (e) {
     console.error("Error checking system health:", e);
@@ -4416,7 +4178,7 @@ async function fetchSystemLogs() {
 
     container.innerHTML = logs
       .map((log) => {
-        let color = "#cbd5e1"; // Default INFO
+        let color = "#cbd5e1"; 
         if (log.level === "SUCCESS") color = "#10b981";
         if (log.level === "WARN") color = "#f59e0b";
         if (log.level === "ERROR") color = "#ef4444";
@@ -4430,14 +4192,11 @@ async function fetchSystemLogs() {
       })
       .join("");
 
-    // Auto-scroll to top if it's already at top (newest first)
-    // or just keep it simple. The backend returns sorted -1 (newest first).
   } catch (e) {
     console.error("Error fetching system logs:", e);
   }
 }
 
-// User Management Modal Actions
 function openAddUserModal() {
   const modal = document.getElementById("add-user-modal");
   if (modal) modal.classList.add("active");
@@ -4471,7 +4230,7 @@ async function submitAddUser() {
     if (res.ok) {
       showStatusPopup("User created successfully!");
       closeAddUserModal();
-      loadUsers(); // Refresh the list
+      loadUsers(); 
     } else {
       showStatusPopup(data.detail || "Failed to create user", "error");
     }
@@ -4489,13 +4248,11 @@ async function refreshAllAdminData() {
   const refreshBtn = document.getElementById("admin-refresh-all");
   const refreshIcon = refreshBtn ? refreshBtn.querySelector("i") : null;
 
-  // Start spin animation
   if (refreshIcon) refreshIcon.classList.add("fa-spin");
 
   try {
     showToast("Admin Refresh", "Updating all system features...");
 
-    // Run all refresh functions in parallel
     await Promise.all([
       loadDashboard(),
       loadAdminTrending(),
@@ -4513,7 +4270,7 @@ async function refreshAllAdminData() {
     console.error("Global Refresh Failed:", error);
     showToast("Refresh Error", "Some components failed to reload.", "error");
   } finally {
-    // Stop spin animation after a slight delay for better UX
+    
     setTimeout(() => {
       if (refreshIcon) refreshIcon.classList.remove("fa-spin");
     }, 800);
@@ -4542,7 +4299,7 @@ async function loadStudyBuddy() {
             </button>
           </div>`;
       } else {
-        listEl.className = "premium-material-grid"; // Switch to premium grid
+        listEl.className = "premium-material-grid"; 
         const html = materials.map((m) => {
           const date = new Date(m.upload_date).toLocaleDateString();
           return `
@@ -4596,7 +4353,6 @@ async function deleteStudyMaterial(id) {
 
 let currentStudyMaterialId = null;
 
-// --- Study Text Modal Functions ---
 function openStudyTextModal() {
   const modal = document.getElementById("study-text-modal");
   if (modal) {
@@ -4620,7 +4376,6 @@ async function submitStudyText() {
     return;
   }
 
-  // Show loading state
   const btn = document.querySelector("#study-text-modal .btn-primary");
   const originalText = btn.innerHTML;
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analyzing...';
@@ -4661,7 +4416,6 @@ async function summarizeMaterial(id) {
   const summaryEl = document.getElementById("material-summary-content");
   if (!summaryEl) return;
 
-  // Abort previous if overlapping
   if (currentChatController) currentChatController.abort();
   currentChatController = new AbortController();
 
@@ -4671,7 +4425,6 @@ async function summarizeMaterial(id) {
         <div class="text-secondary font-medium">Zen is reading your notes...</div>
     </div>`;
   
-  // Clear chat history during loading phase
   const history = document.getElementById("document-chat-history");
   if (history) {
     history.innerHTML = `
@@ -4696,10 +4449,8 @@ async function summarizeMaterial(id) {
     const data = await res.json();
     summaryEl.innerHTML = `<div class="markdown-body p-10">${marked.parse(data.summary)}</div>`;
 
-    // Setup Document Chat
     currentStudyMaterialId = id;
     
-    // UI Interaction: Hide Archive, Show Analysis
     toggleStudyArchive(false);
 
     const chatCard = document.getElementById("document-chat-card");
@@ -4718,7 +4469,7 @@ async function summarizeMaterial(id) {
           </div>
         `;
       }
-      // Focus the chat input
+      
       setTimeout(() => {
         const docInput = document.getElementById("document-chat-input");
         if (docInput) docInput.focus();
@@ -4751,7 +4502,6 @@ function toggleStudyArchive(showArchive) {
             workspace.classList.add("hidden");
             workspace.style.display = "none";
             
-            // Clear analysis content when closing
             const summaryEl = document.getElementById("material-summary-content");
             if (summaryEl) summaryEl.innerHTML = "Synthesizing academic insights...";
             
@@ -4794,13 +4544,11 @@ async function askStudyBuddy() {
 
   if (!query) return;
 
-  // Set Study Input Helper
   window.setStudyInput = (text) => {
     input.value = text;
     input.focus();
   };
 
-  // Add user message to history (Standardized Zen Style)
   const userMsg = document.createElement("div");
   userMsg.className = "zen-message-item user mb-16";
   userMsg.innerHTML = `
@@ -4810,7 +4558,6 @@ async function askStudyBuddy() {
   history.appendChild(userMsg);
   input.value = "";
 
-  // Typing indicator
   const typing = document.createElement("div");
   typing.className = "typing-indicator mb-16";
   typing.innerHTML = `
@@ -4855,15 +4602,12 @@ async function askStudyBuddy() {
       </div>`;
     history.appendChild(aiMsg);
     
-    // Trigger rich rendering for document chat
     if (typeof renderZenContent === 'function') {
         renderZenContent(aiMsg);
     }
     
-    // Auto-scroll to top of new answer if needed, or bottom
     history.scrollTop = history.scrollHeight;
     
-    // Prompt for next follow-up
     input.placeholder = "Ask another follow-up question...";
     input.focus();
 
@@ -4877,9 +4621,8 @@ async function askStudyBuddy() {
   }
 }
 
-// --- Career Center Feature ---
 async function loadCareerCenter() {
-  // Ensure Maker fields are empty by default to prevent autofill
+  
   const makerIds = [
     "maker-fullname", "maker-email", "maker-phone", "maker-linkedin",
     "maker-qualification", "maker-percentage", "maker-role",
@@ -4916,7 +4659,6 @@ function switchCareerTab(tab) {
 }
 window.switchCareerTab = switchCareerTab;
 
-// Store generated resume text globally for download
 let currentGeneratedResume = "";
 let currentAnalysisResult = "";
 
@@ -4995,7 +4737,7 @@ async function downloadResume(format) {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `resume.${format === "pdf" ? "pdf" : "docx"}`; // Correct extension
+    a.download = `resume.${format === "pdf" ? "pdf" : "docx"}`; 
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -5010,9 +4752,8 @@ async function downloadResume(format) {
 }
 window.downloadResume = downloadResume;
 
-// Updated generateResume to include download buttons
 async function generateResume() {
-  // Collect Inputs
+  
   const fullName = document.getElementById("maker-fullname").value.trim();
   const email = document.getElementById("maker-email").value.trim();
   const phone = document.getElementById("maker-phone").value.trim();
@@ -5034,7 +4775,6 @@ async function generateResume() {
 
   const feedbackEl = document.getElementById("resume-generation-feedback");
 
-  // Validation
   if (!fullName || !email || !qualification || !role || !skillsTech) {
     await CustomDialog.alert("Please fill in all required fields (Name, Email, Qualification, Role, Technical Skills).", "Validation Error", "warning");
     return;
@@ -5075,17 +4815,15 @@ async function generateResume() {
     }
 
     const data = await res.json();
-    currentGeneratedResume = data.resume; // Store for download
+    currentGeneratedResume = data.resume; 
     feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.resume)}</div>`;
 
-    // Action Buttons Container
     const actionsDiv = document.createElement("div");
     actionsDiv.style.marginTop = "20px";
     actionsDiv.style.display = "flex";
     actionsDiv.style.gap = "10px";
     actionsDiv.style.flexWrap = "wrap";
 
-    // Copy Button
     const copyBtn = document.createElement("button");
     copyBtn.className = "btn-secondary";
     copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Text';
@@ -5094,19 +4832,17 @@ async function generateResume() {
       showStatusPopup("Resume Copied to Clipboard!");
     };
 
-    // Download PDF Button
     const pdfBtn = document.createElement("button");
     pdfBtn.id = "btn-download-pdf";
     pdfBtn.className = "btn-primary";
-    pdfBtn.style.background = "#ef4444"; // Red for PDF
+    pdfBtn.style.background = "#ef4444"; 
     pdfBtn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Download PDF';
     pdfBtn.onclick = () => downloadResume("pdf");
 
-    // Download Word Button
     const docxBtn = document.createElement("button");
     docxBtn.id = "btn-download-docx";
     docxBtn.className = "btn-primary";
-    docxBtn.style.background = "#2563eb"; // Blue for Word
+    docxBtn.style.background = "#2563eb"; 
     docxBtn.innerHTML = '<i class="fa-solid fa-file-word"></i> Download Word';
     docxBtn.onclick = () => downloadResume("docx");
 
@@ -5121,7 +4857,6 @@ async function generateResume() {
 }
 window.generateResume = generateResume;
 
-// --- Resume Checker Logic ---
 let currentCheckerMode = "text"; 
 
 function setCheckerMode(mode) {
@@ -5211,14 +4946,12 @@ async function checkResume() {
     currentAnalysisResult = data.analysis;
     feedbackEl.innerHTML = `<div class="markdown-body">${marked.parse(data.analysis)}</div>`;
 
-    // Action Buttons Container
     const actionsDiv = document.createElement("div");
     actionsDiv.style.marginTop = "20px";
     actionsDiv.style.display = "flex";
     actionsDiv.style.gap = "10px";
     actionsDiv.style.flexWrap = "wrap";
 
-    // Copy Button
     const copyBtn = document.createElement("button");
     copyBtn.className = "btn-secondary";
     copyBtn.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Analysis';
@@ -5227,7 +4960,6 @@ async function checkResume() {
       showStatusPopup("Analysis Copied to Clipboard!");
     };
 
-    // Download PDF Button
     const pdfBtn = document.createElement("button");
     pdfBtn.id = "btn-analysis-download-pdf";
     pdfBtn.className = "btn-primary";
@@ -5235,7 +4967,6 @@ async function checkResume() {
     pdfBtn.innerHTML = '<i class="fa-solid fa-file-pdf"></i> Download PDF';
     pdfBtn.onclick = () => downloadAnalysis("pdf");
 
-    // Download Word Button
     const docxBtn = document.createElement("button");
     docxBtn.id = "btn-analysis-download-docx";
     docxBtn.className = "btn-primary";
@@ -5254,8 +4985,6 @@ async function checkResume() {
   }
 }
 window.checkResume = checkResume;
-
-// --- University Locations Logic ---
 
 let locationsData = [];
 
@@ -5465,8 +5194,6 @@ window.closeLocationModal = closeLocationModal;
 window.saveLocation = saveLocation;
 window.deleteLocation = deleteLocation;
 
-// --- Admin Filtering Logic ---
-
 function filterAdminUsers() {
   const query = document
     .getElementById("user-search-input")
@@ -5503,7 +5230,7 @@ function filterAdminLocations() {
       (l.category && l.category.toLowerCase().includes(query)) ||
       (l.description && l.description.toLowerCase().includes(query)),
   );
-  // When filtering, we usually want to see all matches, so we bypass the collapsed state if query is present
+  
   const bypassExpand = query.length > 0;
   renderAdminLocationsTable(filtered, bypassExpand);
 }
@@ -5540,8 +5267,6 @@ window.filterAdminCalendar = filterAdminCalendar;
 window.filterAdminLocations = filterAdminLocations;
 window.filterAdminTickets = filterAdminTickets;
 window.filterAdminSuggestions = filterAdminSuggestions;
-
-// --- Trending Queries Logic ---
 
 let currentTrendingQueries = [];
 
@@ -5608,13 +5333,11 @@ function openAddTrendingModal(query = null) {
   const modal = document.getElementById("trending-modal");
   if (!modal) return;
 
-  // Check limit for new additions
   if (!query && currentTrendingQueries.length >= 4) {
     showStatusPopup("Maximum Queries reached", 1000);
     return;
   }
 
-  // Reset or Populate
   const idInput = document.getElementById("trending-id");
   const textInput = document.getElementById("trending-text");
   const subtextInput = document.getElementById("trending-subtext");
@@ -5625,7 +5348,7 @@ function openAddTrendingModal(query = null) {
   const submitBtn = document.getElementById("btn-trending-submit");
 
   if (query) {
-    // Edit Mode
+    
     if (idInput) idInput.value = query.id;
     if (textInput) textInput.value = query.text;
     if (subtextInput) subtextInput.value = query.subtext;
@@ -5639,19 +5362,18 @@ function openAddTrendingModal(query = null) {
       submitBtn.onclick = addTrendingQuery;
     }
 
-    // Highlight icon
     document.querySelectorAll(".icon-option").forEach((el) => {
       if (el.innerHTML.includes(query.icon)) el.classList.add("selected");
       else el.classList.remove("selected");
     });
   } else {
-    // Add Mode
+    
     if (idInput) idInput.value = "";
     if (textInput) textInput.value = "";
     if (subtextInput) subtextInput.value = "";
     if (responseInput) responseInput.value = "";
     if (linkInput) linkInput.value = "";
-    if (hiddenIcon) hiddenIcon.value = "fa-solid fa-fire"; // Default
+    if (hiddenIcon) hiddenIcon.value = "fa-solid fa-fire"; 
 
     if (modalTitle) modalTitle.innerText = "Add Trending Query";
     if (submitBtn) {
@@ -5659,7 +5381,6 @@ function openAddTrendingModal(query = null) {
       submitBtn.onclick = addTrendingQuery;
     }
 
-    // Reset icon selection
     document
       .querySelectorAll(".icon-option")
       .forEach((el) => el.classList.remove("selected"));
@@ -5718,7 +5439,7 @@ function renderSymbolPicker() {
   TRENDING_ICONS.forEach((icon) => {
     const div = document.createElement("div");
     div.className = "icon-option";
-    div.setAttribute("title", ICON_NAMES[icon] || "Icon"); // Add Tooltip
+    div.setAttribute("title", ICON_NAMES[icon] || "Icon"); 
     div.innerHTML = `<i class='${icon}'></i>`;
 
     if (hiddenInput.value === icon) {
@@ -5774,7 +5495,7 @@ async function addTrendingQuery() {
     if (res.ok) {
       closeTrendingModal();
       loadAdminTrending();
-      loadTrendingQueries(); // Refresh main view too
+      loadTrendingQueries(); 
       showStatusPopup(
         id ? "Query updated successfully!" : "Query added successfully!",
       );
@@ -5810,7 +5531,6 @@ window.closeTrendingModal = closeTrendingModal;
 window.addTrendingQuery = addTrendingQuery;
 window.deleteTrendingQuery = deleteTrendingQuery;
 
-// --- Zen AI Assistant Logic ---
 let zenChatHistory = [];
 let zenRecognition = null;
 
@@ -5849,10 +5569,8 @@ function switchStudyTab(tab) {
   const notesView = document.getElementById("study-notes-view");
   const zenView = document.getElementById("study-zen-view");
 
-  // Abort any ongoing chat when switching
   if (currentChatController) currentChatController.abort();
 
-  // Scroll the section to the top so the user sees the header, not the bottom
   const workspace = document.getElementById("study-section");
   if (workspace) workspace.scrollTop = 0;
 
@@ -5862,7 +5580,6 @@ function switchStudyTab(tab) {
     notesView.classList.remove("hidden");
     zenView.classList.add("hidden");
     
-    // Refocus document chat if active (preventScroll avoids page jump)
     const docInput = document.getElementById("document-chat-input");
     if (docInput && currentStudyMaterialId) docInput.focus({ preventScroll: true });
   } else {
@@ -5871,7 +5588,6 @@ function switchStudyTab(tab) {
     zenView.classList.remove("hidden");
     notesView.classList.add("hidden");
     
-    // Focus the zen input without scrolling the page
     setTimeout(() => {
       const zenInput = document.getElementById("zen-input");
       if (zenInput) zenInput.focus({ preventScroll: true });
@@ -5891,14 +5607,11 @@ function handleStudyNewChat() {
   }
 }
 
-
-
 async function sendZenMessage() {
   const input = document.getElementById("zen-input");
   const text = input.value.trim();
   if (!text || !ACCESS_TOKEN) return;
 
-  // Abort previous
   if (currentChatController) currentChatController.abort();
   currentChatController = new AbortController();
 
@@ -5944,7 +5657,7 @@ async function sendZenMessage() {
 }
 
 function renderZenContent(element) {
-  // 1. Math Rendering (KaTeX)
+  
   if (typeof renderMathInElement === 'function') {
     renderMathInElement(element, {
       delimiters: [
@@ -5957,7 +5670,6 @@ function renderZenContent(element) {
     });
   }
   
-  // 2. Syntax Highlighting (Highlight.js)
   if (typeof hljs !== 'undefined') {
     element.querySelectorAll('pre code').forEach((block) => {
       hljs.highlightElement(block);
@@ -5978,13 +5690,11 @@ function appendZenMessage(text, role) {
   let displayText = text;
   let followupsContainer = null;
 
-  // Intelligent Follow-up Detection
-  // We look for questions at the end, often starting with "Follow-up" or matching the chip pattern
   const followupPatterns = [
     /Relevant Questions:[\s\S]*$/i,
     /Follow-up questions:[\s\S]*$/i,
     /Would you like to know about:[\s\S]*$/i,
-    /\n\n\d\. .*\?\n\d\. .*\?\n\d\. .*\?$/ // Matches 3 questions pattern
+    /\n\n\d\. .*\?\n\d\. .*\?\n\d\. .*\?$/ 
   ];
 
   let matchedPattern = null;
@@ -6023,20 +5733,18 @@ function appendZenMessage(text, role) {
     });
   }
 
-  // Use marked for premium markdown rendering
   if (typeof marked !== 'undefined') {
       bubble.innerHTML = role === "zen" ? marked.parse(displayText) : formatText(displayText);
   } else {
       bubble.innerHTML = formatText(displayText);
   }
 
-  // Apply syntax highlighting and math
   renderZenContent(bubble);
 
   messageItem.appendChild(bubble);
 
   if (role === "zen") {
-    // Action Buttons
+    
     const actions = document.createElement("div");
     actions.className = "zen-actions";
 
@@ -6066,7 +5774,6 @@ function appendZenMessage(text, role) {
 
   history.appendChild(messageItem);
   
-  // High-fidelity Auto-scroll
   setTimeout(() => {
     history.scrollTo({
       top: history.scrollHeight,
@@ -6127,20 +5834,18 @@ function startZenSTT() {
   zenRecognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     document.getElementById("zen-input").value = transcript;
-    // Removed auto-send to allow review
+    
   };
 
   zenRecognition.start();
 }
 
-// Expose Zen functions
 window.switchStudyTab = switchStudyTab;
 window.sendZenMessage = sendZenMessage;
 window.newZenChat = newZenChat;
 window.refreshZenChat = refreshZenChat;
 window.startZenSTT = startZenSTT;
 
-// --- Notification Logic ---
 let notificationPollInterval = null;
 
 function toggleNotifications() {
@@ -6196,7 +5901,6 @@ function renderNotifications(notifications, unreadCount) {
 
   if (!container) return;
 
-  // Update badge
   if (unreadCount > 0) {
     badge.textContent = unreadCount > 9 ? "9+" : unreadCount;
     badge.style.display = "flex";
@@ -6251,16 +5955,16 @@ function formatNotifTime(dateStr) {
 }
 
 async function handleNotifClick(id, link) {
-  // Mark as read
+  
   try {
     await fetch(`${API_URL}/notifications/${id}/read`, {
       method: "PATCH",
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
     });
-    fetchNotifications(); // Refresh UI
+    fetchNotifications(); 
 
     if (link) {
-      // If it's an internal route
+      
       if (link.startsWith("#")) {
         const section = link.substring(1);
         showSection(section);
@@ -6327,10 +6031,8 @@ async function clearAllNotifications() {
 function startNotificationPolling() {
   if (notificationPollInterval) clearInterval(notificationPollInterval);
 
-  // Initial fetch
   fetchNotifications();
 
-  // Poll every 30 seconds
   notificationPollInterval = setInterval(fetchNotifications, 30000);
 }
 
@@ -6351,11 +6053,10 @@ function updateNotificationTimestamps() {
   });
 }
 
-// Update timestamps every minute
 setInterval(updateNotificationTimestamps, 60000);
 
 async function deleteNotification(event, id) {
-  if (event) event.stopPropagation(); // Prevent notification click trigger
+  if (event) event.stopPropagation(); 
 
   try {
     const res = await fetch(`${API_URL}/notifications/${id}`, {
@@ -6364,7 +6065,7 @@ async function deleteNotification(event, id) {
     });
 
     if (res.ok) {
-      fetchNotifications(); // Refresh list
+      fetchNotifications(); 
     } else {
       console.error("Failed to delete notification");
     }
@@ -6372,9 +6073,6 @@ async function deleteNotification(event, id) {
     console.error("Error deleting notification:", e);
   }
 }
-
-// --- Train The Brain Feature ---
-
 
 function formatDate(dateStr) {
   if (!dateStr) return "N/A";
@@ -6396,13 +6094,11 @@ function getFileIconClass(filename) {
   return "fa-solid fa-file-lines";
 }
 
-// Expose functions to window
 window.toggleNotifications = toggleNotifications;
 window.markAllNotificationsAsRead = markAllNotificationsAsRead;
 window.clearAllNotifications = clearAllNotifications;
 window.handleNotifClick = handleNotifClick;
 window.deleteNotification = deleteNotification;
-
 
 /* --- Custom Dialog System --- */
 const CustomDialog = {
@@ -6430,7 +6126,6 @@ const CustomDialog = {
       this.msgEl.textContent = message;
       this.cancelBtn.style.display = showCancel ? "block" : "none";
 
-      // Reset icon classes
       this.iconContainer.className = "dialog-icon-circle";
       const iconClasses = {
         success: "fa-circle-check",
@@ -6476,16 +6171,13 @@ const CustomDialog = {
 };
 window.CustomDialog = CustomDialog;
 
-// Initialize if already logged in
-
 if (ACCESS_TOKEN) {
   if (typeof startNotificationPolling === "function")
     startNotificationPolling();
 }
 
-// Window Resize Listener for Responsive Reset
 window.addEventListener("resize", () => {
   if (window.innerWidth > 768) {
-    toggleSidebar(true); // Force close sidebar and overlay
+    toggleSidebar(true); 
   }
 });

@@ -18,7 +18,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <!-- Using a placeholder for favicon if not exists -->
+    
     <link
       rel="icon"
       href="/static/images/svu_logo_final_v2.jpg"
@@ -29,7 +29,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     
-    <!-- Premium AI Rendering: Highlight.js for Code & KaTeX for Math -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
     
@@ -48,7 +47,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- Google Identity Services -->
+    
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       window.GOOGLE_CLIENT_ID = "{{ google_client_id }}";
@@ -58,7 +57,7 @@
   <body>
     <div id="splash-screen">
       <div class="splash-content">
-        <!-- Placeholder logo -->
+        
         <img
           src="/static/images/svu_logo_final_v2.jpg"
           alt="Sri Venkateswara University Logo"
@@ -77,30 +76,23 @@
 
     <div class="container">
       <div id="sidebar-overlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
-      <!-- Sidebar -->
+      
       {% include 'sidebar.html' %}
 
-      <!-- Main Content -->
       <main class="main-content">
-        <!-- Chat Interface -->
+        
         {% include 'chat.html' %}
 
-        <!-- Admin Configuration Section -->
         {% include 'admin.html' %}
 
-        <!-- Dashboard Section -->
         {% include 'dashboard.html' %}
 
-        <!-- Academic Calendar Section -->
         {% include 'calendar.html' %}
 
-        <!-- Study Buddy Section -->
         {% include 'study_buddy.html' %}
 
-        <!-- Locations Section -->
         {% include 'locations.html' %}
 
-        <!-- Career Center Section -->
         {% include 'career.html' %}
       </main>
     </div>
@@ -110,4 +102,3 @@
     <script src="/static/script.js?v=61"></script>
   </body>
 </html>
-

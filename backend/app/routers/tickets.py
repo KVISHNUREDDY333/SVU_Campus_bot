@@ -12,12 +12,10 @@ from .auth import get_current_user
 
 router = APIRouter()
 
-
 class TicketCreate(BaseModel):
     subject: str
     description: str
     category: Optional[str] = "General"
-
 
 class TicketResponse(BaseModel):
     id: str
@@ -28,7 +26,6 @@ class TicketResponse(BaseModel):
     created_by: str
     created_at: datetime
     resolution: Optional[str] = None
-
 
 @router.post("/tickets", response_model=TicketResponse)
 async def create_ticket(
@@ -51,7 +48,6 @@ async def create_ticket(
 
     return TicketResponse(id=str(result.inserted_id), **new_ticket)
 
-
 @router.get("/tickets/my", response_model=List[TicketResponse])
 async def get_my_tickets(
     skip: int = 0, limit: int = 20, current_user: User = Depends(get_current_user)
@@ -67,7 +63,6 @@ async def get_my_tickets(
     )
     return [TicketResponse(id=str(t["_id"]), **t) for t in cursor]
 
-
 @router.get("/admin/tickets", response_model=List[TicketResponse])
 async def get_all_tickets(
     skip: int = 0, limit: int = 50, current_user: User = Depends(get_current_user)
@@ -81,12 +76,10 @@ async def get_all_tickets(
     cursor = database.tickets_db.find().sort("created_at", -1).skip(skip).limit(limit)
     return [TicketResponse(id=str(t["_id"]), **t) for t in cursor]
 
-
 class TicketUpdate(BaseModel):
     status: str
     resolution: Optional[str] = None
     save_as_faq: bool = False
-
 
 @router.put("/admin/tickets/{ticket_id}")
 async def resolve_ticket(
@@ -109,7 +102,6 @@ async def resolve_ticket(
             try:
                 from ..services.rag_service import ingest_faq
 
-                # Insert directly into svu_vectors
                 faq_id = str(ObjectId())
                 await ingest_faq(
                     question=ticket["subject"],
@@ -117,7 +109,7 @@ async def resolve_ticket(
                     source="ticket_resolution",
                     faq_id=faq_id,
                 )
-                # Add metadata in the same collection
+                                                     
                 if database.svu_vectors_db is not None:
                     database.svu_vectors_db.update_one(
                         (
@@ -136,7 +128,6 @@ async def resolve_ticket(
             except Exception as e:
                 print(f"Error saving ticket as FAQ to svu_vectors: {e}")
 
-        # Trigger notification to the ticket owner (notify on any status change)
         owner = ticket.get("created_by")
         if owner:
             await notification_service.create_notification(
@@ -149,7 +140,6 @@ async def resolve_ticket(
         return {"status": "success"}
     except:
         raise HTTPException(status_code=400, detail="Invalid ID")
-
 
 @router.delete("/tickets/{ticket_id}")
 async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current_user)):
@@ -176,7 +166,6 @@ async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current
     except Exception as e:
         print(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
 
 @router.delete("/admin/tickets/delete/closed")
 async def delete_all_closed_tickets(current_user: User = Depends(get_current_user)):

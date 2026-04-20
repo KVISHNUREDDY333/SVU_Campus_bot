@@ -5,7 +5,6 @@ from ..core import database
 
 logger = logging.getLogger("uvicorn")
 
-
 def log_event(level: str, message: str, details: str = None):
     """
     Log an event to the system_logs collection in MongoDB.
@@ -25,7 +24,6 @@ def log_event(level: str, message: str, details: str = None):
             logger.warning(f"System Log DB not initialized. Event: {message}")
     except Exception as e:
         logger.error(f"Failed to write to system_logs_db: {e}")
-
 
 def get_recent_logs(limit: int = 50):
     """

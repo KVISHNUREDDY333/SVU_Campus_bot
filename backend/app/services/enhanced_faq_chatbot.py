@@ -48,10 +48,8 @@ STOPWORDS = {
     "you",
 }
 
-
 def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", (value or "").lower())).strip()
-
 
 def _tokenize(value: str) -> List[str]:
     tokens = []
@@ -59,7 +57,6 @@ def _tokenize(value: str) -> List[str]:
         if len(token) > 2 and token not in STOPWORDS:
             tokens.append(token)
     return tokens
-
 
 def _parse_faq_text(text: str) -> Dict[str, str]:
     raw_text = (text or "").strip()
@@ -75,7 +72,6 @@ def _parse_faq_text(text: str) -> Dict[str, str]:
         answer = raw_text
 
     return {"question": question, "answer": answer}
-
 
 class FAQMatcher:
     """Matches user questions to the best FAQs in svu_vectors."""
@@ -108,7 +104,7 @@ class FAQMatcher:
     def _faq_key(self, faq: Dict[str, Any]) -> str:
         return faq.get("faq_id") or _normalize_text(faq.get("question", ""))[:160]
 
-    def _search_by_keywords(
+    async def _search_by_keywords(
         self, keywords: List[str], limit: int
     ) -> List[Dict[str, Any]]:
         if database.svu_vectors_db is None or not keywords:
@@ -127,10 +123,13 @@ class FAQMatcher:
                     {"category": {"$regex": regex}},
                 ],
             }
-            results = list(
-                database.svu_vectors_db.find(query)
-                .sort("created_at", -1)
-                .limit(max(limit * 4, 10))
+            import asyncio
+            results = await asyncio.to_thread(
+                lambda: list(
+                    database.svu_vectors_db.find(query)
+                    .sort("created_at", -1)
+                    .limit(max(limit * 4, 10))
+                )
             )
             normalized = []
             for item in results:
@@ -268,7 +267,7 @@ class FAQMatcher:
 
         try:
             keywords = self._extract_keywords(user_query)
-            keyword_faqs = self._search_by_keywords(keywords, limit)
+            keyword_faqs = await self._search_by_keywords(keywords, limit)
             semantic_faqs = await self._search_by_similarity(user_query, limit)
             ranked = self._combine_and_rank(
                 user_query, keyword_faqs, semantic_faqs, limit
@@ -278,7 +277,6 @@ class FAQMatcher:
         except Exception as exc:
             logger.error(f"[FAQ_MATCHER] Error finding relevant FAQs: {exc}")
             return []
-
 
 class ResponseSizer:
     """Determines how much content to return based on the question."""
@@ -346,7 +344,6 @@ class ResponseSizer:
             "include_steps": process_query,
             "include_list": list_query or comparison_query,
         }
-
 
 class FAQResponseGenerator:
     """Generates concise, user-facing responses from FAQ content."""
@@ -439,7 +436,6 @@ Quality Standards:
 - If the FAQ does not contain the answer, say that briefly.
 
 Return only the final answer."""
-
 
 class EnhancedFAQChatbot:
     """FAQ-first chatbot for the main chat experience."""
@@ -606,10 +602,7 @@ Return only the cleaned answer."""
             logger.warning(f"[ENHANCED_CHATBOT] Final refinement error: {exc}")
             return response
 
-
-# Singleton instance
 _enhanced_chatbot_instance = None
-
 
 def get_enhanced_faq_chatbot() -> EnhancedFAQChatbot:
     """Get or create the enhanced FAQ chatbot singleton."""

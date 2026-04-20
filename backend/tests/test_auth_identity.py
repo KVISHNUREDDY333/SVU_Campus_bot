@@ -4,7 +4,7 @@ from app.utils.email_validator import is_valid_email, probe_email_authenticity
 import smtplib
 
 def test_is_valid_email():
-    # Valid Providers
+                     
     assert is_valid_email("test@gmail.com") is True
     assert is_valid_email("test@outlook.com") is True
     assert is_valid_email("test@yahoo.com") is True
@@ -12,16 +12,13 @@ def test_is_valid_email():
     assert is_valid_email("john.doe@gmail.com") is True
     assert is_valid_email("user+tag@outlook.com") is True
     
-    # Invalid Domains
     assert is_valid_email("test@svu.edu") is False
     assert is_valid_email("test@company.co") is False
     
-    # Invalid Local Parts
     assert is_valid_email("@gmail.com") is False
     assert is_valid_email("test!email@gmail.com") is False
     assert is_valid_email("test email@yahoo.com") is False
     
-    # Case sensitivity & Whitespace
     assert is_valid_email("TEST@OUTLOOK.COM") is True
     assert is_valid_email(" test@yahoo.com ") is True
 

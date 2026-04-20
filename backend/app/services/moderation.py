@@ -5,7 +5,6 @@ from ..services import rag_service
 
 logger = logging.getLogger("uvicorn")
 
-# List of common offensive/bad words (expanded for better coverage)
 BAD_WORDS = [
     "damn",
     "hell",
@@ -124,7 +123,6 @@ UNIVERSITY_TOPICS = [
     "current affairs",
 ]
 
-
 class ModerationService:
     @staticmethod
     def is_profane(text: str) -> bool:
@@ -143,7 +141,6 @@ class ModerationService:
         """LLM-based check for topic relevance (Education, Academic Support, Knowledge)."""
         text_lower = text.lower()
 
-        # Fast keyword check first
         if any(topic in text_lower for topic in UNIVERSITY_TOPICS):
             return True
 
@@ -175,7 +172,7 @@ class ModerationService:
             return "YES" in result
         except Exception as e:
             logger.error(f"Moderation LLM Error: {e}")
-            return True  # Fail open on system error
+            return True                             
 
     @classmethod
     async def check_content(cls, text: str) -> bool:

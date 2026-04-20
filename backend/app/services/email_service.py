@@ -7,11 +7,10 @@ from ..core.config import Config
 
 logger = logging.getLogger("uvicorn")
 
-
 def send_otp_email(to_email: str, otp: str):
     if not Config.EMAIL_ADDRESS or not Config.EMAIL_PASSWORD:
         logger.warning(f"Email credentials not set. DEV MODE OTP: {otp}")
-        return True  # Return True to simulate success in Dev Mode
+        return True                                               
 
     try:
         msg = MIMEMultipart()

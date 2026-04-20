@@ -24,7 +24,7 @@ authlib
 itsdangerous
 httpx
 beautifulsoup4
-duckduckgo-search
+aiohttp
 certifi
 markdown
 xhtml2pdf

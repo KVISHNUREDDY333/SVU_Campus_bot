@@ -12,10 +12,9 @@ logger = logging.getLogger("uvicorn")
 
 from ..models.academic import ResumeAnalysisRequest, ResumeGenerationRequest
 
-
 async def perform_resume_analysis(resume_text: str, target_role: Optional[str] = None):
     """Refactored helper function to handle AI resume analysis logic."""
-    # Guidelines for the resume checker
+                                       
     guidelines = """
     SV University Placement Cell Guidelines:
     1. Contact Info: Must include Email, Phone, and LinkedIn.
@@ -74,11 +73,9 @@ async def perform_resume_analysis(resume_text: str, target_role: Optional[str] =
         logger.error(f"Resume Analysis Logic Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Analysis Error: {str(e)}")
 
-
 @router.post("/check-resume")
 async def check_resume(req: ResumeAnalysisRequest):
     return await perform_resume_analysis(req.resume_text, req.target_role)
-
 
 @router.post("/check-resume-file")
 async def check_resume_file(
@@ -107,10 +104,9 @@ async def check_resume_file(
         logger.error(f"Resume PDF Processing Error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
 
-
 @router.post("/generate-resume")
 async def generate_resume(req: ResumeGenerationRequest):
-    # Check safety
+                  
     from ..services.moderation import ModerationService
 
     if not await ModerationService.check_content(
@@ -157,19 +153,15 @@ async def generate_resume(req: ResumeGenerationRequest):
         print(f"Resume Generation Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Generation Error: {str(e)}")
 
-
 from pydantic import BaseModel
-
 
 class ResumeDownloadRequest(BaseModel):
     resume_text: str
-    format: str  # 'pdf' or 'docx'
-
+    format: str                   
 
 from fastapi.responses import StreamingResponse
 
 from ..utils.resume_generator import generate_docx, generate_pdf
-
 
 @router.post("/download-resume")
 async def download_resume(req: ResumeDownloadRequest):

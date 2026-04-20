@@ -10,19 +10,16 @@ from .auth import get_current_user
 
 router = APIRouter()
 
-
 class CalendarEvent(BaseModel):
     title: str
-    from_date: str  # ISO datetime: YYYY-MM-DDTHH:mm
-    to_date: str  # ISO datetime: YYYY-MM-DDTHH:mm
-    type: str  # Exam, Holiday, Event
+    from_date: str                                  
+    to_date: str                                  
+    type: str                        
     location: Optional[str] = ""
     description: Optional[str] = ""
 
-
 class CalendarResponse(CalendarEvent):
     id: str
-
 
 @router.get("/calendar", response_model=List[CalendarResponse])
 async def get_calendar(
@@ -42,7 +39,6 @@ async def get_calendar(
         results.append(CalendarResponse(**e))
     return results
 
-
 @router.get("/admin/calendar", response_model=List[CalendarResponse])
 async def get_admin_calendar(current_user: User = Depends(get_current_user)):
     if database.calendar_db is None:
@@ -59,7 +55,6 @@ async def get_admin_calendar(current_user: User = Depends(get_current_user)):
         results.append(CalendarResponse(**e))
     return results
 
-
 @router.post("/admin/calendar", response_model=CalendarResponse)
 async def add_calendar_event(
     event: CalendarEvent, current_user: User = Depends(get_current_user)
@@ -71,7 +66,6 @@ async def add_calendar_event(
     res = database.calendar_db.insert_one(event_dict)
     event_dict["id"] = str(res.inserted_id)
 
-    # Trigger RAG ingestion
     await rag_service.ingest_calendar_event(
         event_id=event_dict["id"],
         title=event.title,
@@ -82,7 +76,6 @@ async def add_calendar_event(
         description=event.description,
     )
 
-    # Restore notification
     await notification_service.create_notification(
         title="Calendar Update",
         message=f"New {event.type} '{event.title}' added to the calendar.",
@@ -90,7 +83,6 @@ async def add_calendar_event(
     )
 
     return CalendarResponse(**event_dict)
-
 
 @router.put("/admin/calendar/{event_id}", response_model=CalendarResponse)
 async def update_calendar_event(
@@ -110,7 +102,6 @@ async def update_calendar_event(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="Event not found")
 
-        # Trigger RAG ingestion (update)
         await rag_service.ingest_calendar_event(
             event_id=event_id,
             title=event.title,
@@ -121,7 +112,6 @@ async def update_calendar_event(
             description=event.description,
         )
 
-        # Restore notification
         await notification_service.create_notification(
             title="Calendar Update",
             message=f"Academic event '{event.title}' has been updated.",
@@ -132,7 +122,6 @@ async def update_calendar_event(
         return CalendarResponse(**event_dict)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid Event ID: {str(e)}")
-
 
 @router.delete("/admin/calendar/{event_id}")
 async def delete_calendar_event(
@@ -148,10 +137,8 @@ async def delete_calendar_event(
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Event not found")
 
-        # Remove from RAG
         await rag_service.remove_calendar_event(event_id)
 
-        # Restore notification
         await notification_service.create_notification(
             title="Calendar Update",
             message=f"An event has been removed from the academic calendar.",

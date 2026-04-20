@@ -22,7 +22,6 @@ ALLOWED_DOMAINS = [
     "zoho.in",
 ]
 
-
 def is_valid_email(email: str) -> bool:
     """
     Validates if the email is from an allowed provider and has a valid format.
@@ -36,10 +35,8 @@ def is_valid_email(email: str) -> bool:
     if domain not in ALLOWED_DOMAINS:
         return False
 
-    # Standard email regex: letters, digits, . _ + -
     regex = r"^[a-z0-9+._-]+@[a-z0-9.-]+\.[a-z]{2,}$"
     return re.match(regex, email) is not None
-
 
 def verify_google_token(token: str) -> Optional[dict]:
     """
@@ -68,7 +65,6 @@ def verify_google_token(token: str) -> Optional[dict]:
         logger.error(f"Unexpected error in verify_google_token: {str(e)}")
         return None
 
-
 def probe_email_authenticity(
     email: str, timeout: int = 5
 ) -> Tuple[Optional[bool], str]:
@@ -82,16 +78,16 @@ def probe_email_authenticity(
     domain = email.split("@")[-1].lower()
 
     try:
-        # 1. Get MX Record using dnspython
+                                          
         if dns:
             try:
                 records = dns.resolver.resolve(domain, "MX")
                 mx_host = str(records[0].exchange).rstrip(".")
             except Exception as e:
                 logger.warning(f"DNS MX lookup failed for {domain}: {e}")
-                mx_host = domain  # Fallback
+                mx_host = domain            
         else:
-            # Hardcoded fallbacks for major providers if dns is missing
+                                                                       
             fallbacks = {
                 "gmail.com": "gmail-smtp-in.l.google.com",
                 "outlook.com": "outlook-com.olc.protection.outlook.com",
@@ -102,7 +98,6 @@ def probe_email_authenticity(
             }
             mx_host = fallbacks.get(domain, domain)
 
-        # 2. SMTP Handshake
         server = smtplib.SMTP(timeout=timeout)
         server.connect(mx_host)
         server.helo()
@@ -121,8 +116,7 @@ def probe_email_authenticity(
                 f"This email address does not seem to exist on {domain.capitalize()}.",
             )
         else:
-            # Some servers give 4xx or other 5xx for various reasons (greylisting, etc.)
-            # We treat ambiguous responses as "format verified" to avoid false negatives
+                                                                                        
             return None, f"Identity format verified (Server responded with code {code})"
 
     except (smtplib.SMTPConnectError, socket.error, socket.timeout, Exception) as e:

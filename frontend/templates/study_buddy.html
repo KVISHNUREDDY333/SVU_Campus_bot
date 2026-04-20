@@ -18,9 +18,8 @@
             </div>
           </div>
 
-          <!-- Lecture Notes View -->
           <div id="study-notes-view" class="p-20 flex flex-col gap-35 study-tab-view notes mx-auto w-full premium-view-entrance overflow-y-auto flex-1">
-            <!-- Materials List -->
+            
             <div id="study-archive-card" class="analysis-card-premium shadow-premium border-none bg-glass-nav">
               <div class="analysis-header border-bottom">
                 <div class="flex items-center gap-15">
@@ -50,9 +49,8 @@
               </div>
             </div>
 
-            <!-- Analysis Workspace (Hidden until file selected) -->
             <div id="analysis-workspace" class="hidden flex flex-col gap-30 mb-80">
-                <!-- Summary Section -->
+                
                 <div class="analysis-card-premium">
                     <div class="analysis-bg-glow"></div>
                     <div class="analysis-header border-bottom">
@@ -79,7 +77,6 @@
                     </div>
                 </div>
 
-                <!-- Wider Follow-up Chat -->
                 <div class="analysis-card-premium flex flex-col study-chat-card-reset" id="document-chat-card">
                     <div class="analysis-header border-bottom p-25 mb-0">
                       <div class="flex items-center gap-15">
@@ -120,7 +117,6 @@
             </div>
           </div>
 
-          <!-- Zen AI View -->
           <div id="study-zen-view" class="hidden study-tab-view zen mx-auto w-full premium-view-entrance zen-viewport">
               <div class="zen-floating-actions">
                   <button onclick="newZenChat()" class="btn-new-chat shadow-premium">
@@ -128,7 +124,6 @@
                   </button>
               </div>
               
-              <!-- Chat Canvas (includes inline header) -->
               <div id="zen-chat-history" class="chat-area scroll-mini">
                   <div class="welcome-screen my-auto">
                        <div class="zen-orb mx-auto mb-15">
@@ -142,11 +137,8 @@
                   </div>
               </div>
 
-              <!-- Zen Typing Indicator moved inside wrapper -->
-
-              <!-- Input Workspace - Mirrored from main chat -->
               <div class="input-area-wrapper">
-                  <!-- Zen Typing Indicator -->
+                  
                   <div id="zen-typing-indicator" class="zen-typing-indicator hidden">
                       <div class="typing-dot"></div>
                       <div class="typing-dot"></div>

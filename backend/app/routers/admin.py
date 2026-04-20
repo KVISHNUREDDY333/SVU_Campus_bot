@@ -33,31 +33,28 @@ router = APIRouter()
 
 VALID_MODELS = ["llama-3.3-70b-versatile"]
 
-
 class UserAdminResponse(pydantic.BaseModel):
     id: str
-    username: str  # email
+    username: str         
     role: str
     created_at: datetime
     status: str = "active"
-
 
 class UserCreate(pydantic.BaseModel):
     username: str
     password: str
     role: str = "student"
 
-
 @router.get("/admin/faqs", response_model=List[FAQResponse])
 async def get_faqs():
     if database.svu_vectors_db is None:
         return []
-    # Query svu_vectors for FAQ-type documents
+                                              
     faqs = list(database.svu_vectors_db.find({"type": "faq"}).sort("created_at", -1))
     results = []
     for f in faqs:
         text = f.get("text", "")
-        # Parse Question/Answer from the text field format "Question: ...\nAnswer: ..."
+                                                                                       
         question = ""
         answer = ""
         if "Question:" in text and "Answer:" in text:
@@ -83,16 +80,13 @@ async def get_faqs():
         )
     return results
 
-
 @router.post("/admin/faqs", response_model=FAQResponse)
 async def create_faq(
     faq: FAQModel, current_user: User = Depends(get_current_admin_user)
 ):
 
-    # Insert directly into svu_vectors via ingest_faq
     from ..services.rag_service import ingest_faq as rag_ingest_faq
 
-    # Create a unique ID for the FAQ
     faq_id = str(ObjectId())
 
     try:
@@ -107,7 +101,6 @@ async def create_faq(
         logger.error(f"Failed to ingest FAQ into vector DB: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create FAQ: {e}")
 
-    # Trigger notification
     await notification_service.create_notification(
         title="New FAQ Added",
         message=f"A new FAQ about '{faq.category}' has been added to the system.",
@@ -124,7 +117,6 @@ async def create_faq(
         verified=False,
     )
 
-
 @router.delete("/admin/faqs/{faq_id}")
 async def delete_faq(faq_id: str, current_user: User = Depends(get_current_admin_user)):
 
@@ -132,7 +124,6 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_admin
         if database.svu_vectors_db is None or database.documents_db is None:
             raise HTTPException(status_code=503, detail="Database not available")
 
-        # Get the FAQ first to find its source
         faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
         if not faq:
             faq = database.svu_vectors_db.find_one({"faq_id": faq_id})
@@ -142,11 +133,10 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_admin
 
         source = faq.get("source")
 
-        # Delete from svu_vectors
         result = database.svu_vectors_db.delete_one({"_id": faq["_id"]})
 
         if result.deleted_count > 0:
-            # Decrement FAQ count in documents_db if source exists
+                                                                  
             if source:
                 database.documents_db.update_one(
                     {"filename": source},
@@ -167,7 +157,6 @@ async def delete_faq(faq_id: str, current_user: User = Depends(get_current_admin
         logger.error(f"Delete FAQ Error: {e}")
         raise HTTPException(status_code=400, detail="Failed to delete FAQ")
 
-
 @router.post("/faqs/suggest")
 async def suggest_faq(faq: SuggestedFAQModel):
     if database.suggested_faqs_db is None:
@@ -184,7 +173,6 @@ async def suggest_faq(faq: SuggestedFAQModel):
     database.suggested_faqs_db.insert_one(new_suggestion)
 
     return {"status": "success", "message": "FAQ suggestion submitted for review"}
-
 
 @router.get("/admin/suggested-faqs", response_model=List[SuggestedFAQResponse])
 async def get_suggested_faqs(current_user: User = Depends(get_current_admin_user)):
@@ -206,7 +194,6 @@ async def get_suggested_faqs(current_user: User = Depends(get_current_admin_user
         )
     return results
 
-
 @router.post("/admin/suggested-faqs/{suggestion_id}/approve")
 async def approve_suggested_faq(
     suggestion_id: str, current_user: User = Depends(get_current_admin_user)
@@ -227,7 +214,6 @@ async def approve_suggested_faq(
         "suggested_by": suggestion.get("suggested_by"),
     }
 
-    # Insert directly into svu_vectors via ingest_faq (no more faqs_db)
     from ..services.rag_service import ingest_faq as rag_ingest_faq
 
     faq_id = str(ObjectId())
@@ -243,7 +229,6 @@ async def approve_suggested_faq(
     except Exception as e:
         logger.error(f"Failed to ingest FAQ into vector DB: {e}")
 
-    # Personal notification to the suggestor
     suggestor = suggestion.get("suggested_by")
     if suggestor:
         await notification_service.create_notification(
@@ -257,7 +242,6 @@ async def approve_suggested_faq(
 
     return {"status": "success", "message": "FAQ approved and published"}
 
-
 @router.delete("/admin/suggested-faqs/{suggestion_id}")
 async def reject_suggested_faq(
     suggestion_id: str, current_user: User = Depends(get_current_admin_user)
@@ -266,7 +250,7 @@ async def reject_suggested_faq(
     suggestion = database.suggested_faqs_db.find_one({"_id": ObjectId(suggestion_id)})
     if not suggestion:
         raise HTTPException(status_code=404, detail="Suggestion not found")
-    # Personal notification to the suggestor
+                                            
     suggestor = suggestion.get("suggested_by")
     if suggestor:
         await notification_service.create_notification(
@@ -280,15 +264,12 @@ async def reject_suggested_faq(
 
     return {"status": "success", "message": "FAQ suggestion rejected"}
 
-
 class AddTextRequest(pydantic.BaseModel):
     title: str
     content: str
 
-
 class AddUrlRequest(pydantic.BaseModel):
     url: str
-
 
 @router.post("/admin/add-text")
 async def add_text_document(
@@ -303,16 +284,15 @@ async def add_text_document(
             "type": "text_entry",
             "uploaded_by": current_user.username,
         }
-        num_chunks = await ingest_text(req.content, metadata=doc_metadata)
+        num_chunks = await ingest_text(req.content, metadata=doc_metadata, store_vectors=False)
         logger.debug(f"Text Entry Ingested. Chunks: {num_chunks}")
 
-        # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
 
         inserted_count = await process_and_refine_knowledge(req.content, req.title)
 
         doc_record = {
-            "filename": req.title,  # Title acts as filename
+            "filename": req.title,                          
             "uploaded_by": current_user.username,
             "uploaded_at": datetime.utcnow(),
             "last_modified": datetime.utcnow(),
@@ -325,13 +305,6 @@ async def add_text_document(
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
 
-        # Trigger common notification for KB update
-        await notification_service.create_notification(
-            title="Knowledge Base Updated",
-            message=f"A new text document '{req.title}' has been added to our knowledge base.",
-            notification_type="common",
-        )
-
         return {
             "status": "success",
             "message": f"Ingested text '{req.title}'",
@@ -339,7 +312,6 @@ async def add_text_document(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
-
 
 @router.post("/admin/upload-document")
 async def upload_document(
@@ -350,7 +322,7 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     try:
-        # Standardise to project root "backend/uploads" folder
+                                                              
         project_root = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         )
@@ -363,11 +335,10 @@ async def upload_document(
 
         logger.debug(f"Ingesting PDF: {file.filename}")
         num_chunks, full_text = await ingest_pdf(
-            file_path, user_id="public", store_vectors=True
+            file_path, user_id="public", store_vectors=False
         )
         logger.debug(f"PDF Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
 
-        # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
 
         inserted_count = await process_and_refine_knowledge(full_text, file.filename)
@@ -385,13 +356,6 @@ async def upload_document(
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
 
-        # Trigger common notification for KB update
-        await notification_service.create_notification(
-            title="Knowledge Base Updated",
-            message=f"New document '{file.filename}' has been uploaded and processed.",
-            notification_type="common",
-        )
-
         return {
             "status": "success",
             "message": f"Ingested {num_chunks} chunks from {file.filename}",
@@ -401,7 +365,6 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-
 @router.post("/admin/add-url")
 async def add_url_document(
     req: AddUrlRequest, current_user: User = Depends(get_current_admin_user)
@@ -409,10 +372,9 @@ async def add_url_document(
 
     try:
         logger.debug(f"Ingesting URL: {req.url}")
-        num_chunks, full_text = await ingest_url(req.url, store_vectors=True)
+        num_chunks, full_text = await ingest_url(req.url, store_vectors=False)
         logger.debug(f"URL Ingested. Chunks: {num_chunks}. Text len: {len(full_text)}")
 
-        # Automated Knowledge Processing: Extract -> Refine -> Ingest (with embeddings)
         from ..services.rag_service import process_and_refine_knowledge
 
         inserted_count = await process_and_refine_knowledge(full_text, req.url)
@@ -430,13 +392,6 @@ async def add_url_document(
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
 
-        # Trigger common notification for KB update
-        await notification_service.create_notification(
-            title="Knowledge Base Updated",
-            message=f"New information from '{req.url}' has been added to the knowledge base.",
-            notification_type="common",
-        )
-
         return {
             "status": "success",
             "message": f"Ingested {num_chunks} chunks from URL",
@@ -445,13 +400,11 @@ async def add_url_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"URL ingestion failed: {str(e)}")
 
-
 @router.get("/dashboard-stats")
 async def get_dashboard_stats(current_user: User = Depends(get_current_admin_user)):
 
     logger.info(f"Fetching dashboard stats for user: {current_user.username}")
 
-    # Initialize defaults
     stats = {
         "total_queries": 0,
         "active_users": 0,
@@ -461,7 +414,7 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
     }
 
     try:
-        # 1. Total Queries (Analytics)
+                                      
         if database.analytics_db is not None:
             stats["total_queries"] = database.analytics_db.count_documents({})
 
@@ -477,7 +430,6 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
                 ),
             }
 
-        # 2. Users Stats
         if database.users_db is not None:
             stats["active_users"] = database.users_db.estimated_document_count()
             roles = database.users_db.distinct("role")
@@ -486,7 +438,6 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
                     {"role": r}
                 )
 
-        # 3. Documents Stats (The Critical Part)
         if database.documents_db is not None:
             doc_count = database.documents_db.count_documents({})
             logger.debug(f"Found {doc_count} documents in DB")
@@ -498,14 +449,13 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
 
     except Exception as e:
         logger.error(f"Dashboard Stats Error: {e}")
-        # Return partial stats instead of failing
+                                                 
         return stats
-
 
 @router.get("/admin/system-health")
 async def get_system_health(current_user: User = Depends(get_current_admin_user)):
 
-    database.get_db_client()  # Try to refresh client if disconnected
+    database.get_db_client()                                         
     mongo_status = "connected" if database.mongo_client else "disconnected"
     from ..services import rag_service
 
@@ -519,7 +469,6 @@ async def get_system_health(current_user: User = Depends(get_current_admin_user)
         "uptime": "99.9%",
         "last_reindexed": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
     }
-
 
 @router.get("/admin/users", response_model=List[UserAdminResponse])
 async def get_all_users(
@@ -547,7 +496,6 @@ async def get_all_users(
         )
     return users
 
-
 @router.post("/admin/users", status_code=201)
 async def create_user(
     user_data: UserCreate, current_user: User = Depends(get_current_admin_user)
@@ -566,7 +514,6 @@ async def create_user(
 
     database.users_db.insert_one(new_user)
     return {"status": "success", "message": f"User {user_data.username} created"}
-
 
 @router.put("/admin/users/{user_id}/role")
 async def update_user_role(
@@ -587,7 +534,6 @@ async def update_user_role(
     except:
         raise HTTPException(status_code=400, detail="Invalid User ID")
 
-
 @router.delete("/admin/users/{user_id}")
 async def delete_user(
     user_id: str, current_user: User = Depends(get_current_admin_user)
@@ -605,7 +551,6 @@ async def delete_user(
     except:
         raise HTTPException(status_code=400, detail="Invalid User ID")
 
-
 @router.post("/admin/cache/clear")
 async def clear_system_cache(current_user: User = Depends(get_current_admin_user)):
 
@@ -614,14 +559,13 @@ async def clear_system_cache(current_user: User = Depends(get_current_admin_user
     rag_service.store = {}
     return {"status": "success", "message": "System cache (session history) cleared."}
 
-
 @router.get("/admin/system-logs")
 async def get_admin_system_logs(
     limit: int = 50, current_user: User = Depends(get_current_admin_user)
 ):
 
     logs = get_recent_logs(limit)
-    # Convert ObjectId to string and format timestamp
+                                                     
     formatted_logs = []
     for log in logs:
         formatted_logs.append(
@@ -634,21 +578,19 @@ async def get_admin_system_logs(
         )
     return formatted_logs
 
-
 @router.post("/admin/reindex")
 async def reindex_knowledge_base(current_user: User = Depends(get_current_admin_user)):
 
     from ..services import rag_service
 
     try:
-        # Re-initialize DB client first
+                                       
         database.get_db_client()
-        # Force re-index/reload of the vector DB connection
+                                                           
         rag_service.setup_rag_chain(force_reload=True)
         return {"status": "success", "message": "Knowledge base connection refreshed."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/admin/documents")
 async def list_documents(
@@ -666,7 +608,6 @@ async def list_documents(
         doc["_id"] = str(doc["_id"])
         docs.append(doc)
     return docs
-
 
 @router.get("/admin/brain/status")
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
@@ -688,12 +629,10 @@ async def get_document_faqs(
         if not identifier:
             return []
 
-        # Query svu_vectors for FAQs belonging to this document
         faqs_raw = list(
             database.svu_vectors_db.find({"type": "faq", "source": identifier})
         )
 
-        # Resiliency Fallback: If no FAQs found with type='faq', check for any docs containing "Question:" for this source
         if not faqs_raw:
             logger.info(
                 f"No type='faq' docs found for {identifier}, trying lenient search..."
@@ -717,7 +656,7 @@ async def get_document_faqs(
                 question = parts[0].replace("Question:", "").strip()
                 answer = parts[1].strip()
             else:
-                # Catch-all for non-standard formats
+                                                    
                 question = text[:100]
                 answer = text
 
@@ -736,7 +675,6 @@ async def get_document_faqs(
         return faqs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/admin/documents/{doc_id}")
 async def delete_document(
@@ -763,10 +701,15 @@ async def delete_document(
 
         database.documents_db.delete_one({"_id": ObjectId(doc_id)})
 
+        import re
+        safe_filename = re.escape(filename)
+                                       
+        source_regex = {"$regex": f"^{safe_filename}$", "$options": "i"}
+
         if database.svu_vectors_db is not None:
-            # Cascade delete FAQs from svu_vectors
+                                                  
             delete_result = database.svu_vectors_db.delete_many(
-                {"type": "faq", "source": filename}
+                {"type": "faq", "source": source_regex}
             )
             logger.info(
                 f"Deleted {delete_result.deleted_count} FAQs associated with {filename}"
@@ -778,8 +721,14 @@ async def delete_document(
                 vector_collection_name
             ]
 
-            # Delete general vector chunks (flat structure)
-            vector_delete_result = vector_collection.delete_many({"source": filename})
+            vector_delete_result = vector_collection.delete_many(
+                {
+                    "$or": [
+                        {"source": source_regex},
+                        {"metadata.source": source_regex}
+                    ]
+                }
+            )
             logger.info(
                 f"Deleted {vector_delete_result.deleted_count} vector chunks for {filename}"
             )
@@ -792,7 +741,6 @@ async def delete_document(
     except Exception as e:
         logger.error(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete document")
-
 
 @router.put("/admin/faqs/{faq_id}")
 async def update_faq(
@@ -813,7 +761,6 @@ async def update_faq(
             "updated_by": current_user.username,
         }
 
-        # Regenerate embedding immediately for the updated FAQ
         if embeddings:
             try:
                 update_data["embedding"] = embeddings.embed_query(formatted_text)
@@ -826,7 +773,6 @@ async def update_faq(
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="FAQ not found")
 
-        # Update last modified on parent document record
         updated_faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
         if updated_faq:
             source = updated_faq.get("source")
@@ -841,10 +787,6 @@ async def update_faq(
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-# --- Location Management Endpoints ---
-
 
 @router.get("/locations", response_model=List[LocationResponse])
 async def get_public_locations(current_user: User = Depends(get_current_user)):
@@ -866,12 +808,10 @@ async def get_public_locations(current_user: User = Depends(get_current_user)):
         )
     return results
 
-
 @router.get("/admin/locations", response_model=List[LocationResponse])
 async def get_all_locations(current_user: User = Depends(get_current_admin_user)):
 
     return await get_public_locations(current_user)
-
 
 @router.post("/admin/locations", response_model=LocationResponse)
 async def create_location(
@@ -884,7 +824,6 @@ async def create_location(
     result = database.locations_db.insert_one(new_loc)
     new_loc["id"] = str(result.inserted_id)
 
-    # Trigger notification
     await notification_service.create_notification(
         title="New Location Added",
         message=f"New campus location '{loc.name}' is now available in the map.",
@@ -892,7 +831,6 @@ async def create_location(
     )
 
     return new_loc
-
 
 @router.put("/admin/locations/{loc_id}", response_model=LocationResponse)
 async def update_location(
@@ -917,7 +855,6 @@ async def update_location(
     updated_loc = database.locations_db.find_one({"_id": ObjectId(loc_id)})
     updated_loc["id"] = str(updated_loc["_id"])
 
-    # Trigger notification
     await notification_service.create_notification(
         title="Location Updated",
         message=f"Campus location '{updated_loc.get('name')}' has been updated.",
@@ -926,16 +863,11 @@ async def update_location(
 
     return updated_loc
 
-
 @router.delete("/admin/locations/{loc_id}")
 async def delete_location(loc_id: str, current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # We might want to know the name before deleting for a better message,
-    # but let's keep it simple for now.
-
-    # Trigger notification
     await notification_service.create_notification(
         title="Location Removed",
         message=f"A campus location has been removed from the map.",
@@ -943,7 +875,6 @@ async def delete_location(loc_id: str, current_user: User = Depends(get_current_
     )
 
     return {"status": "success", "message": "Location deleted"}
-
 
 @router.get("/admin/trending", response_model=List[TrendingQueryResponse])
 async def get_trending_queries():
@@ -966,7 +897,6 @@ async def get_trending_queries():
         )
     return results
 
-
 @router.post("/admin/trending", response_model=TrendingQueryResponse)
 async def add_trending_query(
     query: TrendingQueryModel, current_user: User = Depends(get_current_user)
@@ -977,7 +907,6 @@ async def add_trending_query(
     if database.trending_queries_db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    # Check for maximum limit of 4 queries
     count = database.trending_queries_db.count_documents({})
     if count >= 4:
         raise HTTPException(
@@ -989,10 +918,8 @@ async def add_trending_query(
 
     result = database.trending_queries_db.insert_one(new_query)
 
-    # Remove _id as it might interface with Pydantic validation if it's an ObjectId
     new_query.pop("_id", None)
 
-    # Trigger notification
     await notification_service.create_notification(
         title="Trending Today",
         message=f"Check out the new trending query: '{query.text}'",
@@ -1000,7 +927,6 @@ async def add_trending_query(
     )
 
     return TrendingQueryResponse(id=str(result.inserted_id), **new_query)
-
 
 @router.put("/admin/trending/{query_id}", response_model=TrendingQueryResponse)
 async def update_trending_query(
@@ -1014,7 +940,6 @@ async def update_trending_query(
     if database.trending_queries_db is None:
         raise HTTPException(status_code=500, detail="Database not initialized")
 
-    # Filter out None values
     update_data = {k: v for k, v in update.dict().items() if v is not None}
 
     if not update_data:
@@ -1027,10 +952,8 @@ async def update_trending_query(
     if not result:
         raise HTTPException(status_code=404, detail="Query not found")
 
-    # Remove _id for Pydantic
     result.pop("_id", None)
 
-    # Trigger notification
     await notification_service.create_notification(
         title="Trending Queries Update",
         message=f"The trending topics have been updated. Check them out!",
@@ -1038,7 +961,6 @@ async def update_trending_query(
     )
 
     return TrendingQueryResponse(id=query_id, **result)
-
 
 @router.delete("/admin/trending/{query_id}")
 async def delete_trending_query(
@@ -1054,7 +976,6 @@ async def delete_trending_query(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Query not found")
 
-    # Trigger notification
     await notification_service.create_notification(
         title="Trending Queries Update",
         message=f"Trending queries have been refreshed.",
@@ -1062,7 +983,6 @@ async def delete_trending_query(
     )
 
     return {"status": "success", "message": "Query deleted"}
-
 
 @router.post("/admin/repair/sync-faq-counts")
 async def sync_faqs_count(current_user: User = Depends(get_current_user)):
@@ -1081,12 +1001,10 @@ async def sync_faqs_count(current_user: User = Depends(get_current_user)):
             if not filename:
                 continue
 
-            # Count actual FAQs in svu_vectors
             actual_count = database.svu_vectors_db.count_documents(
                 {"source": filename, "type": "faq"}
             )
 
-            # Update the document record
             database.documents_db.update_one(
                 {"_id": doc["_id"]}, {"$set": {"extracted_faqs": actual_count}}
             )

@@ -14,26 +14,19 @@ from ..routers.auth import get_current_user
 from ..services import rag_service
 from ..services.moderation import ModerationService
 
-
 class StudyMaterialTextRequest(BaseModel):
     title: str
     content: str
 
-
 logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/study-buddy", tags=["Study Buddy"])
 
-
-# Get absolute path to backend directory (assuming router is in backend/app/routers)
-# .../backend/app/routers/study_buddy.py -> .../backend
-# Standardise to project root "uploads" folder
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# app/routers -> app -> backend -> project_root
+                                               
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
 UPLOAD_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "uploads", "study_materials"))
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 
 @router.post("/chat")
 async def chat_with_material(
@@ -45,7 +38,6 @@ async def chat_with_material(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
 
-    # Check content restrictions
     if not await ModerationService.check_content(req.query):
         return {
             "response": ModerationService.get_rejection_message(),
@@ -56,23 +48,18 @@ async def chat_with_material(
         if not rag_service.vector_db:
             rag_service.setup_rag_chain()
 
-        # We perform a similarity search filtered by filename and user_id
-        # This ensures the context is ONLY from this specific document
         filter_metadata = {
             "source": material["filename"],
             "user_id": current_user.username,
         }
 
-        # Use existing vector_db for search with higher k and score filtering if needed
-        # The new embeddings (mpnet) will automatically improve these results.
         docs = rag_service.vector_db.similarity_search_with_score(
             req.query, k=8, filter=filter_metadata
         )
 
-        # Filter by threshold 0.5 (slightly lower for specific docs to be safe)
         valid_docs = [doc for doc, score in docs if score >= 0.5]
         if not valid_docs:
-            # Fallback to search just by filename
+                                                 
             docs = rag_service.vector_db.similarity_search(
                 req.query, k=5, filter={"source": material["filename"]}
             )
@@ -110,7 +97,6 @@ async def chat_with_material(
         print(f"Study Chat Error: {e}")
         raise HTTPException(status_code=500, detail=f"AI Chat Error: {str(e)}")
 
-
 @router.post("/zen")
 async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user)):
     """
@@ -118,7 +104,7 @@ async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user
     History is managed in-memory (sent by client).
     """
     try:
-        # Check content restrictions
+                                    
         if not await ModerationService.check_content(req.query):
             return {"response": ModerationService.get_rejection_message()}
 
@@ -141,9 +127,8 @@ async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user
         - Use precise Markdown and academic tone.
         """
 
-        # Construct message list for LangChain
         messages = [("system", system_prompt)]
-        for msg in req.history[-10:]:  # Pass last 10 turns
+        for msg in req.history[-10:]:                      
             role = "human" if msg["role"] == "user" else "ai"
             messages.append((role, msg["content"]))
 
@@ -156,7 +141,6 @@ async def ask_zen(req: ZenRequest, current_user: User = Depends(get_current_user
         logger.error(f"Zen Chat Error: {e}")
         raise HTTPException(status_code=500, detail=f"Zen AI Error: {str(e)}")
 
-
 @router.post("/upload")
 async def upload_material(
     file: UploadFile = File(...), current_user: User = Depends(get_current_user)
@@ -165,7 +149,6 @@ async def upload_material(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Ingest into Vector DB for RAG & Get Text
     num_chunks = 0
     full_text = ""
     try:
@@ -176,12 +159,9 @@ async def upload_material(
         )
     except Exception as e:
         print(f"Study Material Ingestion Failed: {e}")
-        # We might still want to continue if we have the file, but RAG won't work.
-        # However, for summary we need text. if ingest_pdf failed, we might not have text.
-        # Assuming ingest_pdf does the text extraction.
+                                                                                  
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
 
-    # Generate Summary immediately
     summary_text = ""
     try:
         if not rag_service.fast_llm:
@@ -206,17 +186,16 @@ async def upload_material(
 
     except Exception as e:
         print(f"Auto-Summary Failed: {e}")
-        # Continue without summary, user can try later
+                                                      
         summary_text = "Summary generation failed. Please try again later."
 
-    # Store in DB
     material = {
         "user_id": current_user.username,
         "filename": file.filename,
         "file_path": file_path,
         "upload_date": datetime.utcnow(),
         "chunks": num_chunks,
-        "summary": summary_text,  # Persist summary
+        "summary": summary_text,                   
     }
     result = database.study_materials_db.insert_one(material)
 
@@ -228,25 +207,21 @@ async def upload_material(
         "summary": summary_text,
     }
 
-
 @router.post("/upload-text")
 async def upload_text_material(
     req: StudyMaterialTextRequest, current_user: User = Depends(get_current_user)
 ):
-    # Create a pseudo-filename
+                              
     filename = f"{req.title}.txt"
     file_path = os.path.join(UPLOAD_DIR, f"{current_user.username}_{filename}")
 
-    # Save text to file
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(req.content)
 
-    # Ingest text into Vector DB
     num_chunks = 0
     try:
         from ..services.rag_service import ingest_text
 
-        # We use ingest_text which expects text and metadata
         num_chunks = await ingest_text(
             req.content, metadata={"source": filename, "user_id": current_user.username}
         )
@@ -254,7 +229,6 @@ async def upload_text_material(
         print(f"Study Material Text Ingestion Failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process text: {str(e)}")
 
-    # Generate Summary
     summary_text = ""
     try:
         if not rag_service.fast_llm:
@@ -299,7 +273,6 @@ async def upload_text_material(
         print(f"Auto-Summary Failed: {e}")
         summary_text = "Summary generation failed. Please try again later."
 
-    # Store in DB
     material = {
         "user_id": current_user.username,
         "filename": filename,
@@ -319,7 +292,6 @@ async def upload_text_material(
         "summary": summary_text,
     }
 
-
 @router.get("/materials")
 async def get_materials(current_user: User = Depends(get_current_user)):
     materials = list(
@@ -332,7 +304,6 @@ async def get_materials(current_user: User = Depends(get_current_user)):
         del m["_id"]
     return materials
 
-
 @router.post("/summarize/{material_id}")
 async def summarize_material(
     material_id: str, current_user: User = Depends(get_current_user)
@@ -343,10 +314,6 @@ async def summarize_material(
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
 
-    # If summary already exists, return it?
-    # User might want to re-generate. Let's re-generate or return existing?
-    # For now, let's keep the re-generation logic as distinct action.
-
     try:
         text = ""
         file_path = material["file_path"]
@@ -356,7 +323,7 @@ async def summarize_material(
 
             _, text = await ingest_pdf(file_path)
         else:
-            # Assume plain text for other types like .txt
+                                                         
             with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
             logger.info(f"Read {len(text)} chars from text file: {file_path}")
@@ -380,7 +347,6 @@ async def summarize_material(
 
         response = await rag_service.fast_llm.ainvoke(prompt)
 
-        # Update DB with new summary
         database.study_materials_db.update_one(
             {"_id": ObjectId(material_id)}, {"$set": {"summary": response.content}}
         )
@@ -389,7 +355,6 @@ async def summarize_material(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.delete("/materials/{material_id}")
 async def delete_material(
