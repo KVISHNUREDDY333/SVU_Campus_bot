@@ -6,7 +6,7 @@ from typing import List
 
 import pydantic
 from bson.objectid import ObjectId
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, UploadFile
 
 from ..core import config, database
 from ..models.faq import (
@@ -1016,3 +1016,86 @@ async def sync_faqs_count(current_user: User = Depends(get_current_user)):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# URL Knowledge-Base Pipeline  (Zero-LLM batch ingestion)
+# ---------------------------------------------------------------------------
+
+class IngestUrlsRequest(pydantic.BaseModel):
+    urls: List[str]
+
+
+@router.post("/admin/kb/ingest-urls")
+async def ingest_urls_pipeline(
+    req: IngestUrlsRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """
+    Submit a list of URLs for zero-LLM FAQ extraction.
+    Returns a job_id that can be polled for progress.
+    The extraction runs in the background.
+    """
+    from ..services.url_kb_pipeline import create_job, run_pipeline
+
+    urls = [u.strip() for u in req.urls if u.strip()]
+    if not urls:
+        raise HTTPException(status_code=400, detail="No valid URLs provided.")
+    if len(urls) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 URLs per job.")
+
+    job_id = create_job(urls, submitted_by=current_user.username)
+
+    # Run in FastAPI background task so the response returns immediately
+    background_tasks.add_task(run_pipeline, job_id, urls)
+
+    logger.info(
+        f"[KB-PIPELINE] Job {job_id} submitted by {current_user.username} with {len(urls)} URLs."
+    )
+    return {
+        "status": "submitted",
+        "job_id": job_id,
+        "total_urls": len(urls),
+        "message": "Extraction started in background. Poll /admin/kb/jobs/{job_id} for progress.",
+    }
+
+
+@router.get("/admin/kb/jobs")
+async def list_kb_jobs(
+    limit: int = 20,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """List recent knowledge-base ingestion jobs."""
+    from ..services.url_kb_pipeline import list_jobs
+    return list_jobs(limit=limit)
+
+
+@router.get("/admin/kb/jobs/{job_id}")
+async def get_kb_job_status(
+    job_id: str,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """Get status and per-URL results for a specific ingestion job."""
+    from ..services.url_kb_pipeline import get_job
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return job
+
+
+@router.delete("/admin/kb/jobs/{job_id}")
+async def delete_kb_job(
+    job_id: str,
+    current_user: User = Depends(get_current_admin_user),
+):
+    """Delete a completed job record from the database."""
+    from ..core.config import Config
+    col = database.mongo_client[Config.DB_NAME]["kb_jobs"] if database.mongo_client else None
+    if col is None:
+        raise HTTPException(status_code=503, detail="Database not available.")
+    result = col.delete_one({"job_id": job_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found.")
+    return {"status": "success", "message": f"Job {job_id} deleted."}
+

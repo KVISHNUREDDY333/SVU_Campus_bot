@@ -1,0 +1,11 @@
+services:
+  svu-campus-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vishnukamasani3/svu-campus-bot:latest
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
