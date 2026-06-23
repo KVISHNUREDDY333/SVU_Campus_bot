@@ -138,8 +138,10 @@ async def resolve_ticket(
             )
 
         return {"status": "success"}
-    except:
-        raise HTTPException(status_code=400, detail="Invalid ID")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid ID: {str(e)}")
 
 @router.delete("/tickets/{ticket_id}")
 async def delete_ticket(ticket_id: str, current_user: User = Depends(get_current_user)):

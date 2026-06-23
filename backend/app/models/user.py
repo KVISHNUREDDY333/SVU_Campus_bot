@@ -15,6 +15,8 @@ class Token(BaseModel):
     role: str
     username: str
     full_name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 class TokenData(BaseModel):
     username: Optional[str] = None

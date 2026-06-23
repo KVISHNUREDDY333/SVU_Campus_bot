@@ -1,11 +1,28 @@
+# ============================================
+# SVU Campus Bot — Docker Compose
+# ============================================
+# Run:  docker compose up --build
+# ============================================
+
 services:
   svu-campus-bot:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
     image: vishnukamasani3/svu-campus-bot:latest
     env_file:
       - ./.env
     ports:
       - "8000:8000"
+    volumes:
+      - uploads-data:/app/backend/uploads
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  uploads-data:

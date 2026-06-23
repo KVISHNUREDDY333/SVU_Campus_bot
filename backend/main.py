@@ -6,10 +6,13 @@ import asyncio
 import platform
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pymongo.errors import PyMongoError
+from bson.errors import InvalidId
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:     %(message)s')
 logger = logging.getLogger("uvicorn")
@@ -184,6 +187,33 @@ def display_app_stats(app: FastAPI):
         logger.error(f"Failed to display startup stats: {e}")
 
 app = FastAPI(lifespan=lifespan)
+
+@app.exception_handler(PyMongoError)
+async def pymongo_exception_handler(request: Request, exc: PyMongoError):
+    logger.error(f"Database error occurred: {exc}")
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database service is temporarily unavailable. Please try again later."},
+    )
+
+@app.exception_handler(InvalidId)
+async def invalid_id_exception_handler(request: Request, exc: InvalidId):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "Invalid resource identifier format."},
+    )
+
+@app.exception_handler(AttributeError)
+async def attribute_error_handler(request: Request, exc: AttributeError):
+    # Map NoneType attribute access on database references to a clean 503 Service Unavailable
+    exc_str = str(exc)
+    if "NoneType" in exc_str and any(db_name in exc_str for db_name in ["db", "collection", "_db"]):
+        logger.critical(f"Database service is disconnected or not configured: {exc}")
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Database service is currently unavailable."},
+        )
+    raise exc
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,3 +1,6 @@
+# ============================================
+# Docker build context exclusions
+# ============================================
 .venv
 .git
 __pycache__
@@ -7,12 +10,13 @@ __pycache__
 *.log
 *.sqlite3
 node_modules
-npm-debug.log
-yarn-debug.log
-yarn-error.log
 uploads
 test_extractor.py
 run_url_extraction.py
 README.md
 .gitignore
 .gitattributes
+backend/__pycache__
+backend/app/**/__pycache__
+backend/tests
+backend/uploads

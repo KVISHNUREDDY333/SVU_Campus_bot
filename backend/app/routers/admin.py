@@ -9,6 +9,7 @@ from bson.objectid import ObjectId
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, HTTPException, UploadFile
 
 from ..core import config, database
+from ..utils.file_validator import save_and_validate_file
 from ..models.faq import (
     FAQModel,
     FAQRequest,
@@ -318,20 +319,12 @@ async def upload_document(
     file: UploadFile = File(...), current_user: User = Depends(get_current_admin_user)
 ):
 
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported")
-
     try:
-                                                              
-        project_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        )
-        upload_dir = os.path.join(project_root, "backend", "uploads")
+        upload_dir = config.Config.UPLOAD_DIR
         os.makedirs(upload_dir, exist_ok=True)
         file_path = os.path.join(upload_dir, file.filename)
 
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        await save_and_validate_file(file, file_path, allowed_extensions=['.pdf'])
 
         logger.debug(f"Ingesting PDF: {file.filename}")
         num_chunks, full_text = await ingest_pdf(
@@ -506,7 +499,7 @@ async def create_user(
 
     new_user = {
         "username": user_data.username,
-        "hashed_password": get_password_hash(user_data.password),
+        "password_hash": get_password_hash(user_data.password),
         "role": user_data.role,
         "created_at": datetime.utcnow(),
         "status": "active",
@@ -531,8 +524,8 @@ async def update_user_role(
             {"_id": ObjectId(user_id)}, {"$set": {"role": new_role}}
         )
         return {"status": "success", "message": f"User role updated to {new_role}"}
-    except:
-        raise HTTPException(status_code=400, detail="Invalid User ID")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid User ID: {str(e)}")
 
 @router.delete("/admin/users/{user_id}")
 async def delete_user(
@@ -548,8 +541,8 @@ async def delete_user(
     try:
         database.users_db.delete_one({"_id": ObjectId(user_id)})
         return {"status": "success", "message": "User deleted"}
-    except:
-        raise HTTPException(status_code=400, detail="Invalid User ID")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid User ID: {str(e)}")
 
 @router.post("/admin/cache/clear")
 async def clear_system_cache(current_user: User = Depends(get_current_admin_user)):
@@ -868,9 +861,16 @@ async def delete_location(loc_id: str, current_user: User = Depends(get_current_
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
 
+    if database.locations_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    result = database.locations_db.delete_one({"_id": ObjectId(loc_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Location not found")
+
     await notification_service.create_notification(
         title="Location Removed",
-        message=f"A campus location has been removed from the map.",
+        message="A campus location has been removed from the map.",
         notification_type="common",
     )
 

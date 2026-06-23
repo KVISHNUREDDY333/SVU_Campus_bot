@@ -1,18 +1,18 @@
 import logging
 import os
-import shutil
 from datetime import datetime
 
 from bson import ObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..core import database
+from ..core import Config, database
 from ..models.academic import StudyBuddyChatRequest, ZenRequest
 from ..models.user import User
 from ..routers.auth import get_current_user
 from ..services import rag_service
 from ..services.moderation import ModerationService
+from ..utils.file_validator import save_and_validate_file
 
 class StudyMaterialTextRequest(BaseModel):
     title: str
@@ -21,10 +21,7 @@ class StudyMaterialTextRequest(BaseModel):
 logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/study-buddy", tags=["Study Buddy"])
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-                                               
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
-UPLOAD_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, "uploads", "study_materials"))
+UPLOAD_DIR = os.path.join(Config.UPLOAD_DIR, "study_materials")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -146,8 +143,7 @@ async def upload_material(
     file: UploadFile = File(...), current_user: User = Depends(get_current_user)
 ):
     file_path = os.path.join(UPLOAD_DIR, f"{current_user.username}_{file.filename}")
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    await save_and_validate_file(file, file_path, allowed_extensions=['.pdf'])
 
     num_chunks = 0
     full_text = ""
