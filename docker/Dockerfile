@@ -18,6 +18,9 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Python dependencies ----
+# Install CPU-only PyTorch first to avoid downloading ~2GB of CUDA/Triton GPU libs
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -29,10 +32,12 @@ COPY frontend/ ./frontend/
 RUN mkdir -p /app/backend/uploads /app/uploads
 
 # ---- Security: non-root user ----
-EXPOSE 8000
+# ---- Default port (overridable via env) ----
+ENV PORT=8888
+EXPOSE 8888
 RUN adduser --uid 1001 --disabled-password --gecos "" appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
 # ---- Entry point ----
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn backend.main:app --host 0.0.0.0 --port $PORT
