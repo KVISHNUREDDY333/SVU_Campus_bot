@@ -1,10 +1,3 @@
-# ============================================
-# SVU Campus Bot — Single Container Deployment
-# ============================================
-# Build context must be the project root (.)
-# Usage:  docker build -f docker/Dockerfile -t svu-campus-bot .
-# ============================================
-
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -13,8 +6,8 @@ WORKDIR /app
 # cairo/pango for xhtml2pdf, pkg-config for pycairo build
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        gcc build-essential pkg-config \
-        libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-dev libffi-dev && \
+    gcc build-essential pkg-config \
+    libcairo2-dev libpango1.0-dev libgdk-pixbuf-2.0-dev libffi-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # ---- Python dependencies ----

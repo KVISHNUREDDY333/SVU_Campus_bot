@@ -148,6 +148,23 @@ function renderDocuments(docs) {
       badgeClass = "warning";
     }
 
+    let actionsHtml = `
+                    <button class="icon-btn" onclick="viewDocFaqs('${doc._id}', '${escapeHtml(doc.filename)}')" style="color: var(--accent-color);" title="View FAQs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>`;
+                    
+    if (doc.skipped_faqs && doc.skipped_faqs.length > 0) {
+        actionsHtml += `
+                    <button class="icon-btn" onclick="downloadSkippedFaqs('${doc._id}')" style="color: #f59e0b;" title="Download Skipped FAQs (JSON)">
+                        <i class="fa-solid fa-download"></i>
+                    </button>`;
+    }
+    
+    actionsHtml += `
+                    <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;" title="Delete Document">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>`;
+
     tbody.innerHTML += `
             <tr>
                 <td style="display: flex; align-items: center; gap: 8px;" title="${escapeHtml(doc.filename)}">
@@ -159,17 +176,39 @@ function renderDocuments(docs) {
                 <td style="text-align: center;">${doc.extracted_faqs || 0}</td>
                 <td style="text-align: center;" title="${escapeHtml(doc.uploaded_by || "Admin")}">${doc.uploaded_by || "Admin"}</td>
                 <td style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="icon-btn" onclick="viewDocFaqs('${doc._id}', '${escapeHtml(doc.filename)}')" style="color: var(--accent-color);" title="View FAQs">
-                        <i class="fa-solid fa-eye"></i>
-                    </button>
-                    <button class="icon-btn" onclick="deleteDocument('${doc._id}')" style="color: #ef4444;" title="Delete Document">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${actionsHtml}
                 </td>
             </tr>
         `;
   });
 
+}
+
+async function downloadSkippedFaqs(docId) {
+    try {
+        const res = await fetch(\`\${API_URL}/admin/documents/\${docId}/skipped-faqs\`, {
+            headers: { Authorization: \`Bearer \${ACCESS_TOKEN}\` }
+        });
+        if (!res.ok) throw new Error("Failed to fetch skipped FAQs");
+        
+        const data = await res.json();
+        if (!data.skipped_faqs || data.skipped_faqs.length === 0) {
+            CustomDialog.alert("No skipped FAQs found for this document.", "Info", "info");
+            return;
+        }
+
+        const blob = new Blob([JSON.stringify(data.skipped_faqs, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = \`skipped_faqs_\${data.filename || docId}.json\`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        CustomDialog.alert("Error downloading skipped FAQs: " + e.message, "Error", "error");
+    }
 }
 
 async function deleteDocument(docId) {

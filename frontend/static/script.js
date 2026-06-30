@@ -1668,10 +1668,24 @@ async function submitImportFaqs() {
     if (statusText) {
       statusText.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e;"></i> Done! ${data.imported || 0} imported, ${data.skipped || 0} skipped.`;
       statusText.style.color = "#22c55e";
+      
+      if (data.skipped > 0 && data.skipped_faqs && data.skipped_faqs.length > 0) {
+        let skippedHtml = `<div class="mt-15 bg-ghost p-12 rounded-8 border border-dashed border-red text-left" style="max-height: 150px; overflow-y: auto;">
+            <p class="text-xs font-bold text-red mb-8">Skipped FAQs (Likely Duplicates):</p>
+            <ul class="text-xs text-secondary pl-15" style="list-style: disc;">`;
+        data.skipped_faqs.forEach(s => {
+            skippedHtml += `<li class="mb-4">${escapeHtml(s.question)}</li>`;
+        });
+        skippedHtml += `</ul></div>`;
+        statusText.innerHTML += skippedHtml;
+      }
     }
 
     setTimeout(() => {
-      closeImportFaqsModal();
+      // Only close automatically if there are no skipped FAQs, so the user has time to read them.
+      if (!data.skipped || data.skipped === 0) {
+          closeImportFaqsModal();
+      }
       showStatusPopup(`${data.imported || 0} FAQs imported from '${sourceName}'!`);
       refreshAdminData();
     }, 2000);

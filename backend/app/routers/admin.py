@@ -290,10 +290,10 @@ async def add_text_document(
 
         from ..services.rag_service import process_and_refine_knowledge
 
-        inserted_count = await process_and_refine_knowledge(req.content, req.title)
+        inserted_count, skipped_faqs = await process_and_refine_knowledge(req.content, req.title)
 
         doc_record = {
-            "filename": req.title,                          
+            "filename": req.title,
             "uploaded_by": current_user.username,
             "uploaded_at": datetime.utcnow(),
             "last_modified": datetime.utcnow(),
@@ -301,6 +301,7 @@ async def add_text_document(
             "status": "active",
             "type": "text",
             "extracted_faqs": inserted_count,
+            "skipped_faqs": skipped_faqs,
             "content": req.content,
         }
         if database.documents_db is not None:
@@ -310,6 +311,7 @@ async def add_text_document(
             "status": "success",
             "message": f"Ingested text '{req.title}'",
             "faqs_extracted": inserted_count,
+            "skipped_faqs_count": len(skipped_faqs),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
@@ -334,7 +336,7 @@ async def upload_document(
 
         from ..services.rag_service import process_and_refine_knowledge
 
-        inserted_count = await process_and_refine_knowledge(full_text, file.filename)
+        inserted_count, skipped_faqs = await process_and_refine_knowledge(full_text, file.filename)
 
         doc_record = {
             "filename": file.filename,
@@ -345,6 +347,7 @@ async def upload_document(
             "status": "active",
             "type": "pdf",
             "extracted_faqs": inserted_count,
+            "skipped_faqs": skipped_faqs,
         }
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
@@ -370,7 +373,7 @@ async def add_url_document(
 
         from ..services.rag_service import process_and_refine_knowledge
 
-        inserted_count = await process_and_refine_knowledge(full_text, req.url)
+        inserted_count, skipped_faqs = await process_and_refine_knowledge(full_text, req.url)
 
         doc_record = {
             "filename": req.url,
@@ -381,6 +384,7 @@ async def add_url_document(
             "status": "active",
             "type": "url",
             "extracted_faqs": inserted_count,
+            "skipped_faqs": skipped_faqs,
         }
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
@@ -415,7 +419,7 @@ async def import_processed_faqs(
         from ..services.rag_service import ingest_faq as rag_ingest_faq
 
         inserted_count = 0
-        skipped_count = 0
+        skipped_faqs = []
         errors = []
 
         for i, faq_item in enumerate(req.faqs):
@@ -424,7 +428,7 @@ async def import_processed_faqs(
             category = faq_item.get("category", "General").strip()
 
             if not question or not answer:
-                skipped_count += 1
+                skipped_faqs.append({"question": question or f"Row {i+1}", "reason": "Missing question or answer"})
                 continue
 
             try:
@@ -437,7 +441,7 @@ async def import_processed_faqs(
                 if success:
                     inserted_count += 1
                 else:
-                    skipped_count += 1  # Likely a duplicate
+                    skipped_faqs.append({"question": question, "reason": "Duplicate or ingestion failed"})
             except Exception as e:
                 errors.append(f"FAQ #{i+1}: {str(e)}")
                 logger.error(f"Error importing FAQ #{i+1}: {e}")
@@ -452,19 +456,21 @@ async def import_processed_faqs(
             "status": "active",
             "type": "faq_import",
             "extracted_faqs": inserted_count,
+            "skipped_faqs": skipped_faqs,
         }
         if database.documents_db is not None:
             database.documents_db.insert_one(doc_record)
 
         logger.info(
-            f"[FAQ-IMPORT] {inserted_count} FAQs imported, {skipped_count} skipped from '{req.source_name}'"
+            f"[FAQ-IMPORT] {inserted_count} FAQs imported, {len(skipped_faqs)} skipped from '{req.source_name}'"
         )
 
         return {
             "status": "success",
             "message": f"Imported {inserted_count} FAQs from '{req.source_name}'",
             "imported": inserted_count,
-            "skipped": skipped_count,
+            "skipped": len(skipped_faqs),
+            "skipped_faqs": skipped_faqs,
             "errors": errors[:5] if errors else [],
         }
     except HTTPException:
@@ -747,6 +753,29 @@ async def get_document_faqs(
 
         return faqs
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/admin/documents/{doc_id}/skipped-faqs")
+async def get_document_skipped_faqs(
+    doc_id: str, current_user: User = Depends(get_current_admin_user)
+):
+    try:
+        from bson import ObjectId
+        if database.documents_db is None:
+            raise HTTPException(status_code=500, detail="Database unavailable")
+
+        doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        skipped_faqs = doc.get("skipped_faqs", [])
+        return {
+            "status": "success",
+            "filename": doc.get("filename"),
+            "skipped_faqs": skipped_faqs
+        }
+    except Exception as e:
+        logger.error(f"Error fetching skipped faqs for document {doc_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/admin/documents/{doc_id}")

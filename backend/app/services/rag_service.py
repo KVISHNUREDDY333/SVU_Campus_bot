@@ -677,23 +677,27 @@ async def process_and_refine_knowledge(text: str, source: str):
         refined_faqs = await refine_kb_data(raw_faqs, text)
 
         inserted_count = 0
+        skipped_faqs = []
         for faq in refined_faqs:
+            question = faq.get("question")
             success = await ingest_faq(
-                question=faq.get("question"),
+                question=question,
                 answer=faq.get("answer"),
                 category=faq.get("category", "General"),
                 source=source,
             )
             if success:
                 inserted_count += 1
+            else:
+                skipped_faqs.append({"question": question, "reason": "Duplicate or ingestion failed"})
 
         logger.info(
             f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}"
         )
-        return inserted_count
+        return inserted_count, skipped_faqs
     except Exception as e:
         logger.error(f"[AUTO-TRAIN] Error processing knowledge for {source}: {e}")
-        return 0
+        return 0, []
 
 async def ingest_url(url: str, store_vectors: bool = True):
     """
