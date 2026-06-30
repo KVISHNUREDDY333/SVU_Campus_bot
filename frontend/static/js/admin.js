@@ -244,11 +244,12 @@ function filterFAQs() {
 
   let filtered = allFaqsData;
   if (term) {
-    filtered = filtered.filter(
-      (f) =>
-        f.question.toLowerCase().includes(term) ||
-        f.answer.toLowerCase().includes(term),
-    );
+    filtered = filtered.filter((f) => {
+      const qMatch = f.question && f.question.toLowerCase().includes(term);
+      const aMatch = f.answer && f.answer.toLowerCase().includes(term);
+      const catMatch = f.category && f.category.toLowerCase().includes(term);
+      return qMatch || aMatch || catMatch;
+    });
   }
 
   currentFilteredFAQs = filtered;
@@ -469,18 +470,18 @@ async function viewSkippedFaqs(docId, filename) {
         
         faqs.forEach((faq, index) => {
           list.innerHTML += `
-            <div class="faq-card p-20 mb-15 rounded-12">
-                <div class="flex justify-between items-start mb-12">
-                    <h4 class="faq-q m-0 text-16 font-semibold text-primary pr-20" style="line-height: 1.4;">
-                        <span style="color: var(--accent-color); font-weight: 700;">Q:</span> ${escapeHtml(faq.question)}
-                    </h4>
-                </div>
-                <div class="faq-a text-15 text-secondary pl-24 border-l-2" style="border-color: var(--accent-color); line-height: 1.6;">
-                    <span style="color: var(--accent-color); font-weight: 600;">A:</span> ${escapeHtml(faq.answer)}
-                </div>
-                <div class="flex justify-between items-center mt-15 pt-15 border-t border-standard">
-                    <div class="flex items-center gap-10">
-                        <span class="badge success" style="text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">${escapeHtml(faq.category || "General")}</span>
+            <div class="faq-card-premium mb-15">
+                <div class="faq-display-mode">
+                    <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 8px; font-size: 15px; display: flex; align-items: flex-start; gap: 8px;">
+                        <span style="opacity: 0.6; flex-shrink: 0;">Q:</span>
+                        <span>${escapeHtml(faq.question)}</span>
+                    </div>
+                    <div style="color: var(--text-primary); line-height: 1.6; font-size: 14px; display: flex; align-items: flex-start; gap: 8px;">
+                        <span style="opacity: 0.6; flex-shrink: 0; font-weight: 600;">A:</span>
+                        <span>${escapeHtml(faq.answer)}</span>
+                    </div>
+                    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <span class="badge success" style="font-size: 9px; padding: 4px 10px; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(faq.category || "General")}</span>
                     </div>
                 </div>
             </div>
@@ -498,6 +499,9 @@ function closeSkippedFaqsModal() {
   const modal = document.getElementById("skipped-faqs-modal");
   if (modal) modal.classList.remove("active");
 }
+
+window.viewSkippedFaqs = viewSkippedFaqs;
+window.closeSkippedFaqsModal = closeSkippedFaqsModal;
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("download-skipped-btn");
