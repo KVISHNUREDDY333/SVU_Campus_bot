@@ -1,4 +1,8 @@
 async function sendMessage() {
+  if (window.speechSynthesis && window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    resetHighlighting();
+  }
   
   if (currentChatController) {
     console.warn("User cancelled generation early.");
@@ -196,13 +200,10 @@ async function deleteDocument(docId) {
 
 
 if (userInput) {
-  userInput.addEventListener("keypress", (e) => {
-    
+  userInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (!currentChatController) {
-        sendMessage();
-      }
+      sendMessage();
     }
   });
 }
