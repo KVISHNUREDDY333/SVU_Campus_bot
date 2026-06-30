@@ -1,5 +1,3 @@
-const API_URL = window.location.origin;
-console.log("Using API_URL:", API_URL);
 console.log("SVU Bot Script v11-DEBUG Loaded");
 
 const chatBox = document.getElementById("chat-box");
