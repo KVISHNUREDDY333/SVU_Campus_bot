@@ -429,3 +429,92 @@ function renderCharts(roleData, sentimentData) {
   });
 }
 
+
+let currentSkippedFaqs = [];
+
+async function viewSkippedFaqs(docId, filename) {
+  const modal = document.getElementById("skipped-faqs-modal");
+  if (modal) {
+    modal.classList.add("active");
+    
+    const subtitle = document.getElementById("skipped-faqs-subtitle");
+    if (subtitle) subtitle.textContent = `Source: ${filename}`;
+    
+    const countEl = document.getElementById("skipped-faqs-count");
+    const span = countEl ? countEl.querySelector("span") : null;
+    if (span) span.textContent = "Loading...";
+    
+    const list = document.getElementById("skipped-faqs-list");
+    const empty = document.getElementById("skipped-faqs-empty");
+    
+    list.innerHTML = "";
+    list.style.display = "none";
+    empty.style.display = "none";
+    
+    try {
+      const res = await fetch(`${API_URL}/admin/documents/${docId}/skipped-faqs`, {
+        headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch");
+      
+      const faqs = await res.json();
+      currentSkippedFaqs = faqs;
+      
+      if (faqs.length === 0) {
+        empty.style.display = "block";
+        if (span) span.textContent = "0 skipped FAQs";
+      } else {
+        list.style.display = "block";
+        if (span) span.textContent = `Showing ${faqs.length} skipped FAQs`;
+        
+        faqs.forEach((faq, index) => {
+          list.innerHTML += `
+            <div class="faq-card p-20 mb-15 rounded-12">
+                <div class="flex justify-between items-start mb-12">
+                    <h4 class="faq-q m-0 text-16 font-semibold text-primary pr-20" style="line-height: 1.4;">
+                        <span style="color: var(--accent-color); font-weight: 700;">Q:</span> ${escapeHtml(faq.question)}
+                    </h4>
+                </div>
+                <div class="faq-a text-15 text-secondary pl-24 border-l-2" style="border-color: var(--accent-color); line-height: 1.6;">
+                    <span style="color: var(--accent-color); font-weight: 600;">A:</span> ${escapeHtml(faq.answer)}
+                </div>
+                <div class="flex justify-between items-center mt-15 pt-15 border-t border-standard">
+                    <div class="flex items-center gap-10">
+                        <span class="badge success" style="text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px;">${escapeHtml(faq.category || "General")}</span>
+                    </div>
+                </div>
+            </div>
+          `;
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      showStatusPopup("Error loading skipped FAQs", true);
+    }
+  }
+}
+
+function closeSkippedFaqsModal() {
+  const modal = document.getElementById("skipped-faqs-modal");
+  if (modal) modal.classList.remove("active");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("download-skipped-btn");
+  if (btn) {
+    btn.addEventListener("click", () => {
+      if (!currentSkippedFaqs || currentSkippedFaqs.length === 0) {
+        showStatusPopup("No FAQs to download", true);
+        return;
+      }
+      
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentSkippedFaqs, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "skipped_faqs.json");
+      document.body.appendChild(downloadAnchorNode); 
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    });
+  }
+});

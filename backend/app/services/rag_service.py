@@ -671,7 +671,7 @@ async def process_and_refine_knowledge(text: str, source: str):
         raw_faqs = await extract_faqs_from_text(text)
         if not raw_faqs:
             logger.warning(f"[AUTO-TRAIN] No FAQs extracted from: {source}")
-            return 0
+            return 0, []
 
         logger.info(f"[AUTO-TRAIN] Refining {len(raw_faqs)} FAQs for: {source}")
         refined_faqs = await refine_kb_data(raw_faqs, text)
@@ -679,9 +679,8 @@ async def process_and_refine_knowledge(text: str, source: str):
         inserted_count = 0
         skipped_faqs = []
         for faq in refined_faqs:
-            question = faq.get("question")
             success = await ingest_faq(
-                question=question,
+                question=faq.get("question"),
                 answer=faq.get("answer"),
                 category=faq.get("category", "General"),
                 source=source,
@@ -689,7 +688,7 @@ async def process_and_refine_knowledge(text: str, source: str):
             if success:
                 inserted_count += 1
             else:
-                skipped_faqs.append({"question": question, "reason": "Duplicate or ingestion failed"})
+                skipped_faqs.append(faq)
 
         logger.info(
             f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}"

@@ -293,7 +293,7 @@ async def add_text_document(
         inserted_count, skipped_faqs = await process_and_refine_knowledge(req.content, req.title)
 
         doc_record = {
-            "filename": req.title,
+            "filename": req.title,                          
             "uploaded_by": current_user.username,
             "uploaded_at": datetime.utcnow(),
             "last_modified": datetime.utcnow(),
@@ -311,7 +311,6 @@ async def add_text_document(
             "status": "success",
             "message": f"Ingested text '{req.title}'",
             "faqs_extracted": inserted_count,
-            "skipped_faqs_count": len(skipped_faqs),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Text ingestion failed: {str(e)}")
@@ -419,6 +418,7 @@ async def import_processed_faqs(
         from ..services.rag_service import ingest_faq as rag_ingest_faq
 
         inserted_count = 0
+        skipped_count = 0
         skipped_faqs = []
         errors = []
 
@@ -428,7 +428,7 @@ async def import_processed_faqs(
             category = faq_item.get("category", "General").strip()
 
             if not question or not answer:
-                skipped_faqs.append({"question": question or f"Row {i+1}", "reason": "Missing question or answer"})
+                skipped_count += 1
                 continue
 
             try:
@@ -441,7 +441,8 @@ async def import_processed_faqs(
                 if success:
                     inserted_count += 1
                 else:
-                    skipped_faqs.append({"question": question, "reason": "Duplicate or ingestion failed"})
+                    skipped_count += 1  # Likely a duplicate
+                    skipped_faqs.append({"question": question, "answer": answer, "category": category})
             except Exception as e:
                 errors.append(f"FAQ #{i+1}: {str(e)}")
                 logger.error(f"Error importing FAQ #{i+1}: {e}")
@@ -462,15 +463,14 @@ async def import_processed_faqs(
             database.documents_db.insert_one(doc_record)
 
         logger.info(
-            f"[FAQ-IMPORT] {inserted_count} FAQs imported, {len(skipped_faqs)} skipped from '{req.source_name}'"
+            f"[FAQ-IMPORT] {inserted_count} FAQs imported, {skipped_count} skipped from '{req.source_name}'"
         )
 
         return {
             "status": "success",
             "message": f"Imported {inserted_count} FAQs from '{req.source_name}'",
             "imported": inserted_count,
-            "skipped": len(skipped_faqs),
-            "skipped_faqs": skipped_faqs,
+            "skipped": skipped_count,
             "errors": errors[:5] if errors else [],
         }
     except HTTPException:
@@ -759,24 +759,20 @@ async def get_document_faqs(
 async def get_document_skipped_faqs(
     doc_id: str, current_user: User = Depends(get_current_admin_user)
 ):
-    try:
-        from bson import ObjectId
-        if database.documents_db is None:
-            raise HTTPException(status_code=500, detail="Database unavailable")
+    if database.documents_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
 
+    from bson import ObjectId
+    try:
         doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        skipped_faqs = doc.get("skipped_faqs", [])
-        return {
-            "status": "success",
-            "filename": doc.get("filename"),
-            "skipped_faqs": skipped_faqs
-        }
+        skipped = doc.get("skipped_faqs", [])
+        return skipped
     except Exception as e:
-        logger.error(f"Error fetching skipped faqs for document {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error fetching skipped FAQs: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch skipped FAQs")
 
 @router.delete("/admin/documents/{doc_id}")
 async def delete_document(

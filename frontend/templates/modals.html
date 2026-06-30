@@ -1367,3 +1367,43 @@
         </div>
       </div>
     </div>
+    
+    <div id="skipped-faqs-modal" class="modal">
+      <div class="modal-content premium-modal faq-modal-container flex flex-col">
+        <div class="modal-header modal-header-orange-grad p-22-30 border-none flex-shrink-0">
+          <div class="flex items-center gap-15">
+             <div class="modal-header-icon modal-header-icon-trans">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+             </div>
+             <div>
+                <h3 class="modal-title-white modal-title-skipped">Skipped / Duplicate FAQs</h3>
+                <p id="skipped-faqs-subtitle" class="modal-subtitle-white modal-subtitle-skipped">Review FAQs that were skipped during ingestion</p>
+             </div>
+          </div>
+          <div class="ml-auto mr-20 flex gap-10 items-center">
+             <button id="download-skipped-btn" class="btn btn-primary btn-download-skipped">
+                <i class="fa-solid fa-download mr-8"></i> Download JSON
+             </button>
+             <button class="icon-btn text-white opacity-8 hover:opacity-10" onclick="closeSkippedFaqsModal()" title="Close">
+                <i class="fa-solid fa-times text-20"></i>
+             </button>
+          </div>
+        </div>
+        
+        <div class="modal-body p-30 flex-1 overflow-y-hidden flex flex-col bg-white dark:bg-card">
+            <div id="skipped-faqs-count" class="inline-flex items-center px-12 py-6 rounded-8 bg-ghost text-xs font-semibold text-secondary mb-15 flex-shrink-0 border-standard">
+                <i class="fa-solid fa-list-check mr-8 opacity-7"></i>
+                <span>Loading...</span>
+            </div>
+            
+            <div id="skipped-faqs-list" class="flex-1 overflow-y-auto pr-10">
+                
+            </div>
+             
+            <div id="skipped-faqs-empty" class="text-center p-40 hidden">
+                <i class="fa-solid fa-check-circle text-40 text-success-green opacity-7"></i>
+                <p class="mt-15 text-secondary font-medium">No skipped FAQs found for this document!</p>
+            </div>
+        </div>
+      </div>
+    </div>
