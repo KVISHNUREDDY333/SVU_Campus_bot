@@ -1,4 +1,4 @@
-﻿async function loadStudyBuddy() {
+async function loadStudyBuddy() {
   if (!ACCESS_TOKEN) return;
   const listEl = document.getElementById("study-materials-list");
   if (!listEl) return;
@@ -10,13 +10,16 @@
     if (res.ok) {
       const materials = await res.json();
       if (materials.length === 0) {
+        listEl.className = "mt-25 mb-10";
         listEl.innerHTML = `
-          <div class="p-60 text-center text-secondary bg-ghost rounded-24 border-dashed border-2 animate-fadeIn">
-            <i class="fa-solid fa-cloud-arrow-up text-40 mb-20 opacity-40 text-accent"></i>
-            <p class="font-bold text-xl text-primary mb-8 ls-neg-01">Your research archive is empty.</p>
-            <p class="text-md opacity-70 mb-25">Upload your first material to begin your high-fidelity analysis journey.</p>
-            <button class="btn-primary rounded-12 px-25 py-12 shadow-premium" onclick="openUploadModal('study')">
-              <i class="fa-solid fa-plus mr-8"></i> Begin Upload
+          <div class="premium-empty-state animate-fadeIn">
+            <div class="premium-empty-icon-wrapper">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <h3 class="premium-empty-state-title">Your research archive is empty</h3>
+            <p class="premium-empty-state-desc">Upload your first academic material (PDF) or add text notes to begin your high-fidelity analysis journey.</p>
+            <button class="premium-empty-state-btn" onclick="openUploadModal('study')">
+              <i class="fa-solid fa-plus"></i> Begin Upload
             </button>
           </div>`;
       } else {
