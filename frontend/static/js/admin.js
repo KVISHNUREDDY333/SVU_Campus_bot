@@ -142,9 +142,7 @@ async function viewDocFaqs(docId, filename) {
     if (modalTitle) modalTitle.textContent = "Extracted FAQs";
     if (modalSubtitle) modalSubtitle.textContent = `Source: ${filename}`;
 
-    const categoryFilter = document.getElementById("faq-category-filter");
     const searchInput = document.getElementById("faq-search-input");
-    if (categoryFilter) categoryFilter.value = "";
     if (searchInput) searchInput.value = "";
 
     await loadAllFAQs();
@@ -239,17 +237,12 @@ function renderAllFAQs(reset = false) {
 }
 
 function filterFAQs() {
-  const categoryFilter = document.getElementById("faq-category-filter");
   const searchInput = document.getElementById("faq-search-input");
-  if (!categoryFilter || !searchInput) return;
+  if (!searchInput) return;
 
-  const category = categoryFilter.value;
   const term = searchInput.value.toLowerCase().trim();
 
   let filtered = allFaqsData;
-  if (category) {
-    filtered = filtered.filter((f) => f.category === category);
-  }
   if (term) {
     filtered = filtered.filter(
       (f) =>
