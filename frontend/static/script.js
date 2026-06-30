@@ -1286,7 +1286,7 @@ function openUploadModal(target = "admin") {
   document.getElementById("upload-file").value = ""; 
   const label = document.getElementById("file-label-text");
   if (label) label.textContent = "Click to upload PDF";
-  document.getElementById("upload-progress").style.display = "none";
+  document.getElementById("upload-progress").classList.add("hidden");
 }
 
 function closeUploadModal() {
@@ -1305,7 +1305,7 @@ async function submitDocument() {
     return;
   }
 
-  progressDiv.style.display = "block";
+  progressDiv.classList.remove("hidden");
 
   if (currentUploadTarget === "study") {
     statusText.textContent =
@@ -1376,6 +1376,8 @@ async function submitDocument() {
 const urlModal = document.getElementById("url-modal");
 function openUrlModal() {
   if (urlModal) urlModal.classList.add("active");
+  const progressDiv = document.getElementById("url-progress");
+  if (progressDiv) progressDiv.classList.add("hidden");
 }
 function closeUrlModal() {
   if (urlModal) urlModal.classList.remove("active");
@@ -1392,7 +1394,7 @@ async function submitUrl() {
     return;
   }
 
-  progressDiv.style.display = "block";
+  progressDiv.classList.remove("hidden");
   statusText.textContent = "Scraping and processing (Extracting FAQs)...";
   statusText.style.color = "var(--accent-color)";
 
@@ -1409,7 +1411,7 @@ async function submitUrl() {
     if (!res.ok) throw new Error("Processing failed");
 
     const data = await res.json();
-    progressDiv.style.display = "none";
+    progressDiv.classList.add("hidden");
 
     statusText.textContent = `Success! ${data.faqs_extracted || 0} FAQs extracted.`;
 
@@ -1429,6 +1431,8 @@ async function submitUrl() {
 const textModal = document.getElementById("text-modal");
 function openTextModal() {
   if (textModal) textModal.classList.add("active");
+  const progressDiv = document.getElementById("text-progress");
+  if (progressDiv) progressDiv.classList.add("hidden");
 }
 function closeTextModal() {
   if (textModal) textModal.classList.remove("active");
@@ -1445,7 +1449,7 @@ async function submitText() {
     return;
   }
 
-  progressDiv.style.display = "block";
+  progressDiv.classList.remove("hidden");
   statusText.textContent = "Processing text (Extracting FAQs)...";
   statusText.style.color = "var(--accent-color)";
 
@@ -1476,7 +1480,7 @@ async function submitText() {
 
       document.getElementById("text-title").value = "";
       document.getElementById("text-content").value = "";
-      progressDiv.style.display = "none";
+      progressDiv.classList.add("hidden");
     }, 1500);
   } catch (e) {
     statusText.textContent = "Error: " + e.message;

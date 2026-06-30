@@ -488,6 +488,7 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
         "total_queries": 0,
         "active_users": 0,
         "total_documents": 0,
+        "total_faqs": 0,
         "role_distribution": {},
         "sentiment_stats": {"Positive": 0, "Neutral": 0, "Negative": 0},
     }
@@ -523,6 +524,11 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
             stats["total_documents"] = doc_count
         else:
             logger.critical("documents_db is None!")
+
+        if database.svu_vectors_db is not None:
+            faq_count = database.svu_vectors_db.count_documents({"type": "faq"})
+            logger.debug(f"Found {faq_count} FAQs in DB")
+            stats["total_faqs"] = faq_count
 
         return stats
 
@@ -773,6 +779,74 @@ async def get_document_skipped_faqs(
     except Exception as e:
         logger.error(f"Error fetching skipped FAQs: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch skipped FAQs")
+
+@router.delete("/admin/documents/{doc_id}/skipped-faqs/{index}")
+async def remove_skipped_faq(
+    doc_id: str, index: int, current_user: User = Depends(get_current_admin_user)
+):
+    if database.documents_db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from bson import ObjectId
+    try:
+        doc = database.documents_db.find_one({"_id": ObjectId(doc_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        skipped = doc.get("skipped_faqs", [])
+        if index < 0 or index >= len(skipped):
+            raise HTTPException(status_code=400, detail="Invalid index")
+
+        # Remove the skipped FAQ at the given index
+        skipped.pop(index)
+
+        update_data = {
+            "skipped_faqs": skipped,
+            "skipped_count": len(skipped),
+            "extracted_faqs": doc.get("extracted_faqs", 0) + 1
+        }
+
+        database.documents_db.update_one(
+            {"_id": ObjectId(doc_id)},
+            {"$set": update_data}
+        )
+
+        return {"status": "success", "message": "Skipped FAQ removed"}
+    except Exception as e:
+        logger.error(f"Error removing skipped FAQ: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove skipped FAQ")
+
+
+@router.get("/admin/faqs/search")
+async def search_faqs_admin(
+    query: str, limit: int = 50, current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Hybrid semantic and keyword search for FAQs for the admin dashboard.
+    """
+    from ..services.enhanced_faq_chatbot import FAQMatcher
+    
+    try:
+        matcher = FAQMatcher()
+        results = await matcher.find_relevant_faqs(query, limit=limit)
+        
+        # Map FAQMatcher output to match the format of /admin/faqs
+        mapped_results = []
+        for r in results:
+            mapped_results.append({
+                "id": str(r.get("faq_id", r.get("_id", ""))),
+                "question": r.get("question", ""),
+                "answer": r.get("answer", ""),
+                "category": r.get("category", "General"),
+                "source": r.get("source", "Hybrid Search"),
+                "match_confidence": r.get("match_confidence", 0.0)
+            })
+            
+        return {"status": "success", "faqs": mapped_results}
+    except Exception as e:
+        logger.error(f"Error searching FAQs: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
+
 
 @router.delete("/admin/documents/{doc_id}")
 async def delete_document(

@@ -32,6 +32,9 @@ async function loadDashboard() {
   const docCount = data.total_documents !== undefined ? data.total_documents : 0;
   setText("total-documents", docCount);
 
+  const faqCount = data.total_faqs !== undefined ? data.total_faqs : 0;
+  setText("total-faqs", faqCount);
+
   if (typeof renderCharts === "function") {
       renderCharts(data.role_distribution, data.sentiment_stats);
   }
@@ -59,6 +62,32 @@ async function loadDocuments() {
       renderDocuments(data);
   }
 }
+
+window.filterDocuments = function() {
+  const input = document.getElementById("admin-search-input");
+  if (!input || !window.allDocuments) return;
+  const term = input.value.toLowerCase().trim();
+  
+  if (!term) {
+    if (typeof renderDocuments === "function") renderDocuments(window.allDocuments);
+    return;
+  }
+  
+  const filtered = window.allDocuments.filter(doc => {
+    try {
+      const fn = String(doc.filename || "").toLowerCase();
+      const tp = String(doc.type || "").toLowerCase();
+      const ub = String(doc.uploaded_by || "admin").toLowerCase();
+      
+      return fn.includes(term) || tp.includes(term) || ub.includes(term);
+    } catch (e) {
+      console.error("Error filtering document:", e, doc);
+      return false;
+    }
+  });
+  
+  if (typeof renderDocuments === "function") renderDocuments(filtered);
+};
 
 /**
  * Global Helper to refresh all admin data tables and stats.
@@ -236,25 +265,66 @@ function renderAllFAQs(reset = false) {
   }
 }
 
-function filterFAQs() {
+let searchFAQTimeout = null;
+
+async function filterFAQs() {
   const searchInput = document.getElementById("faq-search-input");
   if (!searchInput) return;
 
   const term = searchInput.value.toLowerCase().trim();
 
-  let filtered = allFaqsData;
-  if (term) {
-    filtered = filtered.filter((f) => {
-      const qMatch = f.question && f.question.toLowerCase().includes(term);
-      const aMatch = f.answer && f.answer.toLowerCase().includes(term);
-      const catMatch = f.category && f.category.toLowerCase().includes(term);
-      return qMatch || aMatch || catMatch;
-    });
+  // Clear previous timeout
+  if (searchFAQTimeout) clearTimeout(searchFAQTimeout);
+
+  if (term.length < 3) {
+    // Revert to local filtering if term is short or empty
+    let filtered = allFaqsData;
+    if (term) {
+      filtered = filtered.filter((f) => {
+        const qMatch = f.question && f.question.toLowerCase().includes(term);
+        const aMatch = f.answer && f.answer.toLowerCase().includes(term);
+        const catMatch = f.category && f.category.toLowerCase().includes(term);
+        return qMatch || aMatch || catMatch;
+      });
+    }
+    currentFilteredFAQs = filtered;
+    renderAllFAQs(true);
+    updateFAQCount();
+    return;
   }
 
-  currentFilteredFAQs = filtered;
-  renderAllFAQs(true);
-  updateFAQCount();
+  // Use debounced API call for semantic + keyword search
+  searchFAQTimeout = setTimeout(async () => {
+    try {
+      const countEl = document.getElementById("faq-count");
+      if (countEl) {
+        countEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-8"></i><span>Running AI Search...</span>`;
+      }
+      
+      const res = await fetch(`${API_URL}/admin/faqs/search?query=${encodeURIComponent(term)}`, {
+        headers: { "Authorization": `Bearer ${ACCESS_TOKEN}` }
+      });
+      if (!res.ok) throw new Error("Search failed");
+      const data = await res.json();
+      currentFilteredFAQs = data.faqs || [];
+      renderAllFAQs(true);
+      
+      if (countEl) {
+        countEl.innerHTML = `<i class="fa-solid fa-bolt mr-8 opacity-7 text-primary"></i><span>Found ${currentFilteredFAQs.length} relevant FAQs</span>`;
+      }
+    } catch (err) {
+      console.error("FAQ Search Error:", err);
+      // Fallback to local filtering
+      let filtered = allFaqsData.filter((f) => {
+        const qMatch = f.question && f.question.toLowerCase().includes(term);
+        const aMatch = f.answer && f.answer.toLowerCase().includes(term);
+        return qMatch || aMatch;
+      });
+      currentFilteredFAQs = filtered;
+      renderAllFAQs(true);
+      updateFAQCount();
+    }
+  }, 400); // 400ms debounce
 }
 
 /**
@@ -432,10 +502,12 @@ function renderCharts(roleData, sentimentData) {
 
 
 let currentSkippedFaqs = [];
+let currentSkippedDocId = null;
 
 async function viewSkippedFaqs(docId, filename) {
   const modal = document.getElementById("skipped-faqs-modal");
   if (modal) {
+    currentSkippedDocId = docId;
     modal.classList.add("active");
     
     const subtitle = document.getElementById("skipped-faqs-subtitle");
@@ -470,8 +542,8 @@ async function viewSkippedFaqs(docId, filename) {
         
         faqs.forEach((faq, index) => {
           list.innerHTML += `
-            <div class="faq-card-premium mb-15">
-                <div class="faq-display-mode">
+            <div class="faq-card-premium mb-15" id="skipped-faq-${index}">
+                <div class="faq-display-mode" id="skipped-display-${index}">
                     <div style="font-weight: 700; color: var(--accent-color); margin-bottom: 8px; font-size: 15px; display: flex; align-items: flex-start; gap: 8px;">
                         <span style="opacity: 0.6; flex-shrink: 0;">Q:</span>
                         <span>${escapeHtml(faq.question)}</span>
@@ -480,8 +552,31 @@ async function viewSkippedFaqs(docId, filename) {
                         <span style="opacity: 0.6; flex-shrink: 0; font-weight: 600;">A:</span>
                         <span>${escapeHtml(faq.answer)}</span>
                     </div>
-                    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div style="margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border-color); display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
                         <span class="badge success" style="font-size: 9px; padding: 4px 10px; border-radius: 50px; text-transform: uppercase; letter-spacing: 0.5px;">${escapeHtml(faq.category || "General")}</span>
+                        <div class="flex gap-10">
+                            <button class="btn-ghost btn-small" onclick="editSkippedFaq(${index})"><i class="fa-solid fa-pen"></i> Edit</button>
+                            <button class="btn-primary btn-small rounded-10" onclick="importSkippedFaq(${index}, false)"><i class="fa-solid fa-file-import"></i> Import to DB</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="faq-edit-mode hidden" id="skipped-edit-${index}" style="margin-top: 10px;">
+                    <div class="mb-10">
+                        <label class="text-xs text-secondary mb-4 block">Question</label>
+                        <textarea id="skipped-q-${index}" class="admin-input text-sm" rows="2" style="width: 100%; border-radius: 8px;">${escapeHtml(faq.question)}</textarea>
+                    </div>
+                    <div class="mb-10">
+                        <label class="text-xs text-secondary mb-4 block">Answer</label>
+                        <textarea id="skipped-a-${index}" class="admin-input text-sm" rows="3" style="width: 100%; border-radius: 8px;">${escapeHtml(faq.answer)}</textarea>
+                    </div>
+                    <div class="mb-15">
+                        <label class="text-xs text-secondary mb-4 block">Category</label>
+                        <input id="skipped-c-${index}" class="admin-input text-sm" style="width: 100%; border-radius: 8px;" value="${escapeHtml(faq.category || "General")}" />
+                    </div>
+                    <div class="flex justify-end gap-10">
+                        <button class="btn-ghost btn-small" onclick="cancelEditSkippedFaq(${index})">Cancel</button>
+                        <button class="btn-primary btn-small rounded-10" onclick="importSkippedFaq(${index}, true)"><i class="fa-solid fa-check"></i> Save & Import</button>
                     </div>
                 </div>
             </div>
@@ -502,6 +597,94 @@ function closeSkippedFaqsModal() {
 
 window.viewSkippedFaqs = viewSkippedFaqs;
 window.closeSkippedFaqsModal = closeSkippedFaqsModal;
+
+window.editSkippedFaq = function(index) {
+  document.getElementById(`skipped-display-${index}`).style.display = "none";
+  document.getElementById(`skipped-edit-${index}`).classList.remove("hidden");
+};
+
+window.cancelEditSkippedFaq = function(index) {
+  document.getElementById(`skipped-display-${index}`).style.display = "block";
+  document.getElementById(`skipped-edit-${index}`).classList.add("hidden");
+};
+
+window.importSkippedFaq = async function(index, useEditedValues = false) {
+  const faq = currentSkippedFaqs[index];
+  if (!faq) return;
+
+  const q = useEditedValues ? document.getElementById(`skipped-q-${index}`).value.trim() : faq.question;
+  const a = useEditedValues ? document.getElementById(`skipped-a-${index}`).value.trim() : faq.answer;
+  const c = useEditedValues ? document.getElementById(`skipped-c-${index}`).value.trim() : (faq.category || "General");
+
+  if (!q || !a) {
+    if (typeof CustomDialog !== "undefined") {
+      CustomDialog.alert("Question and Answer are required.", "Error", "error");
+    } else {
+      alert("Question and Answer are required.");
+    }
+    return;
+  }
+
+  const card = document.getElementById(`skipped-faq-${index}`);
+  if (card) {
+    card.style.opacity = "0.5";
+    card.style.pointerEvents = "none";
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/admin/faqs`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${ACCESS_TOKEN}` 
+      },
+      body: JSON.stringify({ question: q, answer: a, category: c })
+    });
+
+    if (!res.ok) throw new Error("Failed to import FAQ");
+    
+    // Call endpoint to remove from skipped_faqs array in the document
+    if (currentSkippedDocId) {
+      try {
+        await fetch(`${API_URL}/admin/documents/${currentSkippedDocId}/skipped-faqs/${index}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${ACCESS_TOKEN}` }
+        });
+      } catch (removeErr) {
+        console.error("Failed to remove skipped FAQ from doc:", removeErr);
+      }
+    }
+    
+    if (typeof showStatusPopup !== "undefined") {
+      showStatusPopup("FAQ Imported successfully!");
+    } else {
+      alert("FAQ Imported successfully!");
+    }
+    
+    if (typeof refreshAdminData === "function") {
+      refreshAdminData();
+    }
+    
+    // Re-fetch the list to prevent index mismatches
+    if (currentSkippedDocId) {
+       const subtitle = document.getElementById("skipped-faqs-subtitle");
+       const filename = subtitle ? subtitle.textContent.replace("Source: ", "") : "Document";
+       await viewSkippedFaqs(currentSkippedDocId, filename);
+    }
+    
+  } catch (err) {
+    console.error(err);
+    if (typeof showStatusPopup !== "undefined") {
+      showStatusPopup("Error importing FAQ", true);
+    } else {
+      alert("Error importing FAQ");
+    }
+    if (card) {
+      card.style.opacity = "1";
+      card.style.pointerEvents = "auto";
+    }
+  }
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   const btn = document.getElementById("download-skipped-btn");
