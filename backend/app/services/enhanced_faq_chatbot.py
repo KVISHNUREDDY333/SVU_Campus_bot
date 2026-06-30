@@ -313,6 +313,14 @@ class ResponseSizer:
                 "eligibility",
             ]
         )
+        table_query = any(
+            text in normalized_query
+            for text in [
+                "fee", "fees", "structure", "schedule", "dates", "eligibility",
+                "cutoff", "cut off", "salary", "placement", "rank", "marks",
+                "compare", "comparison", "difference", "vs", "versus",
+            ]
+        )
 
         short_fact_query = len(tokens) <= 7 and any(
             normalized_query.startswith(prefix)
@@ -343,6 +351,7 @@ class ResponseSizer:
             "structure": selected["structure"],
             "include_steps": process_query,
             "include_list": list_query or comparison_query,
+            "prefer_table": table_query,
         }
 
 class FAQResponseGenerator:
@@ -398,6 +407,7 @@ class FAQResponseGenerator:
         word_count = config.get("word_count", 100)
         include_steps = config.get("include_steps", False)
         include_list = config.get("include_list", False)
+        prefer_table = config.get("prefer_table", False)
 
         size_instructions = {
             "small": "Answer in 1-2 sentences only.",
@@ -410,32 +420,42 @@ class FAQResponseGenerator:
             "structured": "Use short sections or bullets only when they help readability.",
         }
 
-        return f"""You are refining an answer for the main SVU chatbot using FAQ data from the database.
+        return f"""You are the Official Academic Assistant for Sri Venkateswara University (SVU).
+Your job is to deliver the BEST possible answer using the FAQ data retrieved from the university database.
 
 Language Rule: {language_instruction}
 
 User Question: {query}
 
-FAQ Content:
+Retrieved FAQ Data from Database:
 {faq_content}
 
 Additional Context:
 {context or "None"}
 
-Response Requirements:
-1. Size: {size_instructions[size]}
-2. Structure: {structure_instructions[structure]}
-3. Include steps: {"Yes, but only if the question asks for a process." if include_steps else "No step-by-step explanation unless essential."}
-4. Include list formatting: {"Yes, but only if it makes the answer clearer." if include_list else "No unnecessary bullets or lists."}
+RESPONSE FORMAT SELECTION (Choose the BEST format for this answer):
+- **📊 TABLE**: Use a Markdown table when the data involves fees, dates, comparisons, eligibility criteria, schedules, or any structured numerical/categorical data.
+- **📋 BULLET POINTS**: Use bullet points when listing facilities, requirements, documents needed, rules, or multiple distinct items.
+- **🔢 NUMBERED STEPS**: Use numbered lists when explaining a process, procedure, or step-by-step instructions (e.g., admission process, application steps).
+- **📝 PARAGRAPH**: Use a concise paragraph for simple factual questions, definitions, or single-point answers.
+- **🔀 MIXED**: Combine formats when the answer has both factual overview AND structured data.
 
-Quality Standards:
-- Use only the FAQ content to answer.
-- Do not add background, importance, recommendations, warnings, or extra explanation unless the user asked.
-- Do not say "it is important because", "it is recommended", or similar filler.
-- Keep the answer simple, relevant, true, accurate, and complete only to the needed level.
-- If the FAQ does not contain the answer, say that briefly.
+Response Size Guide:
+- {size_instructions[size]}
+- {structure_instructions[structure]}
+{"- Include clear step-by-step instructions since the user is asking about a process." if include_steps else ""}
+{"- Use structured list or table format since the user is asking for enumerable information." if include_list else ""}
+{"- ⚠️ STRONGLY PREFER TABLE FORMAT: This query involves structured data (fees/dates/eligibility/comparisons). Use a Markdown table as the primary format." if prefer_table else ""}
 
-Return only the final answer."""
+QUALITY STANDARDS (MANDATORY):
+1. **FACTUAL ACCURACY**: Use ONLY the FAQ data provided. Never hallucinate or invent information.
+2. **PROFESSIONAL TONE**: Authoritative yet student-friendly. Represent SVU with dignity.
+3. **BOLD KEY TERMS**: Use **bold** for important names, dates, amounts, and critical terms.
+4. **COMPLETENESS**: Answer every aspect the user asked about using the available data.
+5. **NO FILLER**: Do not add background explanations, generic advice, importance statements, or motivational text unless explicitly asked.
+6. **DIRECT START**: Begin directly with the answer. No preamble like "Sure!" or "Great question!".
+
+Return ONLY the final polished answer."""
 
 class EnhancedFAQChatbot:
     """FAQ-first chatbot for the main chat experience."""
@@ -570,27 +590,28 @@ class EnhancedFAQChatbot:
         language_instruction: str,
     ) -> str:
         try:
-            prompt = f"""Clean this chatbot answer before sending it to the user.
+            prompt = f"""Polish this university chatbot answer before delivery.
 
 Language Rule: {language_instruction}
 
 User Query:
 {query}
 
-FAQ Context:
+FAQ Context (Source of Truth):
 {faq_context}
 
 Current Answer:
 {response}
 
-Rules:
-- Keep the same meaning and stay grounded in the FAQ context.
-- Keep the answer size as {config.get("size", "medium")} with about {config.get("word_count", 100)} words maximum.
-- Remove filler, repetition, background explanation, and unnecessary advice.
-- Keep it simple, relevant, accurate, and well organized.
-- Do not add any new facts.
+POLISHING RULES:
+1. PRESERVE ALL FORMATTING: Keep tables, bullet points, numbered lists, and bold text exactly as they are. Do NOT convert tables to paragraphs or vice versa.
+2. FACTUAL GROUNDING: Ensure every fact matches the FAQ Context. Remove anything not supported by the data.
+3. SIZE TARGET: Keep the answer {config.get("size", "medium")} (~{config.get("word_count", 100)} words). Trim only filler and redundancy.
+4. REMOVE FILLER: Cut phrases like "it is important to note", "please remember", "as mentioned earlier", generic warnings, and motivational text.
+5. DIRECT START: The answer must begin directly with the information. No greeting or preamble.
+6. PROFESSIONAL TONE: Maintain SVU's authoritative yet friendly tone.
 
-Return only the cleaned answer."""
+Return ONLY the polished answer with all original formatting preserved."""
 
             response_obj = await self.refiner_llm.ainvoke(prompt)
             return (

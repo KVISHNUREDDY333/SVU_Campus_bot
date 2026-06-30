@@ -34,7 +34,7 @@ class ResponseRefiner:
         if not raw_response or len(raw_response.strip()) < 10:
             return raw_response
 
-        refine_prompt = f"""You are an academic response editor. Clean the response without adding extra content.
+        refine_prompt = f"""You are an academic response editor for Sri Venkateswara University's official chatbot.
 
 **Original User Query**: {original_query}
 
@@ -42,20 +42,19 @@ class ResponseRefiner:
 {raw_response}
 
 **Refinement Guidelines**:
-1. **Grammar & Clarity**: Fix any grammatical errors, awkward phrasing, or unclear sentences.
-2. **Keep Size Appropriate**: Preserve the original answer length as much as possible. Do not expand a short answer into a long explanation.
-3. **Tone**: Keep the response simple, relevant, accurate, and professional.
-4. **Conciseness**: Remove redundancy and filler.
-5. **Formatting**:
-   - Use plain text or short bullets only when helpful
-   - Keep formatting minimal
-   - Avoid unnecessary headings or tables
+1. **Grammar & Clarity**: Fix grammatical errors, awkward phrasing, or unclear sentences.
+2. **PRESERVE FORMATTING**: Keep all tables, bullet points, numbered lists, bold text, and headings intact. Do NOT flatten tables into paragraphs.
+3. **Size Preservation**: Maintain the original answer length. Do not expand a short answer or compress a detailed one.
+4. **Tone**: Professional, factual, and student-friendly.
+5. **Remove Filler**: Cut generic advice, motivational text, and phrases like "it is important", "please note", "it is recommended" unless directly relevant.
+6. **Direct Start**: The response must begin with the answer, not with "Sure!", "Great question!", or similar preamble.
+7. **Bold Key Terms**: Ensure important names, dates, fees, and deadlines are in **bold**.
 
 **Output Requirements**:
-- Return ONLY the refined response, no explanations or meta-commentary
+- Return ONLY the refined response
 - Maintain all factual information from the original
-- Do not add new facts, background explanation, or generic advice
-- Ensure the response directly answers the user's query
+- Do not add new facts or unsupported claims
+- Preserve all Markdown formatting (tables, lists, bold, headings)
 
 Refined Response:"""
 

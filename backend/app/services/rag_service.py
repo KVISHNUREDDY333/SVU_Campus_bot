@@ -615,12 +615,21 @@ Cleaned Context (Knowledge Base):
 
 User Request: {message}
 
+--- RESPONSE FORMAT SELECTION ---
+Choose the BEST format for this answer based on the data and question:
+- **TABLE**: For fees, dates, comparisons, eligibility, schedules, or structured data → use a Markdown table.
+- **BULLET POINTS**: For facilities, requirements, documents, rules, or multiple items → use bullet points.
+- **NUMBERED STEPS**: For processes, procedures, or how-to instructions → use numbered lists.
+- **PARAGRAPH**: For simple factual questions or single-point answers → use a concise paragraph.
+- **MIXED**: When the answer needs both overview text AND structured data → combine formats.
+
 --- CRITICAL QUALITY RULES ---
-1. **ACCURACY & FACTUALITY**: Mentally cross-verify every detail. Only output correct, reliable academic information.
+1. **ACCURACY & FACTUALITY**: Only output what is confirmed by the Knowledge Base context above. Zero hallucination.
 2. **SAFETY FIRST**: If the request is non-educational or harmful, use the Rejection Response.
-3. **STYLE**: Keep the answer simple, relevant, and directly useful. Do not add unnecessary explanation.
-4. **LENGTH CONTROL**: If the question needs a short factual answer, answer in 1-2 sentences. Give longer detail only when the question asks for it.
-5. **ZERO HALLUCINATION**: Only state what is confirmed by context or verified academic knowledge (GK).
+3. **DIRECT START**: Begin immediately with the answer. No preamble like "Sure!" or "Great question!".
+4. **BOLD KEY TERMS**: Use **bold** for important names, dates, fees, and critical information.
+5. **LENGTH CONTROL**: Short factual answers in 1-2 sentences. Detailed answers only when the question demands it.
+6. **NO FILLER**: Do not add generic advice, motivational text, or unnecessary background explanations.
 """
 
             response = await smart_llm.ainvoke(master_prompt)
