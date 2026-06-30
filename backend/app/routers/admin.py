@@ -393,6 +393,86 @@ async def add_url_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"URL ingestion failed: {str(e)}")
 
+class ImportFAQsRequest(pydantic.BaseModel):
+    source_name: str
+    faqs: list  # List of dicts with 'question', 'answer', optional 'category', 'keywords'
+
+@router.post("/admin/import-faqs")
+async def import_processed_faqs(
+    req: ImportFAQsRequest, current_user: User = Depends(get_current_admin_user)
+):
+    """
+    Import pre-processed FAQs directly into the database.
+    No LLM is used — FAQs are stored as-is with embeddings generated for vector search.
+    """
+    try:
+        if not req.faqs:
+            raise HTTPException(status_code=400, detail="No FAQs provided")
+
+        if not req.source_name or not req.source_name.strip():
+            raise HTTPException(status_code=400, detail="Source name is required")
+
+        from ..services.rag_service import ingest_faq as rag_ingest_faq
+
+        inserted_count = 0
+        skipped_count = 0
+        errors = []
+
+        for i, faq_item in enumerate(req.faqs):
+            question = faq_item.get("question", "").strip()
+            answer = faq_item.get("answer", "").strip()
+            category = faq_item.get("category", "General").strip()
+
+            if not question or not answer:
+                skipped_count += 1
+                continue
+
+            try:
+                success = await rag_ingest_faq(
+                    question=question,
+                    answer=answer,
+                    category=category,
+                    source=req.source_name.strip(),
+                )
+                if success:
+                    inserted_count += 1
+                else:
+                    skipped_count += 1  # Likely a duplicate
+            except Exception as e:
+                errors.append(f"FAQ #{i+1}: {str(e)}")
+                logger.error(f"Error importing FAQ #{i+1}: {e}")
+
+        # Create a document record for tracking in the Knowledge Base table
+        doc_record = {
+            "filename": req.source_name.strip(),
+            "uploaded_by": current_user.username,
+            "uploaded_at": datetime.utcnow(),
+            "last_modified": datetime.utcnow(),
+            "chunks": 0,
+            "status": "active",
+            "type": "faq_import",
+            "extracted_faqs": inserted_count,
+        }
+        if database.documents_db is not None:
+            database.documents_db.insert_one(doc_record)
+
+        logger.info(
+            f"[FAQ-IMPORT] {inserted_count} FAQs imported, {skipped_count} skipped from '{req.source_name}'"
+        )
+
+        return {
+            "status": "success",
+            "message": f"Imported {inserted_count} FAQs from '{req.source_name}'",
+            "imported": inserted_count,
+            "skipped": skipped_count,
+            "errors": errors[:5] if errors else [],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"FAQ Import Error: {e}")
+        raise HTTPException(status_code=500, detail=f"FAQ import failed: {str(e)}")
+
 @router.get("/dashboard-stats")
 async def get_dashboard_stats(current_user: User = Depends(get_current_admin_user)):
 

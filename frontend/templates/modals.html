@@ -532,6 +532,124 @@
       </div>
     </div>
 
+    <div id="import-faqs-modal" class="modal">
+      <div class="modal-content premium-modal max-w-650">
+        <div
+          class="modal-header modal-header-amber"
+        >
+          <div class="flex items-center gap-15">
+            <div
+              class="modal-header-icon"
+            >
+              <i class="fa-solid fa-file-import"></i>
+            </div>
+            <div>
+              <h3
+                class="modal-title-white"
+              >
+                Import Pre-Processed FAQs
+              </h3>
+              <p
+                class="modal-subtitle-white"
+              >
+                Upload a JSON file with ready-to-store FAQ pairs — no LLM processing
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body p-30">
+          <div class="form-group mb-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-tag icon-accent"></i>
+              Source Name / Label
+            </label>
+            <input
+              type="text"
+              id="import-faq-source"
+              class="input-premium"
+              placeholder="e.g., admissions_faqs_2025, hostel_rules"
+            />
+            <p class="text-xs text-secondary mt-6 opacity-8">
+              This label will be used to group and track the imported FAQs in the Knowledge Base.
+            </p>
+          </div>
+
+          <div class="form-group mb-20">
+            <label class="label-premium">
+              <i class="fa-solid fa-file-code icon-accent"></i>
+              FAQ JSON File
+            </label>
+            <div class="file-drop-zone import-faq-drop-zone" id="faq-json-drop-zone">
+              <input
+                type="file"
+                id="import-faq-file"
+                accept=".json"
+                hidden
+                onchange="handleFaqFileSelect(this)"
+              />
+              <label for="import-faq-file">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span id="faq-file-label-text">Click or drag to upload JSON file</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="import-faq-preview" class="hidden">
+            <div class="glass-panel p-16 rounded-12">
+              <div class="flex items-center gap-12 mb-12">
+                <i class="fa-solid fa-list-check text-accent"></i>
+                <span class="font-bold text-primary text-sm">File Preview</span>
+                <span id="import-faq-count" class="badge success ml-auto">0 FAQs</span>
+              </div>
+              <div id="import-faq-sample" class="text-xs text-secondary lh-1-6 overflow-y-auto max-h-150 bg-ghost rounded-8 p-12"></div>
+            </div>
+          </div>
+
+          <div class="import-faq-format-hint mt-20">
+            <details class="text-xs text-secondary">
+              <summary class="cursor-pointer font-bold text-accent mb-8 flex items-center gap-6">
+                <i class="fa-solid fa-circle-info"></i> Expected JSON Format
+              </summary>
+              <pre class="bg-ghost rounded-8 p-12 overflow-x-auto text-xs lh-1-6"><code>[
+  {
+    "question": "What is the hostel fee?",
+    "answer": "The hostel fee is ₹5000 per semester.",
+    "category": "Hostels"
+  },
+  {
+    "question": "How to apply for admission?",
+    "answer": "Visit svuniversity.edu.in and fill the online form.",
+    "category": "Admissions"
+  }
+]</code></pre>
+            </details>
+          </div>
+
+          <div id="import-faq-progress" class="mt-15 hidden">
+            <div class="progress-container-xs">
+              <div id="import-faq-bar" class="progress-bar-amber"></div>
+            </div>
+            <p
+              id="import-faq-status"
+              class="text-sm text-center mt-10 text-accent font-medium"
+            >
+              <i class="fa-solid fa-circle-notch fa-spin"></i> Importing FAQs...
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-standard">
+          <button class="btn-ghost btn-small px-24" onclick="closeImportFaqsModal()">Cancel</button>
+          <button
+            class="btn-primary btn-small px-24 rounded-10 bg-amber border-none"
+            onclick="submitImportFaqs()"
+            id="import-faq-submit-btn"
+          >
+            <i class="fa-solid fa-database"></i> Import to Database
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="auth-overlay" class="auth-overlay flex justify-center items-center">
         <div class="auth-wrapper">
             <div class="sliding-container relative" id="container">

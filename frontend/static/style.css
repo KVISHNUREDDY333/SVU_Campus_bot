@@ -4700,6 +4700,35 @@ body.dark-mode .mobile-menu-btn:hover {
 .shadow-blue { box-shadow: 0 4px 10px rgba(59, 130, 246, 0.25) !important; }
 .bg-red { background: #ef4444 !important; }
 .bg-blue { background: #3b82f6 !important; }
+.bg-amber { background: linear-gradient(135deg, #f59e0b, #d97706) !important; }
+.shadow-amber { box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3) !important; }
+.max-w-650 { max-width: 650px !important; }
+.max-h-150 { max-height: 150px !important; }
+.mt-6 { margin-top: 6px !important; }
+.lh-1-6 { line-height: 1.6 !important; }
+.cursor-pointer { cursor: pointer !important; }
+.overflow-x-auto { overflow-x: auto !important; }
+
+/* Import FAQs Progress Bar */
+.progress-bar-amber {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+  border-radius: 8px;
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+/* Import FAQs Drop Zone Enhancements */
+.import-faq-drop-zone.drag-over {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.05) !important;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15) !important;
+}
+
+.import-faq-drop-zone.file-selected {
+  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.04) !important;
+}
 .bg-dark-slate { background: #1e293b !important; }
 .bg-ghost { background: rgba(0, 0, 0, 0.03) !important; }
 .bg-emerald-light { background: rgba(16, 185, 129, 0.1) !important; border: 1px solid rgba(16, 185, 129, 0.2) !important; }

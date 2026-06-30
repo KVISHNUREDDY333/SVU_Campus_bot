@@ -1,4 +1,4 @@
-﻿const API_URL = window.location.origin;
+const API_URL = window.location.origin;
 console.log("Using API_URL:", API_URL);
 console.log("SVU Bot Script v11-DEBUG Loaded");
 
@@ -1483,6 +1483,211 @@ async function submitText() {
   } catch (e) {
     statusText.textContent = "Error: " + e.message;
     statusText.style.color = "#ef4444";
+  }
+}
+
+// ─── Import Pre-Processed FAQs (No LLM) ───
+let importFaqsParsedData = null;
+
+function openImportFaqsModal() {
+  const modal = document.getElementById("import-faqs-modal");
+  if (!modal) return;
+  modal.classList.add("active");
+
+  // Reset state
+  importFaqsParsedData = null;
+  const sourceInput = document.getElementById("import-faq-source");
+  const fileInput = document.getElementById("import-faq-file");
+  const fileLabel = document.getElementById("faq-file-label-text");
+  const preview = document.getElementById("import-faq-preview");
+  const progress = document.getElementById("import-faq-progress");
+  const dropZone = document.getElementById("faq-json-drop-zone");
+
+  if (sourceInput) sourceInput.value = "";
+  if (fileInput) fileInput.value = "";
+  if (fileLabel) fileLabel.textContent = "Click or drag to upload JSON file";
+  if (preview) preview.classList.add("hidden");
+  if (progress) progress.classList.add("hidden");
+  if (dropZone) dropZone.classList.remove("file-selected");
+
+  // Setup drag-and-drop
+  if (dropZone && !dropZone._dndSetup) {
+    dropZone._dndSetup = true;
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("drag-over");
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith(".json")) {
+        const fileInput = document.getElementById("import-faq-file");
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+        handleFaqFileSelect(fileInput);
+      }
+    });
+  }
+}
+
+function closeImportFaqsModal() {
+  const modal = document.getElementById("import-faqs-modal");
+  if (modal) modal.classList.remove("active");
+  importFaqsParsedData = null;
+}
+
+function handleFaqFileSelect(input) {
+  const file = input.files[0];
+  const fileLabel = document.getElementById("faq-file-label-text");
+  const preview = document.getElementById("import-faq-preview");
+  const countBadge = document.getElementById("import-faq-count");
+  const sampleDiv = document.getElementById("import-faq-sample");
+  const dropZone = document.getElementById("faq-json-drop-zone");
+
+  if (!file) {
+    if (fileLabel) fileLabel.textContent = "Click or drag to upload JSON file";
+    if (preview) preview.classList.add("hidden");
+    if (dropZone) dropZone.classList.remove("file-selected");
+    importFaqsParsedData = null;
+    return;
+  }
+
+  if (fileLabel)
+    fileLabel.innerHTML = `<span class="file-name-display"><i class="fa-solid fa-file-code"></i> ${escapeHtml(file.name)}</span>`;
+  if (dropZone) dropZone.classList.add("file-selected");
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      let parsed = JSON.parse(e.target.result);
+
+      // Support both array format and { faqs: [...] } format
+      if (parsed && !Array.isArray(parsed) && Array.isArray(parsed.faqs)) {
+        parsed = parsed.faqs;
+      }
+
+      if (!Array.isArray(parsed)) {
+        throw new Error("JSON must be an array of FAQ objects");
+      }
+
+      // Validate structure
+      const validFaqs = parsed.filter(
+        (f) => f.question && f.answer && typeof f.question === "string" && typeof f.answer === "string",
+      );
+
+      if (validFaqs.length === 0) {
+        throw new Error("No valid FAQs found. Each item needs 'question' and 'answer' fields.");
+      }
+
+      importFaqsParsedData = validFaqs;
+
+      if (countBadge) countBadge.textContent = `${validFaqs.length} FAQs`;
+      if (sampleDiv) {
+        const sampleItems = validFaqs.slice(0, 3);
+        sampleDiv.innerHTML = sampleItems
+          .map(
+            (f, i) =>
+              `<div style="margin-bottom: 8px; padding-bottom: 8px; ${i < sampleItems.length - 1 ? "border-bottom: 1px dashed var(--border-color);" : ""}">
+                  <div style="font-weight: 600; color: var(--accent-color); margin-bottom: 2px;">Q: ${escapeHtml(f.question.substring(0, 100))}${f.question.length > 100 ? "..." : ""}</div>
+                  <div style="color: var(--text-secondary);">A: ${escapeHtml(f.answer.substring(0, 120))}${f.answer.length > 120 ? "..." : ""}</div>
+                  ${f.category ? `<span class="badge success" style="font-size: 9px; margin-top: 4px; padding: 2px 8px;">${escapeHtml(f.category)}</span>` : ""}
+              </div>`,
+          )
+          .join("");
+
+        if (validFaqs.length > 3) {
+          sampleDiv.innerHTML += `<div style="text-align: center; color: var(--accent-color); font-weight: 600; padding-top: 4px;">+ ${validFaqs.length - 3} more FAQs...</div>`;
+        }
+      }
+
+      if (preview) preview.classList.remove("hidden");
+
+      if (parsed.length !== validFaqs.length) {
+        showStatusPopup(`${parsed.length - validFaqs.length} items skipped (missing question/answer).`);
+      }
+    } catch (err) {
+      importFaqsParsedData = null;
+      if (preview) preview.classList.add("hidden");
+      if (fileLabel)
+        fileLabel.innerHTML = `<span style="color: #ef4444;"><i class="fa-solid fa-triangle-exclamation"></i> Invalid JSON: ${escapeHtml(err.message)}</span>`;
+      if (dropZone) dropZone.classList.remove("file-selected");
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function submitImportFaqs() {
+  const sourceName = document.getElementById("import-faq-source")?.value.trim();
+  const progressDiv = document.getElementById("import-faq-progress");
+  const statusText = document.getElementById("import-faq-status");
+  const progressBar = document.getElementById("import-faq-bar");
+  const submitBtn = document.getElementById("import-faq-submit-btn");
+
+  if (!sourceName) {
+    await CustomDialog.alert("Please provide a source name/label for these FAQs.", "Source Required", "warning");
+    return;
+  }
+
+  if (!importFaqsParsedData || importFaqsParsedData.length === 0) {
+    await CustomDialog.alert("Please upload a valid JSON file with FAQs first.", "File Required", "warning");
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (progressDiv) progressDiv.classList.remove("hidden");
+  if (progressBar) progressBar.style.width = "30%";
+  if (statusText)
+    statusText.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Importing ${importFaqsParsedData.length} FAQs directly to database...`;
+
+  try {
+    const res = await fetch(`${API_URL}/admin/import-faqs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({
+        source_name: sourceName,
+        faqs: importFaqsParsedData,
+      }),
+    });
+
+    if (progressBar) progressBar.style.width = "90%";
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Import failed");
+    }
+
+    const data = await res.json();
+
+    if (progressBar) progressBar.style.width = "100%";
+    if (statusText) {
+      statusText.innerHTML = `<i class="fa-solid fa-check-circle" style="color: #22c55e;"></i> Done! ${data.imported || 0} imported, ${data.skipped || 0} skipped.`;
+      statusText.style.color = "#22c55e";
+    }
+
+    setTimeout(() => {
+      closeImportFaqsModal();
+      showStatusPopup(`${data.imported || 0} FAQs imported from '${sourceName}'!`);
+      refreshAdminData();
+    }, 2000);
+  } catch (e) {
+    if (progressBar) {
+      progressBar.style.width = "100%";
+      progressBar.style.background = "#ef4444";
+    }
+    if (statusText) {
+      statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error: ${escapeHtml(e.message)}`;
+      statusText.style.color = "#ef4444";
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 

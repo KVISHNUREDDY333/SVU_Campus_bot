@@ -1,4 +1,4 @@
-﻿async function sendMessage() {
+async function sendMessage() {
   
   if (currentChatController) {
     console.warn("User cancelled generation early.");
@@ -142,6 +142,10 @@ function renderDocuments(docs) {
       iconClass = "fa-pen";
       typeLabel = "TEXT";
       badgeClass = "info";
+    } else if (doc.type === "faq_import") {
+      iconClass = "fa-file-import";
+      typeLabel = "IMPORT";
+      badgeClass = "warning";
     }
 
     tbody.innerHTML += `
