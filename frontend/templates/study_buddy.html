@@ -111,7 +111,6 @@
                                 id="document-chat-input"
                                 placeholder="Ask a follow-up question about this document..."
                                 class="premium-chat-input"
-                                onkeypress="if (event.key === 'Enter') askStudyBuddy();"
                             />
                             <button class="premium-send-btn" onclick="askStudyBuddy()" title="Submit Inquiry">
                                 <i class="fa-solid fa-paper-plane"></i>
@@ -155,8 +154,7 @@
                       <input type="text" class="hidden invisible-trap" tabindex="-1" title="Autofill trap" />
                       <input type="password" class="hidden invisible-trap" tabindex="-1" title="Autofill trap" />
                       <input type="text" id="zen-input" placeholder="Ask Zen anything... (Type or Speak)" 
-                          autocomplete="off"
-                          onkeypress="if(event.key === 'Enter') sendZenMessage()" />
+                          autocomplete="off" />
                       <button id="zen-mic-btn" class="mic-btn" onclick="startZenSTT()" title="Voice Input">
                           <i class="fa-solid fa-microphone"></i>
                       </button>

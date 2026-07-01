@@ -466,7 +466,6 @@ function clearChat() {
 
 const synth = window.speechSynthesis;
 let currentSpeechBtn = null;
-let currentUtterance = null; 
 let currentHighlightedElement = null;
 let originalHtmlContent = null;
 
@@ -480,59 +479,126 @@ if (window.speechSynthesis.onvoiceschanged !== undefined) {
   window.speechSynthesis.onvoiceschanged = loadVoices;
 }
 
-function speakText(text, element = null, button = null) {
-  console.log("[TTS] speakText called");
+// Global Speech Queue State
+let speechState = {
+  chunks: [],
+  currentIndex: 0,
+  spans: [],
+  element: null,
+  button: null,
+  originalHtmlContent: null,
+  currentUtterance: null,
+  isCancelled: false,
+  keepAliveInterval: null
+};
 
-  if (!window.speechSynthesis) {
-    showStatusPopup("Your browser does not support Text-to-Speech.", 3000);
-    return;
+function resetSpeechState() {
+  if (speechState.keepAliveInterval) {
+    clearInterval(speechState.keepAliveInterval);
   }
+  
+  if (speechState.currentUtterance) {
+    speechState.currentUtterance.onstart = null;
+    speechState.currentUtterance.onboundary = null;
+    speechState.currentUtterance.onend = null;
+    speechState.currentUtterance.onerror = null;
+  }
+  
+  if (speechState.element && speechState.originalHtmlContent) {
+    speechState.element.innerHTML = speechState.originalHtmlContent;
+  }
+  
+  if (speechState.button) {
+    speechState.button.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+    speechState.button.style.color = "";
+  }
+  
+  speechState = {
+    chunks: [],
+    currentIndex: 0,
+    spans: [],
+    element: null,
+    button: null,
+    originalHtmlContent: null,
+    currentUtterance: null,
+    isCancelled: true,
+    keepAliveInterval: null
+  };
+  
+  currentSpeechBtn = null;
+  currentHighlightedElement = null;
+  originalHtmlContent = null;
+}
 
-  if (synth.speaking || currentHighlightedElement) {
-    
-    const isSameElement = currentHighlightedElement === element;
-
-    resetHighlighting();
-    synth.cancel();
-
-    if (isSameElement) {
-      return;
+function getSpeechChunks(text) {
+  const regex = /[^.!?\n]+[.!?\n]*/g;
+  let match;
+  const rawChunks = [];
+  
+  while ((match = regex.exec(text)) !== null) {
+    const chunkText = match[0];
+    const startIndex = match.index;
+    if (chunkText.trim()) {
+      rawChunks.push({
+        text: chunkText,
+        start: startIndex
+      });
     }
   }
-
-  if (button) {
-    currentSpeechBtn = button;
-    button.innerHTML = '<i class="fa-solid fa-stop"></i>';
-    button.style.color = "#ef4444";
+  
+  if (rawChunks.length === 0 && text.trim()) {
+    rawChunks.push({ text: text, start: 0 });
   }
-
-  let textToSpeak = text;
-  let spans = [];
-
-  if (element) {
-    currentHighlightedElement = element;
-    originalHtmlContent = element.innerHTML;
-
-    const result = wrapWordsAndGetText(element);
-    spans = result.spans;
-    textToSpeak = result.fullText;
-  } else {
-    textToSpeak = text.replace(/[*#`]/g, "");
+  
+  const finalChunks = [];
+  for (const chunk of rawChunks) {
+    if (chunk.text.length <= 150) {
+      finalChunks.push(chunk);
+    } else {
+      const words = chunk.text.split(/(\s+)/);
+      let currentSub = "";
+      let subStart = chunk.start;
+      
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        if (currentSub.length + word.length > 150) {
+          if (currentSub.trim()) {
+            finalChunks.push({
+              text: currentSub,
+              start: subStart
+            });
+          }
+          subStart += currentSub.length;
+          currentSub = word;
+        } else {
+          currentSub += word;
+        }
+      }
+      if (currentSub.trim()) {
+        finalChunks.push({
+          text: currentSub,
+          start: subStart
+        });
+      }
+    }
   }
+  return finalChunks;
+}
 
-  if (!textToSpeak.trim()) {
-    console.warn("[TTS] Empty text, skipping");
-    return;
-  }
+function getTargetLangCode() {
+  const selectedLang = document.getElementById("lang-select")?.value || "en";
+  if (selectedLang === "te") return "te-IN";
+  if (selectedLang === "hi") return "hi-IN";
+  return "en-US";
+}
 
-  const utterance = new SpeechSynthesisUtterance(textToSpeak);
-
+function selectBestVoice() {
   if (availableVoices.length === 0) {
     availableVoices = synth.getVoices();
   }
-
+  
   const selectedLang = document.getElementById("lang-select")?.value || "en";
-  let targetLangCode = "en-US";
+  const targetLangCode = getTargetLangCode();
   
   let voiceKeywords = [
     "google us english",
@@ -544,8 +610,6 @@ function speakText(text, element = null, button = null) {
   ];
 
   if (selectedLang === "te") {
-    targetLangCode = "te-IN";
-    
     voiceKeywords = [
       "shruti",
       "google telugu",
@@ -555,12 +619,8 @@ function speakText(text, element = null, button = null) {
       "female",
     ];
   } else if (selectedLang === "hi") {
-    targetLangCode = "hi-IN";
-    
     voiceKeywords = ["swara", "google hindi", "kalpana", "heera", "female"];
   }
-
-  console.log(`[TTS] Target Lang: ${targetLangCode}`);
 
   const getVoiceScore = (voice) => {
     let score = 0;
@@ -568,13 +628,13 @@ function speakText(text, element = null, button = null) {
 
     if (voice.lang === targetLangCode) score += 20;
     else if (voice.lang.split("-")[0] === selectedLang) score += 10;
-    else return -1; 
+    else return -1;
 
     for (const kw of voiceKeywords) {
       if (nameLower.includes(kw.toLowerCase())) {
-        score += 5; 
-        if (kw === "natural") score += 10; 
-        if (kw === "premium") score += 10; 
+        score += 5;
+        if (kw === "natural") score += 10;
+        if (kw === "premium") score += 10;
       }
     }
 
@@ -592,9 +652,6 @@ function speakText(text, element = null, button = null) {
   let preferredVoice = bestVoice ? bestVoice.voice : null;
 
   if (!preferredVoice && selectedLang !== "en") {
-    console.warn(
-      `[TTS] No voice found for ${selectedLang}, falling back to English.`,
-    );
     preferredVoice = availableVoices.find(
       (v) =>
         v.lang.startsWith("en") &&
@@ -603,7 +660,6 @@ function speakText(text, element = null, button = null) {
   }
 
   if (!preferredVoice && selectedLang === "en") {
-    
     preferredVoice = availableVoices.find(
       (v) =>
         v.name.includes("Zira") ||
@@ -612,68 +668,138 @@ function speakText(text, element = null, button = null) {
   }
 
   if (!preferredVoice && availableVoices.length > 0) {
-    
     preferredVoice =
       availableVoices.find((v) => v.lang.startsWith(selectedLang)) ||
       availableVoices[0];
   }
+  return preferredVoice;
+}
 
+function speakNextChunk() {
+  if (speechState.isCancelled) return;
+  
+  if (speechState.currentIndex >= speechState.chunks.length) {
+    console.log("[TTS] Finished all chunks.");
+    resetSpeechState();
+    return;
+  }
+  
+  const chunk = speechState.chunks[speechState.currentIndex];
+  const utterance = new SpeechSynthesisUtterance(chunk.text);
+  speechState.currentUtterance = utterance;
+  
+  const preferredVoice = selectBestVoice();
   if (preferredVoice) {
-    console.log(
-      `[TTS] Using voice: ${preferredVoice.name} (${preferredVoice.lang})`,
-    );
     utterance.voice = preferredVoice;
     utterance.lang = preferredVoice.lang;
   } else {
-    
-    utterance.lang = targetLangCode;
+    utterance.lang = getTargetLangCode();
   }
-
+  
   utterance.rate = 1.0;
   utterance.pitch = 1.0;
-
-  currentUtterance = utterance;
-
-  if (element) {
-    utterance.onboundary = (event) => {
-      if (event.name === "word") {
-        highlightWordAt(event.charIndex, spans);
-      }
-    };
-
-    utterance.onend = () => {
-      console.log("[TTS] Finished");
-      resetHighlighting();
-    };
-
-    utterance.onerror = (e) => {
-      console.error("[TTS] Utterance Error:", e);
-      resetHighlighting();
-    };
-  }
-
-  console.log("[TTS] Executing commands...");
+  
+  utterance.onboundary = (event) => {
+    if (speechState.isCancelled) return;
+    if (event.name === "word" && speechState.element) {
+      const absoluteCharIndex = chunk.start + event.charIndex;
+      highlightWordAt(absoluteCharIndex, speechState.spans);
+    }
+  };
+  
+  utterance.onend = () => {
+    if (speechState.isCancelled) return;
+    speechState.currentIndex++;
+    speakNextChunk();
+  };
+  
+  utterance.onerror = (e) => {
+    console.error("[TTS] Utterance error:", e);
+    if (e.error === "interrupted" || speechState.isCancelled) {
+      return;
+    }
+    speechState.currentIndex++;
+    setTimeout(speakNextChunk, 50);
+  };
+  
   try {
+    if (speechState.keepAliveInterval) {
+      clearInterval(speechState.keepAliveInterval);
+    }
     
-    synth.cancel();
-
-    const speechTimeout = setTimeout(() => {
-      if (synth.speaking) return; 
-      console.warn("[TTS] Speech didn't start, forcing resume...");
-      synth.cancel();
-      synth.resume();
-      synth.speak(utterance);
-    }, 300);
-
+    speechState.keepAliveInterval = setInterval(() => {
+      if (speechState.isCancelled) {
+        clearInterval(speechState.keepAliveInterval);
+        return;
+      }
+      if (synth.speaking) {
+        synth.resume();
+      }
+    }, 5000);
+    
     synth.speak(utterance);
-  } catch (e) {
-    console.error("[TTS] Exception during speak:", e);
-    showStatusPopup("Audio Engine Error. Please refresh.", 3000);
+  } catch (err) {
+    console.error("[TTS] Failed to speak chunk:", err);
+    speechState.currentIndex++;
+    setTimeout(speakNextChunk, 50);
   }
 }
 
-function wrapWordsAndGetText(element) {
+function speakText(text, element = null, button = null) {
+  console.log("[TTS] speakText called");
+
+  if (!window.speechSynthesis) {
+    showStatusPopup("Your browser does not support Text-to-Speech.", 3000);
+    return;
+  }
+
+  const isSameElement = speechState.element === element;
+
+  const wasSpeaking = synth.speaking;
+  synth.cancel();
+  resetSpeechState();
+
+  if (wasSpeaking && isSameElement && element !== null) {
+    return;
+  }
+
+  speechState.isCancelled = false;
+  speechState.element = element;
+  speechState.button = button;
+
+  if (button) {
+    currentSpeechBtn = button;
+    button.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    button.style.color = "#ef4444";
+  }
+
+  let textToSpeak = text;
   
+  if (element) {
+    currentHighlightedElement = element;
+    speechState.originalHtmlContent = element.innerHTML;
+    originalHtmlContent = element.innerHTML;
+
+    const result = wrapWordsAndGetText(element);
+    speechState.spans = result.spans;
+    textToSpeak = result.fullText;
+  } else {
+    textToSpeak = text.replace(/[*#`]/g, "");
+  }
+
+  if (!textToSpeak.trim()) {
+    console.warn("[TTS] Empty text, skipping");
+    resetSpeechState();
+    return;
+  }
+
+  speechState.chunks = getSpeechChunks(textToSpeak);
+  speechState.currentIndex = 0;
+
+  speakNextChunk();
+}
+
+function wrapWordsAndGetText(element) {
   const walker = document.createTreeWalker(
     element,
     NodeFilter.SHOW_TEXT,
@@ -684,7 +810,6 @@ function wrapWordsAndGetText(element) {
   let node;
   while ((node = walker.nextNode())) {
     if (node.nodeValue.length > 0) {
-      
       textNodes.push(node);
     }
   }
@@ -695,9 +820,7 @@ function wrapWordsAndGetText(element) {
 
   textNodes.forEach((textNode) => {
     const originalText = textNode.nodeValue;
-    
     const parts = originalText.split(/(\s+)/);
-
     const fragment = document.createDocumentFragment();
 
     parts.forEach((part) => {
@@ -708,14 +831,12 @@ function wrapWordsAndGetText(element) {
         fullText += part;
         runningCharCount += part.length;
       } else {
-        
         const span = document.createElement("span");
         span.textContent = part;
         span.dataset.start = runningCharCount;
         span.dataset.end = runningCharCount + part.length;
         span.className = "speech-word";
         fragment.appendChild(span);
-
         allSpans.push(span);
 
         fullText += part;
@@ -730,15 +851,14 @@ function wrapWordsAndGetText(element) {
 }
 
 function highlightWordAt(charIndex, spans) {
-  if (!currentHighlightedElement) return;
+  if (!speechState.element) return;
 
-  const active = currentHighlightedElement.querySelector(".speaking-word");
+  const active = speechState.element.querySelector(".speaking-word");
   if (active) active.classList.remove("speaking-word");
 
   let targetSpan = spans.find((span) => {
     const start = parseInt(span.dataset.start);
     const end = parseInt(span.dataset.end);
-    
     return charIndex >= start && charIndex < end;
   });
 
@@ -749,9 +869,8 @@ function highlightWordAt(charIndex, spans) {
   }
 
   if (!targetSpan) {
-    
     let closest = null;
-    let minDiff = 5; 
+    let minDiff = 5;
 
     spans.forEach((span) => {
       const start = parseInt(span.dataset.start);
@@ -766,36 +885,29 @@ function highlightWordAt(charIndex, spans) {
 
   if (targetSpan) {
     targetSpan.classList.add("speaking-word");
-    
   }
 }
 
 function resetHighlighting() {
-  if (currentHighlightedElement && originalHtmlContent) {
-    currentHighlightedElement.innerHTML = originalHtmlContent;
-  }
-  if (currentSpeechBtn) {
-    currentSpeechBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-  }
-  currentHighlightedElement = null;
-  originalHtmlContent = null;
-  currentUtterance = null;
-  currentSpeechBtn = null;
+  resetSpeechState();
 }
 
-const micBtn = document.getElementById("mic-btn");
-let recognition = null;
-let isListening = false; 
+// Unified Speech-to-Text Manager
+let activeSpeechRecognition = null;
+let activeSTTListening = false;
 
-function initializeSTT() {
-  if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-    if (micBtn) micBtn.style.display = "none";
-    console.warn("Web Speech API not supported.");
-    return null;
+function toggleSTT(inputElement, micButtonElement, onResultCallback) {
+  if (activeSTTListening && activeSpeechRecognition) {
+    stopSTT();
+    return;
   }
 
-  const SpeechRecognition =
-    window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+    showStatusPopup("Speech-to-Text is not supported in this browser.", 3000);
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const recognizer = new SpeechRecognition();
 
   recognizer.continuous = false;
@@ -803,78 +915,108 @@ function initializeSTT() {
 
   const langSelect = document.getElementById("lang-select");
   const selectedLang = langSelect ? langSelect.value : "en";
-
   const langMap = {
     en: "en-US",
     te: "te-IN",
     hi: "hi-IN",
   };
   recognizer.lang = langMap[selectedLang] || "en-US";
-  console.log(`[STT] Initialized for language: ${recognizer.lang}`);
+  console.log(`[STT] Initialized for: ${recognizer.lang}`);
 
   recognizer.onstart = () => {
-    isListening = true;
-    micBtn.classList.add("listening");
-    
-    userInput.placeholder = "Listening... Speak now";
+    activeSTTListening = true;
+    if (micButtonElement) {
+      micButtonElement.classList.add("listening");
+      micButtonElement.classList.add("active");
+    }
+    if (inputElement) {
+      if (!inputElement.dataset.originalPlaceholder) {
+        inputElement.dataset.originalPlaceholder = inputElement.placeholder || "";
+      }
+      inputElement.placeholder = "Listening... Speak now";
+    }
   };
 
   recognizer.onend = () => {
-    isListening = false;
-    micBtn.classList.remove("listening");
-    
-    userInput.placeholder = "Ask anything... (Type or Speak)";
+    activeSTTListening = false;
+    if (micButtonElement) {
+      micButtonElement.classList.remove("listening");
+      micButtonElement.classList.remove("active");
+    }
+    if (inputElement) {
+      inputElement.placeholder = inputElement.dataset.originalPlaceholder || "Ask anything... (Type or Speak)";
+    }
+    activeSpeechRecognition = null;
   };
 
   recognizer.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     console.log(`[STT] Heard: "${transcript}"`);
-    userInput.value = transcript;
-
-    setTimeout(() => sendMessage(), 500);
+    if (inputElement) {
+      inputElement.value = transcript;
+    }
+    if (onResultCallback) {
+      onResultCallback(transcript);
+    }
   };
 
   recognizer.onerror = (event) => {
-    console.error("Speech recognition error", event.error);
-    isListening = false;
-    micBtn.classList.remove("listening");
-
+    console.error("[STT] Error:", event.error);
+    activeSTTListening = false;
+    if (micButtonElement) {
+      micButtonElement.classList.remove("listening");
+      micButtonElement.classList.remove("active");
+    }
+    
     if (event.error === "not-allowed") {
-      showStatusPopup(
-        "Microphone access denied. Please enable permissions.",
-        4000,
-      );
+      showStatusPopup("Microphone access denied. Please enable permissions.", 4000);
     } else if (event.error === "no-speech") {
       showStatusPopup("No speech detected. Please try again.", 2000);
+    } else if (event.error === "network") {
+      showStatusPopup("Network error. Please check your internet connection.", 3000);
     }
   };
 
-  return recognizer;
+  activeSpeechRecognition = recognizer;
+  try {
+    recognizer.start();
+  } catch (e) {
+    console.error("[STT] Failed to start recognition:", e);
+    activeSTTListening = false;
+    activeSpeechRecognition = null;
+  }
+}
+
+function stopSTT() {
+  if (activeSpeechRecognition) {
+    try {
+      activeSpeechRecognition.stop();
+    } catch (e) {
+      console.warn("[STT] Error stopping:", e);
+    }
+    activeSpeechRecognition = null;
+    activeSTTListening = false;
+  }
+}
+
+const micBtn = document.getElementById("mic-btn");
+let recognition = null;
+let isListening = false;
+
+function initializeSTT() {
+  return null;
 }
 
 function toggleVoiceInput() {
-  
-  if (isListening && recognition) {
-    recognition.stop();
-    return;
-  }
-
-  recognition = initializeSTT();
-
-  if (recognition) {
-    try {
-      recognition.start();
-    } catch (e) {
-      console.error("Failed to start recognition:", e);
-      
-    }
-  }
+  const userInputEl = document.getElementById("user-input");
+  const micBtnEl = document.getElementById("mic-btn");
+  toggleSTT(userInputEl, micBtnEl, (transcript) => {
+    setTimeout(() => sendMessage(), 500);
+  });
 }
 
 function stopVoiceInput() {
-  if (recognition && isListening) {
-    recognition.stop();
-  }
+  stopSTT();
 }
 
 function animateValue(id, start, end, duration) {

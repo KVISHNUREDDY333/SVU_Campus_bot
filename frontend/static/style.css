@@ -1131,6 +1131,26 @@ body.dark-mode .splash-title {
   background: rgba(20, 184, 166, 0.1);
 }
 
+.mic-btn.listening,
+.mic-btn.active {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #ef4444 !important;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.25);
+  animation: micPulse 1.5s infinite ease-in-out;
+}
+
+@keyframes micPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
 .send-btn {
   width: 44px;
   height: 44px;

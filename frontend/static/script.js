@@ -2527,7 +2527,6 @@ window.addTrendingQuery = addTrendingQuery;
 window.deleteTrendingQuery = deleteTrendingQuery;
 
 let zenChatHistory = [];
-let zenRecognition = null;
 
 function showZenTypingIndicator() {
   const orb = document.querySelector("#zen-chat-history .zen-orb");
@@ -2801,38 +2800,11 @@ function refreshZenChat() {
 }
 
 function startZenSTT() {
-  if (!("webkitSpeechRecognition" in window)) {
-    showStatusPopup("STT not supported in this browser.");
-    return;
-  }
-
-  if (zenRecognition) {
-    zenRecognition.stop();
-    return;
-  }
-
-  zenRecognition = new webkitSpeechRecognition();
-  zenRecognition.lang =
-    document.getElementById("lang-select")?.value === "te"
-      ? "te-IN"
-      : document.getElementById("lang-select")?.value === "hi"
-        ? "hi-IN"
-        : "en-US";
-
-  const btn = document.getElementById("zen-mic-btn");
-  zenRecognition.onstart = () => btn.classList.add("active");
-  zenRecognition.onend = () => {
-    btn.classList.remove("active");
-    zenRecognition = null;
-  };
-
-  zenRecognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    document.getElementById("zen-input").value = transcript;
-    
-  };
-
-  zenRecognition.start();
+  const zenInputEl = document.getElementById("zen-input");
+  const zenMicBtnEl = document.getElementById("zen-mic-btn");
+  toggleSTT(zenInputEl, zenMicBtnEl, (transcript) => {
+    setTimeout(() => sendZenMessage(), 500);
+  });
 }
 
 window.switchStudyTab = switchStudyTab;
@@ -3176,3 +3148,32 @@ window.addEventListener("resize", () => {
     toggleSidebar(true); 
   }
 });
+
+// Standardized Keydown Listeners for Chat Inputs
+function bindChatKeydownListeners() {
+  const docChatInput = document.getElementById("document-chat-input");
+  if (docChatInput) {
+    docChatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        askStudyBuddy();
+      }
+    });
+  }
+
+  const zenChatInput = document.getElementById("zen-input");
+  if (zenChatInput) {
+    zenChatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        sendZenMessage();
+      }
+    });
+  }
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bindChatKeydownListeners);
+} else {
+  bindChatKeydownListeners();
+}
