@@ -129,6 +129,29 @@
                 <option value="te">Telugu</option>
                 <option value="hi">Hindi</option>
               </select>
+
+              <!-- Premium Custom Language Selector -->
+              <div class="custom-lang-selector" id="custom-lang-selector">
+                <button class="custom-lang-btn" id="custom-lang-btn" type="button" aria-haspopup="listbox" aria-expanded="false" title="Change Language">
+                  <i class="fa-solid fa-globe lang-globe-icon"></i>
+                  <span id="current-lang-label">English</span>
+                  <i class="fa-solid fa-chevron-down lang-chevron-icon"></i>
+                </button>
+                <div class="custom-lang-dropdown" id="custom-lang-dropdown" role="listbox" aria-label="Language options" title="Language options">
+                  <div class="custom-lang-option active" data-value="en" role="option" aria-selected="true">
+                    <span class="lang-name">English</span>
+                    <i class="fa-solid fa-check check-icon"></i>
+                  </div>
+                  <div class="custom-lang-option" data-value="te" role="option" aria-selected="false">
+                    <span class="lang-name">తెలుగు</span>
+                    <i class="fa-solid fa-check check-icon"></i>
+                  </div>
+                  <div class="custom-lang-option" data-value="hi" role="option" aria-selected="false">
+                    <span class="lang-name">हिन्दी</span>
+                    <i class="fa-solid fa-check check-icon"></i>
+                  </div>
+                </div>
+              </div>
               <button
                 id="mic-btn"
                 class="mic-btn"

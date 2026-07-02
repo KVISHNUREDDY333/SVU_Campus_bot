@@ -212,6 +212,87 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  // Initialize Premium Custom Language Dropdown
+  const customLangBtn = document.getElementById("custom-lang-btn");
+  const customLangDropdown = document.getElementById("custom-lang-dropdown");
+  const customLangSelector = document.getElementById("custom-lang-selector");
+  const langSelect = document.getElementById("lang-select");
+
+  if (customLangBtn && customLangDropdown && langSelect) {
+    // Synchronize selection state
+    const syncLanguageSelection = (val) => {
+      const options = customLangDropdown.querySelectorAll(".custom-lang-option");
+      options.forEach(opt => {
+        const isActive = opt.getAttribute("data-value") === val;
+        opt.classList.toggle("active", isActive);
+        opt.setAttribute("aria-selected", isActive ? "true" : "false");
+        if (isActive) {
+          const name = opt.querySelector(".lang-name").textContent;
+          document.getElementById("current-lang-label").textContent = name;
+        }
+      });
+      langSelect.value = val;
+    };
+
+    // Toggle dropdown visibility
+    customLangBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = customLangSelector.classList.contains("open");
+      customLangSelector.classList.toggle("open", !isOpen);
+      customLangBtn.setAttribute("aria-expanded", !isOpen ? "true" : "false");
+    });
+
+    // Option selection handler
+    customLangDropdown.addEventListener("click", (e) => {
+      const option = e.target.closest(".custom-lang-option");
+      if (option) {
+        const val = option.getAttribute("data-value");
+        syncLanguageSelection(val);
+        customLangSelector.classList.remove("open");
+        customLangBtn.setAttribute("aria-expanded", "false");
+        // Dispatch change event to notify any external integrations
+        langSelect.dispatchEvent(new Event("change"));
+      }
+    });
+
+    // Close dropdown on clicking outside
+    document.addEventListener("click", (e) => {
+      if (!customLangSelector.contains(e.target)) {
+        customLangSelector.classList.remove("open");
+        customLangBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    // Keyboard accessibility support
+    customLangSelector.addEventListener("keydown", (e) => {
+      const options = Array.from(customLangDropdown.querySelectorAll(".custom-lang-option"));
+      const activeOption = customLangDropdown.querySelector(".custom-lang-option.active");
+      let activeIndex = options.indexOf(activeOption);
+
+      if (e.key === "Escape") {
+        customLangSelector.classList.remove("open");
+        customLangBtn.focus();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!customLangSelector.classList.contains("open")) {
+          customLangSelector.classList.add("open");
+        } else {
+          activeIndex = (activeIndex + 1) % options.length;
+          syncLanguageSelection(options[activeIndex].getAttribute("data-value"));
+        }
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (customLangSelector.classList.contains("open")) {
+          activeIndex = (activeIndex - 1 + options.length) % options.length;
+          syncLanguageSelection(options[activeIndex].getAttribute("data-value"));
+        }
+      }
+    });
+
+    // Sync initial select state
+    syncLanguageSelection(langSelect.value || "en");
+  }
 });
 
 function appendMessage(text, sender, save = true) {
