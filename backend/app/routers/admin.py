@@ -487,6 +487,7 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
     stats = {
         "total_queries": 0,
         "active_users": 0,
+        "new_users_today": 0,
         "total_documents": 0,
         "total_faqs": 0,
         "role_distribution": {},
@@ -517,6 +518,13 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
                 stats["role_distribution"][r] = database.users_db.count_documents(
                     {"role": r}
                 )
+            
+            # Calculate new users today
+            from datetime import datetime, time
+            today_start = datetime.combine(datetime.utcnow().date(), time.min)
+            stats["new_users_today"] = database.users_db.count_documents(
+                {"created_at": {"$gte": today_start}}
+            )
 
         if database.documents_db is not None:
             doc_count = database.documents_db.count_documents({})
@@ -526,7 +534,9 @@ async def get_dashboard_stats(current_user: User = Depends(get_current_admin_use
             logger.critical("documents_db is None!")
 
         if database.svu_vectors_db is not None:
-            faq_count = database.svu_vectors_db.count_documents({"type": "faq"})
+            faq_count = database.svu_vectors_db.count_documents(
+                {"$or": [{"type": "faq"}, {"question": {"$exists": True}}]}
+            )
             logger.debug(f"Found {faq_count} FAQs in DB")
             stats["total_faqs"] = faq_count
 
@@ -691,6 +701,12 @@ async def list_documents(
     )
     for doc in cursor:
         doc["_id"] = str(doc["_id"])
+        filename = doc.get("filename")
+        if filename and database.svu_vectors_db is not None:
+            actual_count = database.svu_vectors_db.count_documents(
+                {"source": filename, "$or": [{"type": "faq"}, {"question": {"$exists": True}}]}
+            )
+            doc["extracted_faqs"] = actual_count
         docs.append(doc)
     return docs
 
@@ -1181,7 +1197,7 @@ async def sync_faqs_count(current_user: User = Depends(get_current_user)):
                 continue
 
             actual_count = database.svu_vectors_db.count_documents(
-                {"source": filename, "type": "faq"}
+                {"source": filename, "$or": [{"type": "faq"}, {"question": {"$exists": True}}]}
             )
 
             database.documents_db.update_one(

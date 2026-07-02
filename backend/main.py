@@ -207,13 +207,18 @@ async def invalid_id_exception_handler(request: Request, exc: InvalidId):
 async def attribute_error_handler(request: Request, exc: AttributeError):
     # Map NoneType attribute access on database references to a clean 503 Service Unavailable
     exc_str = str(exc)
-    if "NoneType" in exc_str and any(db_name in exc_str for db_name in ["db", "collection", "_db"]):
+    db_keywords = [
+        "db", "collection", "_db", "find", "insert", "update", "delete", 
+        "count", "aggregate", "create_index", "distinct", "estimated_document_count"
+    ]
+    if "NoneType" in exc_str and any(kw in exc_str for kw in db_keywords):
         logger.critical(f"Database service is disconnected or not configured: {exc}")
         return JSONResponse(
             status_code=503,
             content={"detail": "Database service is currently unavailable."},
         )
     raise exc
+
 
 app.add_middleware(
     CORSMiddleware,

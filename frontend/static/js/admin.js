@@ -28,6 +28,16 @@ async function loadDashboard() {
 
   setText("total-queries", data.total_queries);
   setText("active-users", data.active_users);
+  const newUsers = data.new_users_today !== undefined ? data.new_users_today : 0;
+  const newUsersWrapper = document.getElementById("new-users-today-wrapper");
+  if (newUsersWrapper) {
+    if (newUsers > 0) {
+      setText("new-users-today", newUsers);
+      newUsersWrapper.style.display = "";
+    } else {
+      newUsersWrapper.style.display = "none";
+    }
+  }
 
   const docCount = data.total_documents !== undefined ? data.total_documents : 0;
   setText("total-documents", docCount);
