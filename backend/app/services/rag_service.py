@@ -347,9 +347,31 @@ async def _search_keywords_directly(
     if database.svu_vectors_db is None:
         return [] if return_list else ""
     try:
-        search_words = (
-            keywords if keywords else [w for w in query.split() if len(w) > 3]
-        )
+        import re
+        if not keywords:
+            # Tokenize by finding all words (alphanumeric sequences)
+            raw_words = re.findall(r'\b\w+\b', query.lower())
+            # Simple english stopwords to filter out
+            stop_words = {
+                "what", "where", "when", "which", "who", "whom", "this", "that", "these", "those",
+                "here", "there", "their", "theirs", "with", "from", "about", "once", "all", "any",
+                "both", "each", "few", "more", "most", "other", "some", "such", "than", "too", "very",
+                "can", "will", "just", "should", "now", "the", "and", "for", "you", "your", "them",
+                "they", "have", "been", "were", "are", "was", "has", "had"
+            }
+            search_words = [
+                w for w in raw_words
+                if len(w) >= 3 and w not in stop_words
+            ]
+            # Add short important terms if they are completely numeric or common abbreviations
+            short_terms = [
+                w for w in raw_words
+                if len(w) == 2 and (w.isdigit() or w in {"ug", "pg", "tc", "cc", "pe", "it", "ph"})
+            ]
+            search_words.extend(short_terms)
+        else:
+            search_words = keywords
+
         if not search_words:
             return [] if return_list else ""
 
@@ -361,6 +383,8 @@ async def _search_keywords_directly(
                 {"text": {"$regex": regex_obj}},
                 {"category": {"$regex": regex_obj}},
                 {"keywords": {"$in": [regex_obj]}},
+                {"question": {"$regex": regex_obj}},
+                {"answer": {"$regex": regex_obj}},
             ]
         }
 
@@ -371,24 +395,55 @@ async def _search_keywords_directly(
         results = await asyncio.to_thread(
             lambda: list(
                 database.svu_vectors_db.find(
-                    search_query, {"text": 1, "category": 1, "_id": 0}
+                    search_query, {"text": 1, "category": 1, "question": 1, "answer": 1, "_id": 0}
                 )
-                .sort("created_at", -1)
-                .limit(limit)
+                .limit(200)
             )
-        )                            
+        )
 
         if not results:
             return [] if return_list else ""
 
-        texts = [doc.get("text", "") for doc in results if "text" in doc]
+        # Score documents by keyword hits
+        scored_results = []
+        for doc in results:
+            text_lower = (doc.get("text") or "").lower()
+            q_lower = (doc.get("question") or "").lower()
+            a_lower = (doc.get("answer") or "").lower()
+            cat_lower = (doc.get("category") or "").lower()
+
+            score = 0
+            for word in search_words:
+                w = word.lower()
+                if re.search(r'\b' + re.escape(w) + r'\b', q_lower):
+                    score += 15
+                elif w in q_lower:
+                    score += 8
+
+                if re.search(r'\b' + re.escape(w) + r'\b', a_lower):
+                    score += 5
+                elif w in a_lower:
+                    score += 3
+
+                if w in text_lower:
+                    score += 1
+                if w in cat_lower:
+                    score += 2
+
+            scored_results.append((score, doc))
+
+        # Sort by score descending
+        scored_results.sort(key=lambda x: x[0], reverse=True)
+        top_results = [doc for score, doc in scored_results if score > 0][:limit]
+
+        texts = [doc.get("text", "") for doc in top_results if "text" in doc]
         if return_list:
             return texts
 
         context = "\n\n".join(texts)
         scope = f"(Type: {doc_type})" if doc_type else ""
         logger.info(
-            f"Keyword search {scope} found {len(results)} results using words: {search_words}"
+            f"Keyword search {scope} found {len(top_results)} results using words: {search_words}"
         )
         return context
     except Exception as e:
@@ -406,12 +461,12 @@ async def _search_vectors_directly(query: str, limit: int = 10, return_list: boo
         if not results:
             return [] if return_list else ""
 
-        valid_docs = [doc for doc, score in results if score >= 0.50]
+        valid_docs = [doc for doc, score in results if score >= 0.40]
         valid_docs = valid_docs[:limit]
 
         if not valid_docs:
             logger.info(
-                f"Vector search found results, but none met the 0.50 threshold for query: {query[:50]}"
+                f"Vector search found results, but none met the 0.40 threshold for query: {query[:50]}"
             )
             return [] if return_list else ""
 

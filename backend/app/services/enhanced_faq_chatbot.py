@@ -127,12 +127,49 @@ class FAQMatcher:
             results = await asyncio.to_thread(
                 lambda: list(
                     database.svu_vectors_db.find(query)
-                    .sort("created_at", -1)
-                    .limit(max(limit * 4, 10))
+                    .limit(200)
                 )
             )
-            normalized = []
+
+            # Score each document by keyword matches
+            scored_results = []
             for item in results:
+                q_text = (item.get("question") or "").lower()
+                a_text = (item.get("answer") or "").lower()
+                t_text = (item.get("text") or "").lower()
+                cat_text = (item.get("category") or "").lower()
+
+                score = 0
+                for word in keywords:
+                    w = word.lower()
+                    # Substantial weight for exact word matches in question
+                    if re.search(r'\b' + re.escape(w) + r'\b', q_text):
+                        score += 15
+                    elif w in q_text:
+                        score += 8
+                    
+                    # Weight for match in answer
+                    if re.search(r'\b' + re.escape(w) + r'\b', a_text):
+                        score += 5
+                    elif w in a_text:
+                        score += 3
+                    
+                    # Weight for category or text
+                    if w in cat_text:
+                        score += 2
+                    if w in t_text:
+                        score += 1
+
+                scored_results.append((score, item))
+
+            # Sort by score descending
+            scored_results.sort(key=lambda x: x[0], reverse=True)
+            
+            # Select the top ones
+            top_results = [item for score, item in scored_results if score > 0][:limit * 4]
+
+            normalized = []
+            for item in top_results:
                 item["keyword_hit"] = True
                 normalized.append(self._normalize_faq_doc(item))
             return normalized
@@ -151,9 +188,9 @@ class FAQMatcher:
             if not rag_service.vector_db:
                 return []
 
-            docs = rag_service.vector_db.similarity_search_with_score(
+            docs = await rag_service.vector_db.asimilarity_search_with_score(
                 query,
-                k=max(limit * 4, 10),
+                k=max(limit * 8, 40),
                 filter={"type": "faq"},
             )
 
@@ -207,16 +244,23 @@ class FAQMatcher:
             else 0.0
         )
         score = (
-            (0.40 * question_overlap)
-            + (0.18 * answer_overlap)
-            + (0.05 * category_overlap)
-            + (0.17 * sequence_score)
-            + (0.15 * min(max(float(faq.get("vector_score", 0.0) or 0.0), 0.0), 1.0))
+            (0.50 * question_overlap)
+            + (0.05 * answer_overlap)
+            + (0.02 * category_overlap)
+            + (0.25 * sequence_score)
+            + (0.18 * min(max(float(faq.get("vector_score", 0.0) or 0.0), 0.0), 1.0))
             + phrase_bonus
         )
         if faq.get("keyword_hit"):
             score += 0.05
-        return round(min(score, 0.99), 3)
+            
+        # Add strong question overlap bonuses
+        if question_overlap >= 0.99:
+            score += 0.15
+        elif question_overlap >= 0.74:
+            score += 0.08
+            
+        return round(score, 4)
 
     def _combine_and_rank(
         self,
@@ -510,12 +554,13 @@ class EnhancedFAQChatbot:
                 }
 
             primary_faq = relevant_faqs[0]
-            confidence = float(primary_faq.get("match_confidence", 0.0) or 0.0)
-            if confidence < 0.23:
+            raw_confidence = float(primary_faq.get("match_confidence", 0.0) or 0.0)
+            if raw_confidence < 0.23:
                 logger.info("[ENHANCED_CHATBOT] No strong FAQ match found")
+                primary_faq["match_confidence"] = min(raw_confidence, 0.99)
                 return {
                     "matched": False,
-                    "confidence": confidence,
+                    "confidence": min(raw_confidence, 0.99),
                     "response": "",
                     "primary_faq": primary_faq,
                 }
@@ -523,10 +568,15 @@ class EnhancedFAQChatbot:
             related_faqs = []
             for faq in relevant_faqs[1:]:
                 faq_confidence = float(faq.get("match_confidence", 0.0) or 0.0)
-                if faq_confidence >= max(0.18, confidence - 0.10):
+                if faq_confidence >= max(0.18, raw_confidence - 0.10):
                     related_faqs.append(faq)
                 if len(related_faqs) >= 2:
                     break
+
+            # Cap confidence values to 0.99 for display
+            primary_faq["match_confidence"] = min(raw_confidence, 0.99)
+            for faq in related_faqs:
+                faq["match_confidence"] = min(faq.get("match_confidence", 0.0), 0.99)
 
             faq_context = self._build_context(primary_faq, related_faqs)
             response_config = self.response_sizer.determine_response_size(
@@ -548,7 +598,7 @@ class EnhancedFAQChatbot:
             )
             return {
                 "matched": True,
-                "confidence": confidence,
+                "confidence": min(raw_confidence, 0.99),
                 "response": final_response,
                 "primary_faq": primary_faq,
             }
