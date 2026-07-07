@@ -4,7 +4,7 @@ import os
 import re
 from datetime import datetime
 
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
 
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -487,7 +487,7 @@ async def _search_vectors_directly(query: str, limit: int = 10, return_list: boo
 def _reciprocal_rank_fusion(vector_results, keyword_results, k=60):
     """Combines vector and keyword results using Reciprocal Rank Fusion."""
     scores = {}
-    from langchain.schema import Document
+    from langchain_core.documents import Document
 
     for rank, doc in enumerate(vector_results):
         content = doc.page_content if hasattr(doc, "page_content") else str(doc)
