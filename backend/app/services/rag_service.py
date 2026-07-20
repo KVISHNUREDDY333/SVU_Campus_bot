@@ -724,13 +724,164 @@ Choose the BEST format for this answer based on the data and question:
         logger.error(f"RAG Chain Invocation Error: {e}\n{traceback.format_exc()}")
         raise e
 
+async def verify_faq_against_web(question: str, answer: str) -> dict:
+    """
+    Verifies an extracted FAQ pair against the official university website using raw DuckDuckGo scraping.
+    Queries:
+    1. site:svuniversity.edu.in + question keywords
+    2. Sri Venkateswara University + question keywords
+    Uses the LLM to assess support and returns a validation dictionary.
+    """
+    import urllib.parse
+    import requests
+    from bs4 import BeautifulSoup
+    import json
+    import re
+
+    # 1. Clean query and search
+    # Filter keywords from question to make query compact and effective
+    raw_words = re.findall(r'\b\w+\b', question.lower())
+    stop_words = {
+        "what", "where", "when", "which", "who", "whom", "this", "that", "these", "those",
+        "here", "there", "their", "theirs", "with", "from", "about", "once", "all", "any",
+        "both", "each", "few", "more", "most", "other", "some", "such", "than", "too", "very",
+        "can", "will", "just", "should", "now", "the", "and", "for", "you", "your", "them",
+        "they", "have", "been", "were", "are", "was", "has", "had", "is", "of", "in", "to", "a"
+    }
+    keywords = [w for w in raw_words if w not in stop_words and len(w) >= 3]
+    if not keywords:
+        keywords = raw_words[:5]
+
+    query_str = " ".join(keywords)
+
+    # Try scoped search first
+    search_query = f"site:svuniversity.edu.in {query_str}"
+    results = []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        res = requests.post("https://html.duckduckgo.com/html/", data={"q": search_query}, headers=headers, timeout=5)
+        if res.status_code == 200:
+            soup = BeautifulSoup(res.text, "html.parser")
+            for result in soup.find_all("div", class_="result"):
+                title_elem = result.find("a", class_="result__a")
+                snippet_elem = result.find("a", class_="result__snippet")
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                    href = title_elem.get("href")
+                    parsed_url = urllib.parse.urlparse(href)
+                    qs = urllib.parse.parse_qs(parsed_url.query)
+                    actual_url = qs.get("uddg", [href])[0]
+                    snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                    results.append({"title": title, "url": actual_url, "snippet": snippet})
+    except Exception as e:
+        logger.error(f"DDG verification search failed: {e}")
+
+    # If scoped search had no results, try broader search
+    if not results:
+        search_query_broad = f"Sri Venkateswara University Tirupati {query_str}"
+        try:
+            res = requests.post("https://html.duckduckgo.com/html/", data={"q": search_query_broad}, headers=headers, timeout=5)
+            if res.status_code == 200:
+                soup = BeautifulSoup(res.text, "html.parser")
+                for result in soup.find_all("div", class_="result"):
+                    title_elem = result.find("a", class_="result__a")
+                    snippet_elem = result.find("a", class_="result__snippet")
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        href = title_elem.get("href")
+                        parsed_url = urllib.parse.urlparse(href)
+                        qs = urllib.parse.parse_qs(parsed_url.query)
+                        actual_url = qs.get("uddg", [href])[0]
+                        snippet = snippet_elem.get_text(strip=True) if snippet_elem else ""
+                        results.append({"title": title, "url": actual_url, "snippet": snippet})
+        except Exception as e:
+            logger.error(f"DDG verification broad search failed: {e}")
+
+    # If still no results, return PENDING status
+    if not results:
+        return {
+            "verified": False,
+            "verification_status": "PENDING",
+            "verification_source": "https://svuniversity.edu.in/",
+            "confidence_score": 0.3,
+            "explanation": "No online search results found to verify the facts.",
+            "source_url": "https://svuniversity.edu.in/"
+        }
+
+    # 2. Use LLM to verify FAQ against search results
+    search_context = ""
+    for idx, r in enumerate(results[:3]):
+        search_context += f"Result {idx+1}:\nURL: {r['url']}\nTitle: {r['title']}\nSnippet: {r['snippet']}\n\n"
+
+    verification_prompt = f"""
+    You are the Official Fact Verifier for Sri Venkateswara University. Your task is to verify an extracted FAQ pair against online search results from the university website.
+
+    FAQ to Verify:
+    Question: {question}
+    Answer: {answer}
+
+    Online Search Results:
+    {search_context}
+
+    INSTRUCTIONS:
+    Compare the FAQ Answer against the Online Search Results. Choose one of the following statuses:
+    - "VERIFIED": The answer is fully supported and matches the online search results (exact numbers, dates, policies, or facts).
+    - "PARTIALLY": The answer is partially supported, or the search results are slightly ambiguous/incomplete but do not contradict the answer.
+    - "INVALID": The online search results directly contradict the answer, or show that the answer contains incorrect information.
+
+    Assign a confidence score between 0.0 and 1.0 (1.0 = absolute certainty, 0.0 = completely unverified).
+    Explain your reasoning in a short sentence.
+    Identify the URL from the search results that best supports this verification.
+
+    Output Format (MUST return ONLY valid JSON in this exact structure):
+    {{
+        "status": "VERIFIED|PARTIALLY|INVALID",
+        "confidence_score": 0.95,
+        "explanation": "Brief reason for your classification.",
+        "source_url": "https://url-of-matching-result"
+    }}
+    """
+
+    try:
+        response = await smart_llm.ainvoke(verification_prompt)
+        content = response.content
+
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
+            status = data.get("status", "PARTIALLY").upper()
+            if status not in ["VERIFIED", "PARTIALLY", "INVALID"]:
+                status = "PARTIALLY"
+
+            return {
+                "verified": status == "VERIFIED",
+                "verification_status": status,
+                "verification_source": "https://svuniversity.edu.in/",
+                "confidence_score": float(data.get("confidence_score", 0.5)),
+                "explanation": data.get("explanation", "Verified using LLM comparison with search results."),
+                "source_url": data.get("source_url", results[0]["url"] if results else "https://svuniversity.edu.in/")
+            }
+    except Exception as e:
+        logger.error(f"Error during LLM verification of FAQ: {e}")
+
+    return {
+        "verified": False,
+        "verification_status": "PARTIALLY",
+        "verification_source": "https://svuniversity.edu.in/",
+        "confidence_score": 0.5,
+        "explanation": "Failed to complete LLM verification due to processing error.",
+        "source_url": results[0]["url"] if results else "https://svuniversity.edu.in/"
+    }
+
 async def process_and_refine_knowledge(text: str, source: str):
     """
-    Automated pipeline: Extract -> Refine -> Ingest (with embeddings).
-    This replaces the manual 'Train the Brain' feature.
+    Automated pipeline: Extract -> Refine -> Verify via Scraped Web Results -> Ingest or Queue.
     """
     try:
-                             
         logger.info(f"[AUTO-TRAIN] Extracting FAQs from: {source}")
         raw_faqs = await extract_faqs_from_text(text)
         if not raw_faqs:
@@ -743,19 +894,47 @@ async def process_and_refine_knowledge(text: str, source: str):
         inserted_count = 0
         skipped_faqs = []
         for faq in refined_faqs:
-            success = await ingest_faq(
-                question=faq.get("question"),
-                answer=faq.get("answer"),
-                category=faq.get("category", "General"),
-                source=source,
-            )
-            if success:
-                inserted_count += 1
+            q_text = faq.get("question", "")
+            a_text = faq.get("answer", "")
+            if not q_text or not a_text:
+                continue
+
+            logger.info(f"[AUTO-TRAIN] Verifying FAQ: {q_text[:50]}...")
+            verification = await verify_faq_against_web(q_text, a_text)
+
+            if verification["verification_status"] == "VERIFIED":
+                success = await ingest_faq(
+                    question=q_text,
+                    answer=a_text,
+                    category=faq.get("category", "General"),
+                    source=source,
+                    verified=True,
+                    verification_status="VERIFIED",
+                    verification_source=verification["verification_source"],
+                    confidence_score=verification["confidence_score"],
+                    last_verified=datetime.utcnow()
+                )
+                if success:
+                    inserted_count += 1
+                else:
+                    skipped_faqs.append(faq)
             else:
+                logger.info(f"[AUTO-TRAIN] FAQ verification status: {verification['verification_status']}. Queuing for admin review.")
+                if database.suggested_faqs_db is not None:
+                    database.suggested_faqs_db.insert_one({
+                        "question": q_text,
+                        "answer": a_text,
+                        "category": faq.get("category", "General"),
+                        "suggested_by": "system_auto_train_unverified",
+                        "timestamp": datetime.utcnow(),
+                        "verification_status": verification["verification_status"],
+                        "explanation": verification["explanation"],
+                        "source_url": verification["source_url"]
+                    })
                 skipped_faqs.append(faq)
 
         logger.info(
-            f"[AUTO-TRAIN] Completed. Ingested {inserted_count} refined FAQs for: {source}"
+            f"[AUTO-TRAIN] Completed. Ingested {inserted_count} verified FAQs, queued {len(skipped_faqs)} unverified FAQs for review."
         )
         return inserted_count, skipped_faqs
     except Exception as e:
@@ -959,6 +1138,11 @@ async def ingest_faq(
     category: str = "General",
     source: str = "manual",
     faq_id: str = None,
+    verified: bool = False,
+    verification_status: str = "PENDING",
+    verification_source: str = "https://svuniversity.edu.in/",
+    last_verified: datetime = None,
+    confidence_score: float = 0.0,
 ):
     """
     Ingests a single FAQ into the svu_vectors collection with a flat structure.
@@ -1005,6 +1189,11 @@ async def ingest_faq(
             "faq_id": faq_id or str(ObjectId()),
             "category": category,
             "created_at": datetime.utcnow(),
+            "verified": verified,
+            "verification_status": verification_status,
+            "verification_source": verification_source,
+            "last_verified": last_verified or datetime.utcnow(),
+            "confidence_score": confidence_score,
         }
 
         if embedding:

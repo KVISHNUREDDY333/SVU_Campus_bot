@@ -108,6 +108,9 @@ async def resolve_ticket(
                     answer=update.resolution,
                     source="ticket_resolution",
                     faq_id=faq_id,
+                    verified=True,
+                    verification_status="VERIFIED",
+                    confidence_score=1.0,
                 )
                                                      
                 if database.svu_vectors_db is not None:
@@ -122,6 +125,9 @@ async def resolve_ticket(
                                 "type": "faq",
                                 "category": ticket.get("category", "General"),
                                 "created_at": datetime.utcnow(),
+                                "verified": True,
+                                "verification_status": "VERIFIED",
+                                "confidence_score": 1.0,
                             }
                         },
                     )

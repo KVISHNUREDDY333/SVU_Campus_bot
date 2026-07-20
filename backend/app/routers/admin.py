@@ -97,6 +97,9 @@ async def create_faq(
             category=faq.category,
             source="admin_manual",
             faq_id=faq_id,
+            verified=True,
+            verification_status="VERIFIED",
+            confidence_score=1.0,
         )
     except Exception as e:
         logger.error(f"Failed to ingest FAQ into vector DB: {e}")
@@ -115,7 +118,7 @@ async def create_faq(
         category=faq.category,
         created_at=datetime.utcnow(),
         source_urls=[],
-        verified=False,
+        verified=True,
     )
 
 @router.delete("/admin/faqs/{faq_id}")
@@ -226,6 +229,9 @@ async def approve_suggested_faq(
             category=new_faq["category"],
             source="community_suggestion",
             faq_id=faq_id,
+            verified=True,
+            verification_status="VERIFIED",
+            confidence_score=1.0,
         )
     except Exception as e:
         logger.error(f"Failed to ingest FAQ into vector DB: {e}")
@@ -710,7 +716,6 @@ async def list_documents(
         docs.append(doc)
     return docs
 
-@router.get("/admin/brain/status")
 @router.get("/admin/documents/{doc_id}/faqs", response_model=List[FAQResponse])
 async def get_document_faqs(
     doc_id: str, current_user: User = Depends(get_current_admin_user)
@@ -936,7 +941,7 @@ async def update_faq(
 ):
 
     if database.svu_vectors_db is None:
-        raise HTTPException(status_code=500, detail="Database not available")
+        raise HTTPException(status_code=503, detail="Database not available")
 
     from bson import ObjectId
 
@@ -944,6 +949,8 @@ async def update_faq(
         formatted_text = f"Question: {faq.question}\nAnswer: {faq.answer}"
         update_data = {
             "text": formatted_text,
+            "question": faq.question,
+            "answer": faq.answer,
             "category": faq.category,
             "updated_at": datetime.utcnow(),
             "updated_by": current_user.username,
@@ -954,15 +961,33 @@ async def update_faq(
                 update_data["embedding"] = embeddings.embed_query(formatted_text)
             except Exception as e:
                 logger.error(f"Error re-embedding FAQ {faq_id}: {e}")
-        result = database.svu_vectors_db.update_one(
-            {"_id": ObjectId(faq_id)}, {"$set": update_data}
-        )
+
+        # Try matching by _id first (standard MongoDB ObjectId)
+        result = None
+        try:
+            result = database.svu_vectors_db.update_one(
+                {"_id": ObjectId(faq_id)}, {"$set": update_data}
+            )
+        except Exception:
+            pass
+
+        # Fallback: try matching by the custom faq_id field
+        if not result or result.matched_count == 0:
+            result = database.svu_vectors_db.update_one(
+                {"faq_id": faq_id}, {"$set": update_data}
+            )
 
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="FAQ not found")
 
-        updated_faq = database.svu_vectors_db.find_one({"_id": ObjectId(faq_id)})
-        if updated_faq:
+        # Update document's last_modified timestamp if source is linked
+        try:
+            lookup_filter = {"_id": ObjectId(faq_id)}
+        except Exception:
+            lookup_filter = {"faq_id": faq_id}
+
+        updated_faq = database.svu_vectors_db.find_one(lookup_filter)
+        if updated_faq and database.documents_db is not None:
             source = updated_faq.get("source")
             if source:
                 database.documents_db.update_one(
@@ -973,8 +998,12 @@ async def update_faq(
             "status": "success",
             "message": "FAQ updated and re-indexed successfully",
         }
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Update FAQ Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/locations", response_model=List[LocationResponse])
 async def get_public_locations(current_user: User = Depends(get_current_user)):

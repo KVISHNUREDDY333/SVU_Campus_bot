@@ -430,12 +430,20 @@ async function updateAllFAQ(id) {
       showStatusPopup("FAQ Updated Successfully");
       refreshAdminData(); 
     } else {
-      await CustomDialog.alert("Failed to update FAQ", "Update Failed", "error");
+      let errMsg = "Failed to update FAQ";
+      try {
+        const errData = await res.json();
+        errMsg = errData.detail || errMsg;
+      } catch (_) {}
+      console.error("FAQ Update Error:", res.status, errMsg);
+      await CustomDialog.alert(errMsg, "Update Failed", "error");
     }
   } catch (e) {
-    console.error(e);
+    console.error("FAQ Update Network Error:", e);
+    await CustomDialog.alert("Network error. Please try again.", "Update Failed", "error");
   }
 }
+
 
 async function deleteAllFAQ(id) {
   if (!(await CustomDialog.confirm("Delete this FAQ?"))) return;
